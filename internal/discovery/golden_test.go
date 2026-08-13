@@ -22,8 +22,7 @@ func TestGoldenExample(t *testing.T) {
 	require.NoError(t, err)
 	docs, err := Materialize(dir, cats)
 	require.NoError(t, err)
-	doc, err := ApplyFragment(dir, Merge(docs...))
-	require.NoError(t, err)
+	doc := Merge(docs...)
 	got, err := doc.YAML()
 	require.NoError(t, err)
 

@@ -43,18 +43,6 @@ var Catalog = asyncgo.Spec(
 `MessageOf` *references* your struct rather than duplicating the shape, so the
 schema cannot drift from the data contract.
 
-### 3. The fragment (optional YAML)
-
-For parts you prefer to author by hand, drop an `asyncapi.fragment.yaml` beside
-the generated file. It is deep-merged over the document: non-zero values
-override, omitted fields are preserved, maps are unioned.
-
-```yaml
-info:
-  license:
-    name: MIT
-```
-
 ### Generate & check
 
 ```bash
@@ -66,8 +54,7 @@ asyncgo check ./...
 ```
 
 The generator discovers catalogs **reachable from `main`**, then runs a small
-harness to materialize them (never executing your `main` package). If
-`asyncapi.fragment.yaml` is present, it is merged over the result.
+harness to materialize them (never executing your `main` package).
 
 ## Schema derivation rules
 

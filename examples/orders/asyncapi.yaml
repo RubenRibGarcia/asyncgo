@@ -6,8 +6,6 @@ info:
   contact:
     name: Orders Team
     email: orders@example.com
-  license:
-    name: MIT
 servers:
   prod:
     host: broker.example.com:9092
@@ -15,9 +13,6 @@ servers:
     description: Production Kafka cluster
 defaultContentType: application/json
 channels:
-  order-cancelled:
-    address: order-cancelled
-    description: Emitted when an order is cancelled
   order-placed:
     address: order-placed
     messages:
