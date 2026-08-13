@@ -1,0 +1,29 @@
+# Binaries
+/asyncgo
+/asyncgo.exe
+*.exe
+*.test
+*.out
+
+# Go workspace (go.work is committed; go.work.sum is regenerated)
+go.work.sum
+
+# Generated harness temp dirs (normally auto-removed)
+asyncgo-harness-*/
+
+# Vendor (managed via `go mod vendor`)
+vendor/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Serena (don't version cache)
+.serena/cache/
