@@ -17,14 +17,13 @@ type Address struct {
 }
 
 type Order struct {
-	ID      string         `json:"id" asyncgo:"required"`
+	ID      string         `json:"id"             asyncgo:"required"`
 	Amount  float64        `json:"amount"`
 	Note    string         `json:"note,omitempty" asyncgo:"description=Optional note"`
 	Address Address        `json:"address"`
 	Tags    []string       `json:"tags"`
 	Meta    map[string]int `json:"meta"`
 	Skip    string         `json:"-"`
-	hidden  string
 }
 
 const (
@@ -126,9 +125,23 @@ func TestFromTypeSpecials(t *testing.T) {
 		wantType   string
 		wantFormat string
 	}{
-		{name: "should_return_date_time_for_time", typ: reflect.TypeOf(time.Time{}), wantType: "string", wantFormat: "date-time"},
-		{name: "should_return_byte_string_for_byte_slice", typ: reflect.TypeOf([]byte{}), wantType: "string", wantFormat: "byte"},
-		{name: "should_return_unconstrained_for_interface", typ: reflect.TypeOf((*any)(nil)).Elem(), wantType: ""},
+		{
+			name:       "should_return_date_time_for_time",
+			typ:        reflect.TypeOf(time.Time{}),
+			wantType:   "string",
+			wantFormat: "date-time",
+		},
+		{
+			name:       "should_return_byte_string_for_byte_slice",
+			typ:        reflect.TypeOf([]byte{}),
+			wantType:   "string",
+			wantFormat: "byte",
+		},
+		{
+			name:     "should_return_unconstrained_for_interface",
+			typ:      reflect.TypeOf((*any)(nil)).Elem(),
+			wantType: "",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -150,7 +163,11 @@ func TestRefEscapesSlashes(t *testing.T) {
 	typ := reflect.TypeOf(Order{})
 	// Compute the expectation from the type's own package path so the test
 	// survives module renames: JSON Pointer escaping must turn "/" into "~1".
-	want := "#/components/schemas/" + strings.ReplaceAll(typ.PkgPath(), "/", "~1") + "." + typ.Name()
+	want := "#/components/schemas/" + strings.ReplaceAll(
+		typ.PkgPath(),
+		"/",
+		"~1",
+	) + "." + typ.Name()
 	assert.Equal(t, want, Ref(typ))
 }
 

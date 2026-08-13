@@ -21,9 +21,9 @@ import (
 )
 
 var (
-	timeType       = reflect.TypeOf(time.Time{})
-	rawMessageType = reflect.TypeOf(json.RawMessage{})
-	byteSliceType  = reflect.TypeOf([]byte{})
+	timeType       = reflect.TypeFor[time.Time]()
+	rawMessageType = reflect.TypeFor[json.RawMessage]()
+	byteSliceType  = reflect.TypeFor[[]byte]()
 )
 
 // Name returns the fully-qualified schema name for a named type:
@@ -153,8 +153,8 @@ func jsonName(f reflect.StructField) (string, bool) {
 	if tag == "-" {
 		return "", true
 	}
-	if i := strings.IndexByte(tag, ','); i >= 0 {
-		return tag[:i], false
+	if before, _, ok := strings.Cut(tag, ","); ok {
+		return before, false
 	}
 	return tag, false
 }

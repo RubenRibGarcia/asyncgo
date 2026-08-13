@@ -58,7 +58,10 @@ func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
 		return nil, 0, fmt.Errorf("finding catalogs: %w", err)
 	}
 	if len(cats) == 0 {
-		return nil, 0, fmt.Errorf("no AsyncAPI catalogs (*spec.AsyncAPI vars) reachable from main in %s", dir)
+		return nil, 0, fmt.Errorf(
+			"no AsyncAPI catalogs (*spec.AsyncAPI vars) reachable from main in %s",
+			dir,
+		)
 	}
 	docs, err := discovery.Materialize(dir, cats)
 	if err != nil {

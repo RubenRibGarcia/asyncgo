@@ -19,9 +19,24 @@ func (s *server) setBinding(proto string, v any) *server {
 func (s *server) Kafka(b spec.KafkaServerBinding) *server {
 	return s.setBinding(spec.ProtocolKafka, &b)
 }
-func (s *server) AMQP(b spec.AMQPServerBinding) *server { return s.setBinding(spec.ProtocolAMQP, &b) }
-func (s *server) NATS(b spec.NATSServerBinding) *server { return s.setBinding(spec.ProtocolNATS, &b) }
-func (s *server) MQTT(b spec.MQTTServerBinding) *server { return s.setBinding(spec.ProtocolMQTT, &b) }
+
+func (s *server) AMQP(
+	b spec.AMQPServerBinding,
+) *server {
+	return s.setBinding(spec.ProtocolAMQP, &b)
+}
+
+func (s *server) NATS(
+	b spec.NATSServerBinding,
+) *server {
+	return s.setBinding(spec.ProtocolNATS, &b)
+}
+
+func (s *server) MQTT(
+	b spec.MQTTServerBinding,
+) *server {
+	return s.setBinding(spec.ProtocolMQTT, &b)
+}
 
 // Binding attaches a protocol-specific server binding under the given protocol key.
 func (s *server) Binding(proto string, v any) *server { return s.setBinding(proto, v) }
@@ -39,12 +54,15 @@ func (c *channel) setBinding(proto string, v any) *channel {
 func (c *channel) Kafka(b spec.KafkaChannelBinding) *channel {
 	return c.setBinding(spec.ProtocolKafka, &b)
 }
+
 func (c *channel) AMQP(b spec.AMQPChannelBinding) *channel {
 	return c.setBinding(spec.ProtocolAMQP, &b)
 }
+
 func (c *channel) NATS(b spec.NATSChannelBinding) *channel {
 	return c.setBinding(spec.ProtocolNATS, &b)
 }
+
 func (c *channel) MQTT(b spec.MQTTChannelBinding) *channel {
 	return c.setBinding(spec.ProtocolMQTT, &b)
 }
@@ -65,12 +83,15 @@ func (o *operation) setBinding(proto string, v any) *operation {
 func (o *operation) Kafka(b spec.KafkaOperationBinding) *operation {
 	return o.setBinding(spec.ProtocolKafka, &b)
 }
+
 func (o *operation) AMQP(b spec.AMQPOperationBinding) *operation {
 	return o.setBinding(spec.ProtocolAMQP, &b)
 }
+
 func (o *operation) NATS(b spec.NATSOperationBinding) *operation {
 	return o.setBinding(spec.ProtocolNATS, &b)
 }
+
 func (o *operation) MQTT(b spec.MQTTOperationBinding) *operation {
 	return o.setBinding(spec.ProtocolMQTT, &b)
 }
@@ -91,12 +112,15 @@ func (m *message) setBinding(proto string, v any) *message {
 func (m *message) Kafka(b spec.KafkaMessageBinding) *message {
 	return m.setBinding(spec.ProtocolKafka, &b)
 }
+
 func (m *message) AMQP(b spec.AMQPMessageBinding) *message {
 	return m.setBinding(spec.ProtocolAMQP, &b)
 }
+
 func (m *message) NATS(b spec.NATSMessageBinding) *message {
 	return m.setBinding(spec.ProtocolNATS, &b)
 }
+
 func (m *message) MQTT(b spec.MQTTMessageBinding) *message {
 	return m.setBinding(spec.ProtocolMQTT, &b)
 }

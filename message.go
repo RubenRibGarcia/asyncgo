@@ -25,12 +25,12 @@ type message struct {
 // catalog cannot drift from the data contract.
 func MessageOf(v any) *message { return &message{typ: reflect.TypeOf(v)} }
 
-func (m *message) Name(n string) *message            { m.name = n; return m }
-func (m *message) Title(t string) *message           { m.title = t; return m }
-func (m *message) Summary(s string) *message         { m.summary = s; return m }
-func (m *message) Description(d string) *message     { m.description = d; return m }
-func (m *message) ContentType(c string) *message     { m.contentType = c; return m }
-func (m *message) Headers(h *spec.Schema) *message   { m.headers = h; return m }
+func (m *message) Name(n string) *message          { m.name = n; return m }
+func (m *message) Title(t string) *message         { m.title = t; return m }
+func (m *message) Summary(s string) *message       { m.summary = s; return m }
+func (m *message) Description(d string) *message   { m.description = d; return m }
+func (m *message) ContentType(c string) *message   { m.contentType = c; return m }
+func (m *message) Headers(h *spec.Schema) *message { m.headers = h; return m }
 
 // Example attaches a named payload example to the message.
 func (m *message) Example(name string, payload any) *message {

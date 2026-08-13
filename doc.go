@@ -5,6 +5,7 @@
 package asyncgo
 
 import (
+	"maps"
 	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
@@ -31,9 +32,7 @@ func Spec(items ...Item) *spec.AsyncAPI {
 	}
 	if len(b.defs) > 0 {
 		c := b.components()
-		for k, v := range b.defs {
-			c.Schemas[k] = v
-		}
+		maps.Copy(c.Schemas, b.defs)
 	}
 	return b.doc
 }
@@ -66,7 +65,7 @@ func Info(title, version string) *infoBuilder {
 	return &infoBuilder{info: spec.Info{Title: title, Version: version}}
 }
 
-func (i *infoBuilder) Description(s string) *infoBuilder   { i.info.Description = s; return i }
+func (i *infoBuilder) Description(s string) *infoBuilder    { i.info.Description = s; return i }
 func (i *infoBuilder) TermsOfService(s string) *infoBuilder { i.info.TermsOfService = s; return i }
 func (i *infoBuilder) Contact(c spec.Contact) *infoBuilder  { i.info.Contact = &c; return i }
 func (i *infoBuilder) License(l spec.License) *infoBuilder  { i.info.License = &l; return i }
