@@ -5,10 +5,6 @@
 //
 //	asyncgo generate [dir]   write asyncapi.yaml for the module rooted at dir
 //	asyncgo check [dir]      fail if asyncapi.yaml is out of date
-//
-// If dir contains an asyncapi.fragment.yaml, it is deep-merged over the
-// generated document (see spec.Overlay), so parts of the spec can be authored
-// by hand instead of in a Go catalog.
 package main
 
 import (
@@ -54,9 +50,8 @@ func resolveDir(args []string) (string, error) {
 	return abs, nil
 }
 
-// buildDocument derives the document from the catalogs reachable from main and
-// applies the fragment file, if present. It returns the document and the number
-// of catalogs found.
+// buildDocument derives the document from the catalogs reachable from main. It
+// returns the document and the number of catalogs found.
 func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
 	cats, err := discovery.Find(dir)
 	if err != nil {
@@ -70,10 +65,6 @@ func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
 		return nil, 0, fmt.Errorf("materializing catalogs: %w", err)
 	}
 	doc := discovery.Merge(docs...)
-	doc, err = discovery.ApplyFragment(dir, doc)
-	if err != nil {
-		return nil, 0, fmt.Errorf("applying fragment: %w", err)
-	}
 
 	return doc, len(cats), nil
 }

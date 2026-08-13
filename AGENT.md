@@ -35,7 +35,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 ┌───────▼───────────────┐   ┌─────────────▼───────────────┐
 │   spec (object model) │   │ schema (struct → JSON Schema)│
 │  AsyncAPI 3.1.0 types │   │ FromType(reflect.Type)       │
-│  + codecs + Overlay   │   │ fully-qualified, hoisted     │
+│  + codecs   │   │ fully-qualified, hoisted     │
 └───────┬───────────────┘   └─────────────────────────────┘
         │
 ┌───────▼─────────────────────────────────────────────────┐
@@ -44,7 +44,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 │     from main (static, no execution)                    │
 │  2. Generate a harness that imports catalog packages    │
 │     and prints them as YAML (runs init only)            │
-│  3. Merge catalogs + apply asyncapi.fragment.yaml       │
+│  3. Merge catalogs       │
 │  4. Emit YAML (generate) or diff (check)                │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -71,10 +71,6 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
    `main`). This avoids executing user code while still giving `schema/` a real
    `reflect.Type`.
 
-6. **YAML fragment merge** — an optional `asyncapi.fragment.yaml` is deep-merged
-   over the generated document (`spec.Overlay`): non-zero values override, maps
-   union.
-
 ## Public API
 
 | Area | Symbols |
@@ -82,7 +78,6 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 | DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `Channels`, `Channel`, `Operation`, `MessageOf`, `Kafka`/`AMQP`/`NATS`/`MQTT`/`Binding` helpers |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `Channel`, `Operation`, `Message`, `Schema`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
-| Merge | `spec.Overlay(base, overlay)` |
 | CLI | `asyncgo generate [dir]`, `asyncgo check [dir]` |
 
 ## Directory Structure
@@ -102,7 +97,6 @@ asyncgo/
 │   ├── spec.go                 #   AsyncAPI, Info, Server, Channel, Operation, Message, Components
 │   ├── schema.go               #   JSON Schema types + $defs/$ref
 │   ├── bindings.go             #   Kafka, AMQP, NATS, MQTT bindings (+ extensible *Bindings maps)
-│   ├── merge.go                #   Overlay (deep-merge a YAML fragment over a document)
 │   ├── encode.go               #   YAML/JSON marshal
 │   └── *_test.go
 ├── schema/                     # struct -> JSON Schema (the "data contract" half)
@@ -116,7 +110,6 @@ asyncgo/
 │   └── discovery/              # catalog discovery + materialization (not public API)
 │       ├── discover.go         #   go/packages: locate *spec.AsyncAPI vars reachable from main
 │       ├── materialize.go      #   run a generated harness to materialize catalogs
-│       ├── fragment.go         #   read + overlay asyncapi.fragment.yaml
 │       ├── merge.go            #   merge multiple catalogs into one document
 │       └── *_test.go
 ├── docs/
@@ -126,7 +119,6 @@ asyncgo/
     └── orders/                 # example service (its own Go module)
         ├── go.mod              #   require + replace => ../..
         ├── main.go             #   //go:generate asyncgo generate .
-        ├── asyncapi.fragment.yaml   # hand-authored fragment merged over the result
         ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
         └── orders/
             ├── domain.go       #   structs (schema source)
@@ -173,7 +165,7 @@ asyncgo/
   - `require.*` for hard failures (stop immediately)
 
   ```go
-  doc, err := Overlay(base, overlay)
+  doc, err := buildDocument()
   require.NoError(t, err)
   require.NotNil(t, doc)
 
@@ -233,7 +225,7 @@ All commits must follow the
 
 | Scope      | Applies to                                                |
 | ---------- | --------------------------------------------------------- |
-| `spec`     | `spec/` — object model, codecs, bindings, Overlay         |
+| `spec`     | `spec/` — object model, codecs, bindings                |
 | `schema`   | `schema/` — struct → JSON Schema reflection               |
 | `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
@@ -247,10 +239,10 @@ All commits must follow the
 ```
 feat(dsl): add NATS and MQTT binding helpers
 fix(spec): preserve integer bindings through materialization
-refactor(internal): extract fragment overlay into discovery
+refactor(internal): extract catalog materialization into discovery
 test(schema): add table-driven tests for scalar derivation
 chore(deps): switch yaml.v3 to goccy/go-yaml
-docs: document the fragment merge in README
+docs: document schema derivation rules in README
 ```
 
 ### Breaking changes
