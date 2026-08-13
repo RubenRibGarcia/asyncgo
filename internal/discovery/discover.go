@@ -24,8 +24,8 @@ type Catalog struct {
 // asyncAPI identity, derived from the real type so it stays correct if the
 // module path changes.
 var (
-	asyncAPIPkgPath = reflect.TypeOf((*spec.AsyncAPI)(nil)).Elem().PkgPath()
-	asyncAPIName    = reflect.TypeOf((*spec.AsyncAPI)(nil)).Elem().Name()
+	asyncAPIPkgPath = reflect.TypeFor[spec.AsyncAPI]().PkgPath()
+	asyncAPIName    = reflect.TypeFor[spec.AsyncAPI]().Name()
 )
 
 // Find discovers exported package-level variables of type *spec.AsyncAPI in the

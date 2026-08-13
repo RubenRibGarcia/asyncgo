@@ -10,7 +10,7 @@ import (
 
 type OrderPlaced struct {
 	OrderID string  `json:"order_id" asyncgo:"required"`
-	Amount  float64 `json:"amount" asyncgo:"required"`
+	Amount  float64 `json:"amount"   asyncgo:"required"`
 	Note    string  `json:"note"`
 }
 

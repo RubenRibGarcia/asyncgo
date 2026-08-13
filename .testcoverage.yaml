@@ -1,0 +1,12 @@
+profile: coverage.out
+
+threshold:
+    file: 85
+    package: 85
+    total: 90
+
+exclude:
+    paths:
+        - ^model/
+
+force-annotation-comment: true

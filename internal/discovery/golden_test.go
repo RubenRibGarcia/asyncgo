@@ -28,6 +28,10 @@ func TestGoldenExample(t *testing.T) {
 
 	want, err := os.ReadFile(filepath.Join(dir, "asyncapi.yaml"))
 	require.NoError(t, err)
-	assert.Equal(t, string(want), string(got),
-		"generated document differs from committed example; regenerate with `go run ./cmd/asyncgo generate ./examples/orders`")
+	assert.Equal(
+		t,
+		string(want),
+		string(got),
+		"generated document differs from committed example; regenerate with `go run ./cmd/asyncgo generate ./examples/orders`",
+	)
 }

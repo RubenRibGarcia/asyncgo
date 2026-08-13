@@ -17,7 +17,10 @@ func TestEncodeYAML(t *testing.T) {
 		"order-placed": {
 			Address: "order-placed",
 			Messages: map[string]*Message{
-				"orderPlaced": {Name: "OrderPlaced", Payload: Ref("#/components/schemas/OrderPlaced")},
+				"orderPlaced": {
+					Name:    "OrderPlaced",
+					Payload: Ref("#/components/schemas/OrderPlaced"),
+				},
 			},
 			Bindings: ChannelBindings{
 				ProtocolKafka: &KafkaChannelBinding{Topic: "order-placed", Partitions: 3},

@@ -14,7 +14,7 @@ import (
 //	example=...      example value
 //	format=...       JSON Schema format (e.g. "date-time", "uuid", "email")
 func applyTag(s *spec.Schema, tag string) {
-	for _, part := range strings.Split(tag, ",") {
+	for part := range strings.SplitSeq(tag, ",") {
 		part = strings.TrimSpace(part)
 		switch {
 		case part == "" || part == "required":
@@ -22,7 +22,7 @@ func applyTag(s *spec.Schema, tag string) {
 		case strings.HasPrefix(part, "description="):
 			s.Description = strings.TrimPrefix(part, "description=")
 		case strings.HasPrefix(part, "enum="):
-			for _, v := range strings.Split(strings.TrimPrefix(part, "enum="), "|") {
+			for v := range strings.SplitSeq(strings.TrimPrefix(part, "enum="), "|") {
 				s.Enum = append(s.Enum, v)
 			}
 		case strings.HasPrefix(part, "example="):
@@ -34,7 +34,7 @@ func applyTag(s *spec.Schema, tag string) {
 }
 
 func hasFlag(tag, flag string) bool {
-	for _, part := range strings.Split(tag, ",") {
+	for part := range strings.SplitSeq(tag, ",") {
 		if strings.TrimSpace(part) == flag {
 			return true
 		}

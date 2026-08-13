@@ -33,9 +33,18 @@ func Materialize(dir string, cats []Catalog) ([]*spec.AsyncAPI, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating harness directory: %w", err)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() {
+		err := os.RemoveAll(tmp)
+		if err != nil {
+			fmt.Printf("failed to remove harness directory: %v\n", err)
+		}
+	}()
 
-	if err := os.WriteFile(filepath.Join(tmp, "main.go"), []byte(harness(cats)), 0o644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(tmp, "main.go"),
+		[]byte(harness(cats)),
+		0o644,
+	); err != nil {
 		return nil, fmt.Errorf("writing harness: %w", err)
 	}
 
@@ -78,6 +87,8 @@ func harness(cats []Catalog) string {
 	for _, c := range cats {
 		fmt.Fprintf(&b, "\t\t%s.%s,\n", alias[c.PkgPath], c.VarName)
 	}
-	b.WriteString("\t}\n\tout, err := yaml.Marshal(docs)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tif _, err := os.Stdout.Write(out); err != nil {\n\t\tpanic(err)\n\t}\n}\n")
+	b.WriteString(
+		"\t}\n\tout, err := yaml.Marshal(docs)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tif _, err := os.Stdout.Write(out); err != nil {\n\t\tpanic(err)\n\t}\n}\n",
+	)
 	return b.String()
 }
