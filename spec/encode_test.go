@@ -1,8 +1,10 @@
 package spec
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeYAML(t *testing.T) {
@@ -33,9 +35,7 @@ func TestEncodeYAML(t *testing.T) {
 	}
 
 	out, err := doc.YAML()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	s := string(out)
 
 	for _, want := range []string{
@@ -47,8 +47,6 @@ func TestEncodeYAML(t *testing.T) {
 		"type: object",
 		"partitions: 3",
 	} {
-		if !strings.Contains(s, want) {
-			t.Errorf("output missing %q:\n%s", want, s)
-		}
+		assert.Contains(t, s, want)
 	}
 }

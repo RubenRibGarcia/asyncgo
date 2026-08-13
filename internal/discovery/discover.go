@@ -40,7 +40,7 @@ func Find(dir string) ([]Catalog, error) {
 	}
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading packages in %s: %w", dir, err)
 	}
 	if n := packages.PrintErrors(pkgs); n > 0 {
 		return nil, fmt.Errorf("%d error(s) loading packages", n)

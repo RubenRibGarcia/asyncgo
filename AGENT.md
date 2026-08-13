@@ -137,9 +137,10 @@ asyncgo/
 
 - **Go version**: 1.25+
 - **Dependencies**: `github.com/goccy/go-yaml` for YAML,
+  `github.com/stretchr/testify` for test assertions,
   `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
   Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
-- **Testing**: `go test ./...` must pass. The `internal/discovery` tests are
+- **Testing**: `go test ./... -race` must pass. The `internal/discovery` tests are
   end-to-end: they run the generator against `examples/orders/` and assert the
   committed `asyncapi.yaml` is reproduced exactly (golden test).
 
@@ -165,9 +166,24 @@ asyncgo/
   - `should_return_X` for success paths
   - `should_return_error` / `should_return_nil` for error and boundary cases
 
-  **Assertions** — use the standard library `testing` package directly:
-  `t.Error`/`t.Errorf` for soft failures, `t.Fatal`/`t.Fatalf` for hard
-  failures. No third-party assertion library.
+  **Assertions** — use `testify/assert` and `testify/require` for all
+  assertions. Never call `t.Error`/`t.Errorf`/`t.Fatal`/`t.Fatalf` directly.
+
+  - `assert.*` for soft failures (continue on failure)
+  - `require.*` for hard failures (stop immediately)
+
+  ```go
+  doc, err := Overlay(base, overlay)
+  require.NoError(t, err)
+  require.NotNil(t, doc)
+
+  assert.Equal(t, "kafka", server.Protocol)
+  assert.Equal(t, 3, len(channels))
+  assert.Contains(t, channels, "order-placed")
+  assert.Len(t, schemas, 5)
+  assert.Empty(t, tags)
+  assert.Error(t, err)
+  ```
 
 - **Error handling**: wrap errors with context using `fmt.Errorf("...: %w", err)`.
 - **Naming**:

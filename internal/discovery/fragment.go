@@ -23,7 +23,7 @@ func ApplyFragment(dir string, doc *spec.AsyncAPI) (*spec.AsyncAPI, error) {
 		return doc, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading %s: %w", FragmentFile, err)
 	}
 
 	var frag spec.AsyncAPI

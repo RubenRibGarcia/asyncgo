@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/goccy/go-yaml"
@@ -16,21 +17,21 @@ import (
 func Overlay(base, overlay *AsyncAPI) (*AsyncAPI, error) {
 	bm, err := toMap(base)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("converting base document: %w", err)
 	}
 	om, err := toMap(overlay)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("converting overlay document: %w", err)
 	}
 	merged := mergeAny(bm, om).(map[string]any)
 
 	raw, err := yaml.Marshal(merged)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshaling merged document: %w", err)
 	}
 	var out AsyncAPI
 	if err := yaml.Unmarshal(raw, &out); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshaling merged document: %w", err)
 	}
 	return &out, nil
 }
@@ -41,11 +42,11 @@ func toMap(a *AsyncAPI) (map[string]any, error) {
 	}
 	raw, err := yaml.Marshal(a)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshaling document: %w", err)
 	}
 	m := map[string]any{}
 	if err := yaml.Unmarshal(raw, &m); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshaling document: %w", err)
 	}
 	return m, nil
 }

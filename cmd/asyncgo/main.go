@@ -47,7 +47,11 @@ func resolveDir(args []string) (string, error) {
 	if len(args) > 0 {
 		dir = args[0]
 	}
-	return filepath.Abs(dir)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolving directory %q: %w", dir, err)
+	}
+	return abs, nil
 }
 
 // buildDocument derives the document from the catalogs reachable from main and
@@ -56,19 +60,19 @@ func resolveDir(args []string) (string, error) {
 func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
 	cats, err := discovery.Find(dir)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("finding catalogs: %w", err)
 	}
 	if len(cats) == 0 {
 		return nil, 0, fmt.Errorf("no AsyncAPI catalogs (*spec.AsyncAPI vars) reachable from main in %s", dir)
 	}
 	docs, err := discovery.Materialize(dir, cats)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("materializing catalogs: %w", err)
 	}
 	doc := discovery.Merge(docs...)
 	doc, err = discovery.ApplyFragment(dir, doc)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("applying fragment: %w", err)
 	}
 
 	return doc, len(cats), nil
@@ -77,20 +81,20 @@ func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
 func generate(args []string) error {
 	dir, err := resolveDir(args)
 	if err != nil {
-		return err
+		return fmt.Errorf("generating: %w", err)
 	}
 
 	doc, n, err := buildDocument(dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("generating: %w", err)
 	}
 	out, err := doc.YAML()
 	if err != nil {
-		return err
+		return fmt.Errorf("encoding document: %w", err)
 	}
 	path := filepath.Join(dir, "asyncapi.yaml")
 	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return err
+		return fmt.Errorf("writing %s: %w", path, err)
 	}
 	fmt.Printf("wrote %s (%d catalog(s))\n", path, n)
 	return nil
@@ -99,16 +103,16 @@ func generate(args []string) error {
 func check(args []string) error {
 	dir, err := resolveDir(args)
 	if err != nil {
-		return err
+		return fmt.Errorf("checking: %w", err)
 	}
 
 	doc, _, err := buildDocument(dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("checking: %w", err)
 	}
 	got, err := doc.YAML()
 	if err != nil {
-		return err
+		return fmt.Errorf("encoding document: %w", err)
 	}
 
 	path := filepath.Join(dir, "asyncapi.yaml")
@@ -117,7 +121,7 @@ func check(args []string) error {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("%s not found; run `asyncgo generate` first", path)
 		}
-		return err
+		return fmt.Errorf("reading %s: %w", path, err)
 	}
 	if !bytes.Equal(got, want) {
 		return fmt.Errorf("%s is out of date; run `asyncgo generate`", path)

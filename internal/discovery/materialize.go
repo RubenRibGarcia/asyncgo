@@ -31,12 +31,12 @@ func Materialize(dir string, cats []Catalog) ([]*spec.AsyncAPI, error) {
 
 	tmp, err := os.MkdirTemp(dir, "asyncgo-harness-")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating harness directory: %w", err)
 	}
 	defer os.RemoveAll(tmp)
 
 	if err := os.WriteFile(filepath.Join(tmp, "main.go"), []byte(harness(cats)), 0o644); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("writing harness: %w", err)
 	}
 
 	cmd := exec.Command("go", "run", "./"+filepath.Base(tmp))

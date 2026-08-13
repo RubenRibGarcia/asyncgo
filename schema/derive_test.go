@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type Address struct {
@@ -34,136 +36,138 @@ func TestFromTypeHoistsNamedStructs(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	s := FromType(reflect.TypeOf(Order{}), defs)
 
-	if s.Ref == "" {
-		t.Fatalf("expected $ref for named struct, got %+v", s)
-	}
-	if want := Ref(reflect.TypeOf(Order{})); s.Ref != want {
-		t.Errorf("unexpected ref: got %s, want %s", s.Ref, want)
-	}
+	require.NotEmpty(t, s.Ref)
+	assert.Equal(t, Ref(reflect.TypeOf(Order{})), s.Ref)
 
-	obj, ok := defs[orderKey]
-	if !ok {
-		t.Fatalf("expected defs to contain %q, got keys %v", orderKey, keys(defs))
-	}
+	require.Contains(t, defs, orderKey)
+	obj := defs[orderKey]
 
 	// Optional-by-default: only "id" is required.
-	if len(obj.Required) != 1 || obj.Required[0] != "id" {
-		t.Errorf("expected required=[id], got %v", obj.Required)
-	}
+	assert.Equal(t, []string{"id"}, obj.Required)
 
 	// Nested Address is hoisted and referenced.
+	require.Contains(t, obj.Properties, "address")
 	addrProp := obj.Properties["address"]
-	if addrProp == nil || addrProp.Ref == "" {
-		t.Errorf("expected address property to be a $ref, got %+v", addrProp)
-	}
-	if _, ok := defs[addressKey]; !ok {
-		t.Errorf("expected Address to be hoisted")
-	}
+	require.NotNil(t, addrProp)
+	assert.NotEmpty(t, addrProp.Ref)
+	assert.Contains(t, defs, addressKey)
 
 	// Note description from asyncgo tag.
-	if got := obj.Properties["note"].Description; got != "Optional note" {
-		t.Errorf("expected note description, got %q", got)
-	}
+	require.Contains(t, obj.Properties, "note")
+	assert.Equal(t, "Optional note", obj.Properties["note"].Description)
 
 	// json:"-" and unexported fields are skipped.
-	if _, ok := obj.Properties["Skip"]; ok {
-		t.Errorf("expected json:\"-\" field to be skipped")
-	}
-	if _, ok := obj.Properties["hidden"]; ok {
-		t.Errorf("expected unexported field to be skipped")
-	}
+	assert.NotContains(t, obj.Properties, "Skip")
+	assert.NotContains(t, obj.Properties, "hidden")
 }
 
 func TestFromTypeScalars(t *testing.T) {
 	defs := map[string]*spec.Schema{}
-	cases := []struct {
+	tests := []struct {
+		name   string
 		v      any
 		typ    string
 		format string
 	}{
-		{"x", "string", ""},
-		{true, "boolean", ""},
-		{int(1), "integer", ""},
-		{int64(1), "integer", ""},
-		{float64(1), "number", "double"},
-		{float32(1), "number", "float"},
+		{name: "should_return_string", v: "x", typ: "string"},
+		{name: "should_return_boolean", v: true, typ: "boolean"},
+		{name: "should_return_integer_for_int", v: int(1), typ: "integer"},
+		{name: "should_return_integer_for_int64", v: int64(1), typ: "integer"},
+		{name: "should_return_double_for_float64", v: float64(1), typ: "number", format: "double"},
+		{name: "should_return_float_for_float32", v: float32(1), typ: "number", format: "float"},
 	}
-	for _, c := range cases {
-		s := FromType(reflect.TypeOf(c.v), defs)
-		if s.Type != c.typ {
-			t.Errorf("%T: expected type %q, got %q", c.v, c.typ, s.Type)
-		}
-		if s.Format != c.format {
-			t.Errorf("%T: expected format %q, got %q", c.v, c.format, s.Format)
-		}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := FromType(reflect.TypeOf(tc.v), defs)
+			assert.Equal(t, tc.typ, s.Type)
+			assert.Equal(t, tc.format, s.Format)
+		})
 	}
 }
 
 func TestFromTypeCollections(t *testing.T) {
 	defs := map[string]*spec.Schema{}
-
-	arr := FromType(reflect.TypeOf([]string{}), defs)
-	if arr.Type != "array" || arr.Items == nil || arr.Items.Type != "string" {
-		t.Errorf("unexpected array schema: %+v", arr)
+	tests := []struct {
+		name   string
+		v      any
+		verify func(*testing.T, *spec.Schema)
+	}{
+		{
+			name: "should_return_array_schema_for_slice",
+			v:    []string{},
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "array", s.Type)
+				require.NotNil(t, s.Items)
+				assert.Equal(t, "string", s.Items.Type)
+			},
+		},
+		{
+			name: "should_return_object_schema_for_map",
+			v:    map[string]int{},
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "object", s.Type)
+				require.NotNil(t, s.AdditionalProperties)
+				assert.Equal(t, "integer", s.AdditionalProperties.Type)
+			},
+		},
 	}
-
-	m := FromType(reflect.TypeOf(map[string]int{}), defs)
-	if m.Type != "object" || m.AdditionalProperties == nil || m.AdditionalProperties.Type != "integer" {
-		t.Errorf("unexpected map schema: %+v", m)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.verify(t, FromType(reflect.TypeOf(tc.v), defs))
+		})
 	}
 }
 
 func TestFromTypeSpecials(t *testing.T) {
 	defs := map[string]*spec.Schema{}
-
-	tt := FromType(reflect.TypeOf(time.Time{}), defs)
-	if tt.Type != "string" || tt.Format != "date-time" {
-		t.Errorf("unexpected time schema: %+v", tt)
+	tests := []struct {
+		name       string
+		typ        reflect.Type
+		wantType   string
+		wantFormat string
+	}{
+		{name: "should_return_date_time_for_time", typ: reflect.TypeOf(time.Time{}), wantType: "string", wantFormat: "date-time"},
+		{name: "should_return_byte_string_for_byte_slice", typ: reflect.TypeOf([]byte{}), wantType: "string", wantFormat: "byte"},
+		{name: "should_return_unconstrained_for_interface", typ: reflect.TypeOf((*any)(nil)).Elem(), wantType: ""},
 	}
-
-	b := FromType(reflect.TypeOf([]byte("x")), defs)
-	if b.Type != "string" || b.Format != "byte" {
-		t.Errorf("unexpected []byte schema: %+v", b)
-	}
-
-	any := FromType(reflect.TypeOf((*any)(nil)).Elem(), defs)
-	if any.Type != "" && any.Ref != "" {
-		t.Errorf("expected unconstrained schema for any, got %+v", any)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := FromType(tc.typ, defs)
+			assert.Equal(t, tc.wantType, s.Type)
+			assert.Equal(t, tc.wantFormat, s.Format)
+		})
 	}
 }
 
 func TestRecursiveStructTerminates(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	s := FromType(reflect.TypeOf(Node{}), defs)
-	if s.Ref == "" {
-		t.Fatalf("expected $ref for recursive named struct")
-	}
-	if _, ok := defs["github.com/RubenRibGarcia/asyncgo/schema.Node"]; !ok {
-		t.Errorf("expected Node to be hoisted")
-	}
+	require.NotEmpty(t, s.Ref)
+	assert.Contains(t, defs, "github.com/RubenRibGarcia/asyncgo/schema.Node")
 }
 
 func TestRefEscapesSlashes(t *testing.T) {
 	typ := reflect.TypeOf(Order{})
-	got := Ref(typ)
 	// Compute the expectation from the type's own package path so the test
 	// survives module renames: JSON Pointer escaping must turn "/" into "~1".
 	want := "#/components/schemas/" + strings.ReplaceAll(typ.PkgPath(), "/", "~1") + "." + typ.Name()
-	if got != want {
-		t.Errorf("unexpected ref escaping:\n got %s\nwant %s", got, want)
-	}
+	assert.Equal(t, want, Ref(typ))
 }
 
 func TestEscapePointer(t *testing.T) {
-	cases := map[string]string{
-		"a/b":   "a~1b",
-		"a~b":   "a~0b",
-		"a/b~c": "a~1b~0c",
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "should_escape_slash", in: "a/b", want: "a~1b"},
+		{name: "should_escape_tilde", in: "a~b", want: "a~0b"},
+		{name: "should_escape_slash_and_tilde", in: "a/b~c", want: "a~1b~0c"},
 	}
-	for in, want := range cases {
-		if got := escapePointer(in); got != want {
-			t.Errorf("escapePointer(%q) = %q, want %q", in, got, want)
-		}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, escapePointer(tc.in))
+		})
 	}
 }
 
@@ -171,12 +175,4 @@ func TestEscapePointer(t *testing.T) {
 type Node struct {
 	Value    string `json:"value"`
 	Children []Node `json:"children"`
-}
-
-func keys(m map[string]*spec.Schema) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }

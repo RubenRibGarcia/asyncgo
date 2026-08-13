@@ -1,6 +1,11 @@
 package spec
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestOverlay(t *testing.T) {
 	base := New()
@@ -24,49 +29,31 @@ func TestOverlay(t *testing.T) {
 	}
 
 	merged, err := Overlay(base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Overlay wins on scalar; base preserved elsewhere.
-	if merged.AsyncAPI != Version {
-		t.Errorf("expected version %q preserved, got %q", Version, merged.AsyncAPI)
-	}
-	if merged.Info.Title != "Overlay" {
-		t.Errorf("expected title Overlay, got %q", merged.Info.Title)
-	}
-	if merged.Info.Version != "1.0.0" {
-		t.Errorf("expected version preserved, got %q", merged.Info.Version)
-	}
-	if merged.Info.Description != "base desc" {
-		t.Errorf("expected description preserved, got %q", merged.Info.Description)
-	}
+	assert.Equal(t, Version, merged.AsyncAPI)
+	assert.Equal(t, "Overlay", merged.Info.Title)
+	assert.Equal(t, "1.0.0", merged.Info.Version)
+	assert.Equal(t, "base desc", merged.Info.Description)
 
 	// Servers: prod deep-merged (host/protocol kept, description overlaid), dev added.
+	require.Contains(t, merged.Servers, "prod")
 	prod := merged.Servers["prod"]
-	if prod == nil {
-		t.Fatal("expected prod server")
-	}
-	if prod.Host != "h" || prod.Protocol != ProtocolKafka {
-		t.Errorf("expected prod host/protocol preserved, got %+v", prod)
-	}
-	if prod.Description != "from fragment" {
-		t.Errorf("expected prod description overlaid, got %q", prod.Description)
-	}
-	if dev := merged.Servers["dev"]; dev == nil || dev.Protocol != ProtocolNATS {
-		t.Errorf("expected dev server added, got %+v", dev)
-	}
+	assert.Equal(t, "h", prod.Host)
+	assert.Equal(t, ProtocolKafka, prod.Protocol)
+	assert.Equal(t, "from fragment", prod.Description)
+
+	require.Contains(t, merged.Servers, "dev")
+	assert.Equal(t, ProtocolNATS, merged.Servers["dev"].Protocol)
 
 	// Channels: a deep-merged, b added.
-	if merged.Channels["a"].Description != "overlay channel" {
-		t.Errorf("expected channel a description overlaid, got %q", merged.Channels["a"].Description)
-	}
-	if merged.Channels["a"].Address != "a" {
-		t.Errorf("expected channel a address preserved, got %q", merged.Channels["a"].Address)
-	}
-	if merged.Channels["b"] == nil || merged.Channels["b"].Address != "b" {
-		t.Errorf("expected channel b added, got %+v", merged.Channels["b"])
-	}
+	require.Contains(t, merged.Channels, "a")
+	assert.Equal(t, "overlay channel", merged.Channels["a"].Description)
+	assert.Equal(t, "a", merged.Channels["a"].Address)
+
+	require.Contains(t, merged.Channels, "b")
+	assert.Equal(t, "b", merged.Channels["b"].Address)
 }
 
 func TestOverlayDoesNotMutateBase(t *testing.T) {
@@ -75,10 +62,7 @@ func TestOverlayDoesNotMutateBase(t *testing.T) {
 	overlay := New()
 	overlay.Info = Info{Title: "Overlay"}
 
-	if _, err := Overlay(base, overlay); err != nil {
-		t.Fatal(err)
-	}
-	if base.Info.Title != "Base" {
-		t.Errorf("Overlay mutated base: title is %q", base.Info.Title)
-	}
+	_, err := Overlay(base, overlay)
+	require.NoError(t, err)
+	assert.Equal(t, "Base", base.Info.Title)
 }
