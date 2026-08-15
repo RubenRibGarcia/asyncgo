@@ -1,4 +1,4 @@
-package orders
+package simple
 
 import (
 	"github.com/RubenRibGarcia/asyncgo"

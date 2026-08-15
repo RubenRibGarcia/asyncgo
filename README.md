@@ -13,13 +13,15 @@ touchpoints in your code.
 ### 1. The struct (data contract)
 
 Message payloads are derived from your Go structs via reflection. `json` tags
-drive field names; optional `asyncgo` tags add what reflection cannot see.
+drive field names; `asyncapi` tags carry `required`, `enum`, `example`, and
+`format`. Field descriptions are read from the field's doc comment.
 
 ```go
 type OrderPlaced struct {
- OrderID string  `json:"order_id" asyncgo:"required"`
- Amount  float64 `json:"amount"   asyncgo:"required"`
- Note    string  `json:"note"     asyncgo:"description=Optional note"`
+ OrderID string  `json:"order_id" asyncapi:"required"`
+ Amount  float64 `json:"amount"   asyncapi:"required"`
+ // Optional note from the customer.
+ Note    string  `json:"note"`
 }
 ```
 
@@ -61,7 +63,9 @@ harness to materialize them (never executing your `main` package).
 - **Fully-qualified names** — hoisted schemas are keyed `pkgPath.TypeName`
   (e.g. `example.com/orders/orders.OrderPlaced`); `$ref` escapes `/` per JSON
   Pointer.
-- **Optional by default** — a field is required only with `asyncgo:"required"`.
+- **Optional by default** — a field is required only with `asyncapi:"required"`.
+- **Descriptions from comments** — a field's `description` is read from its doc
+  comment; `enum`, `example`, and `format` still come from the `asyncapi` tag.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
   inline types are inlined.
 
@@ -73,6 +77,5 @@ harness to materialize them (never executing your `main` package).
 | `schema/` | `struct → JSON Schema` reflection |
 | `cmd/asyncgo/` | `generate` / `check` CLI |
 | `internal/discovery/` | catalog discovery + materialization |
-| `examples/orders/` | runnable example (its own module) |
-
-See `docs/brainstorm.md` (rationale) and `docs/design.md` (decisions).
+| `examples/simple/` | runnable example (its own module) |
+| `examples/embedded/` | example with embedded structs (its own module) |

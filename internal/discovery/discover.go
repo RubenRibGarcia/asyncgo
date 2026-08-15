@@ -28,10 +28,9 @@ var (
 	asyncAPIName    = reflect.TypeFor[spec.AsyncAPI]().Name()
 )
 
-// Find discovers exported package-level variables of type *spec.AsyncAPI in the
-// module rooted at dir, restricted to packages reachable from a main package.
-// If the module has no main package, all module packages are considered.
-func Find(dir string) ([]Catalog, error) {
+// load loads all packages in the module rooted at dir with the syntax and type
+// information needed for catalog discovery and comment extraction.
+func load(dir string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports |
 			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
@@ -45,9 +44,23 @@ func Find(dir string) ([]Catalog, error) {
 	if n := packages.PrintErrors(pkgs); n > 0 {
 		return nil, fmt.Errorf("%d error(s) loading packages", n)
 	}
+	return pkgs, nil
+}
 
-	reachable := reachableFromMain(pkgs)
+// Find discovers exported package-level variables of type *spec.AsyncAPI in the
+// module rooted at dir, restricted to packages reachable from a main package.
+// If the module has no main package, all module packages are considered.
+func Find(dir string) ([]Catalog, error) {
+	pkgs, err := load(dir)
+	if err != nil {
+		return nil, err
+	}
+	return scanCatalogs(pkgs, reachableFromMain(pkgs)), nil
+}
 
+// scanCatalogs returns catalog variables declared in the reachable packages,
+// sorted by package path then variable name.
+func scanCatalogs(pkgs []*packages.Package, reachable map[string]bool) []Catalog {
 	var out []Catalog
 	for _, pkg := range pkgs {
 		if !reachable[pkg.ID] {
@@ -63,7 +76,7 @@ func Find(dir string) ([]Catalog, error) {
 		}
 		return out[i].VarName < out[j].VarName
 	})
-	return out, nil
+	return out
 }
 
 // scanFile returns catalog variables declared at file scope in file.

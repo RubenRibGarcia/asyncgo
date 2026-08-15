@@ -12,14 +12,14 @@ import (
 )
 
 type Address struct {
-	Street string `json:"street" asyncgo:"required"`
+	Street string `json:"street" asyncapi:"required"`
 	City   string `json:"city"`
 }
 
 type Order struct {
-	ID      string         `json:"id"             asyncgo:"required"`
+	ID      string         `json:"id"             asyncapi:"required"`
 	Amount  float64        `json:"amount"`
-	Note    string         `json:"note,omitempty" asyncgo:"description=Optional note"`
+	Note    string         `json:"note,omitempty"`
 	Address Address        `json:"address"`
 	Tags    []string       `json:"tags"`
 	Meta    map[string]int `json:"meta"`
@@ -51,9 +51,10 @@ func TestFromTypeHoistsNamedStructs(t *testing.T) {
 	assert.NotEmpty(t, addrProp.Ref)
 	assert.Contains(t, defs, addressKey)
 
-	// Note description from asyncgo tag.
+	// Note has no description: the reflection path cannot read field comments,
+	// so descriptions are injected later by the discovery pass.
 	require.Contains(t, obj.Properties, "note")
-	assert.Equal(t, "Optional note", obj.Properties["note"].Description)
+	assert.Empty(t, obj.Properties["note"].Description)
 
 	// json:"-" and unexported fields are skipped.
 	assert.NotContains(t, obj.Properties, "Skip")

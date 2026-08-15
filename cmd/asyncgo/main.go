@@ -53,23 +53,7 @@ func resolveDir(args []string) (string, error) {
 // buildDocument derives the document from the catalogs reachable from main. It
 // returns the document and the number of catalogs found.
 func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
-	cats, err := discovery.Find(dir)
-	if err != nil {
-		return nil, 0, fmt.Errorf("finding catalogs: %w", err)
-	}
-	if len(cats) == 0 {
-		return nil, 0, fmt.Errorf(
-			"no AsyncAPI catalogs (*spec.AsyncAPI vars) reachable from main in %s",
-			dir,
-		)
-	}
-	docs, err := discovery.Materialize(dir, cats)
-	if err != nil {
-		return nil, 0, fmt.Errorf("materializing catalogs: %w", err)
-	}
-	doc := discovery.Merge(docs...)
-
-	return doc, len(cats), nil
+	return discovery.Build(dir)
 }
 
 func generate(args []string) error {

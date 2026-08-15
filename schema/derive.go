@@ -7,8 +7,10 @@
 //     into "#/components/schemas/...".
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
-//   - asyncgo struct tags carry "required", "description=...", "enum=a|b|...",
-//     "example=...", and "format=...".
+//   - asyncapi struct tags carry "required", "enum=a|b|...", "example=...",
+//     and "format=...". Descriptions are read from the field's doc comment by
+//     the generator's discovery pass (internal/discovery), since reflection
+//     cannot see comments.
 package schema
 
 import (
@@ -133,7 +135,7 @@ func fillObject(s *spec.Schema, t reflect.Type, defs map[string]*spec.Schema) {
 		}
 
 		prop := FromType(f.Type, defs)
-		if tag := f.Tag.Get("asyncgo"); tag != "" {
+		if tag := f.Tag.Get("asyncapi"); tag != "" {
 			applyTag(prop, tag)
 			if hasFlag(tag, "required") {
 				s.Required = append(s.Required, name)
