@@ -9,8 +9,8 @@ import (
 )
 
 type OrderPlaced struct {
-	OrderID string  `json:"order_id" asyncgo:"required"`
-	Amount  float64 `json:"amount"   asyncgo:"required"`
+	OrderID string  `json:"order_id" asyncapi:"required"`
+	Amount  float64 `json:"amount"   asyncapi:"required"`
 	Note    string  `json:"note"`
 }
 

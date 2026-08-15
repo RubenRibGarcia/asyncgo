@@ -9,13 +9,13 @@ import (
 )
 
 func TestFindMaterializeMerge(t *testing.T) {
-	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "orders"))
+	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "simple"))
 	require.NoError(t, err)
 
 	cats, err := Find(dir)
 	require.NoError(t, err)
 	require.Len(t, cats, 1)
-	assert.Equal(t, "example.com/orders/orders", cats[0].PkgPath)
+	assert.Equal(t, "github.com/RubenRibGarcia/asyncgo/examples/simple", cats[0].PkgPath)
 	assert.Equal(t, "Catalog", cats[0].VarName)
 
 	docs, err := Materialize(dir, cats)
@@ -30,7 +30,7 @@ func TestFindMaterializeMerge(t *testing.T) {
 	require.Contains(t, ch.Messages, "OrderPlaced")
 
 	// Schema is hoisted under the fully-qualified type name.
-	const key = "example.com/orders/orders.OrderPlaced"
+	const key = "github.com/RubenRibGarcia/asyncgo/examples/simple.OrderPlaced"
 	require.Contains(t, merged.Components.Schemas, key)
 	assert.Len(t, merged.Components.Schemas[key].Required, 2)
 }

@@ -9,29 +9,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGoldenExample regenerates the example's document and asserts it matches
-// the committed asyncapi.yaml. This locks the artifact against drift; when the
+// TestGoldenExample regenerates each example's document and asserts it matches
+// the committed asyncapi.yaml. This locks the artifacts against drift; when the
 // generator output changes, regenerate with:
 //
-//	go run ./cmd/asyncgo generate ./examples/orders
+//	go run ./cmd/asyncgo generate ./examples/<name>
 func TestGoldenExample(t *testing.T) {
-	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "orders"))
-	require.NoError(t, err)
+	for _, name := range []string{"simple", "embedded"} {
+		t.Run(name, func(t *testing.T) {
+			dir, err := filepath.Abs(filepath.Join("..", "..", "examples", name))
+			require.NoError(t, err)
 
-	cats, err := Find(dir)
-	require.NoError(t, err)
-	docs, err := Materialize(dir, cats)
-	require.NoError(t, err)
-	doc := Merge(docs...)
-	got, err := doc.YAML()
-	require.NoError(t, err)
+			doc, _, err := Build(dir)
+			require.NoError(t, err)
+			got, err := doc.YAML()
+			require.NoError(t, err)
 
-	want, err := os.ReadFile(filepath.Join(dir, "asyncapi.yaml"))
-	require.NoError(t, err)
-	assert.Equal(
-		t,
-		string(want),
-		string(got),
-		"generated document differs from committed example; regenerate with `go run ./cmd/asyncgo generate ./examples/orders`",
-	)
+			want, err := os.ReadFile(filepath.Join(dir, "asyncapi.yaml"))
+			require.NoError(t, err)
+			assert.Equal(
+				t,
+				string(want),
+				string(got),
+				"generated document differs from committed example; regenerate with `go run ./cmd/asyncgo generate ./examples/%s`",
+				name,
+			)
+		})
+	}
 }

@@ -1,4 +1,4 @@
-module example.com/orders
+module github.com/RubenRibGarcia/asyncgo/examples/simple
 
 go 1.25.7
 

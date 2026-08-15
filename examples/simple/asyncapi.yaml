@@ -18,7 +18,7 @@ channels:
     messages:
       OrderPlaced:
         payload:
-          $ref: "#/components/schemas/example.com~1orders~1orders.OrderPlaced"
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1examples~1simple.OrderPlaced"
         name: OrderPlaced
     description: Emitted when an order is placed
     bindings:
@@ -34,7 +34,7 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    example.com/orders/orders.OrderPlaced:
+    github.com/RubenRibGarcia/asyncgo/examples/simple.OrderPlaced:
       type: object
       properties:
         amount:

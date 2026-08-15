@@ -60,7 +60,8 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
    escapes `/`→`~1`, `~`→`~0` per RFC 6901.
 
 3. **Optional by default** — a field is required only when tagged
-   `asyncgo:"required"`.
+   `asyncapi:"required"`. Field descriptions are read from the field's doc
+   comment by the discovery pass, not from the tag.
 
 4. **Always hoist** — named struct types go into `components.schemas` and are
    referenced via `$ref`; only anonymous inline types are inlined.
@@ -88,7 +89,7 @@ asyncgo/
 ├── README.md                   # User-facing docs
 ├── go.mod
 ├── go.sum
-├── go.work                     # multi-module workspace (root + examples/orders)
+├── go.work                     # multi-module workspace (root + examples/simple + examples/embedded)
 ├── doc.go                      # fluent DSL: Spec(), Info(), Server(), Channel(), Operation()
 ├── message.go                  #   MessageOf(T{})
 ├── bindings.go                 #   Kafka(...), AMQP(...), NATS(...), MQTT(...), Binding(...)
@@ -101,7 +102,7 @@ asyncgo/
 │   └── *_test.go
 ├── schema/                     # struct -> JSON Schema (the "data contract" half)
 │   ├── derive.go               #   FromType(reflect.Type) -> spec.Schema
-│   ├── tags.go                 #   asyncgo struct-tag parsing
+│   ├── tags.go                 #   asyncapi struct-tag parsing
 │   └── derive_test.go
 ├── cmd/
 │   └── asyncgo/                # CLI: generate | check
@@ -111,18 +112,20 @@ asyncgo/
 │       ├── discover.go         #   go/packages: locate *spec.AsyncAPI vars reachable from main
 │       ├── materialize.go      #   run a generated harness to materialize catalogs
 │       ├── merge.go            #   merge multiple catalogs into one document
+│       ├── descriptions.go     #   extract field doc comments + apply them to schemas
+│       ├── build.go            #   Build(): the full generate pipeline
 │       └── *_test.go
-├── docs/
-│   ├── brainstorm.md           # design rationale (approach comparison)
-│   └── design.md               # locked decisions + package/API sketch
 └── examples/
-    └── orders/                 # example service (its own Go module)
+    ├── simple/                 # example service (its own Go module)
+    │   ├── go.mod              #   require + replace => ../..
+    │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
+    │   ├── schema.go           #   structs (schema source)
+    │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
+    └── embedded/               # example with embedded structs (its own module)
         ├── go.mod              #   require + replace => ../..
-        ├── main.go             #   //go:generate asyncgo generate .
         ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
-        └── orders/
-            ├── domain.go       #   structs (schema source)
-            └── catalog.go      #   var Catalog = asyncgo.Spec(...)
+        ├── schema.go           #   structs (schema source)
+        └── catalog.go          #   var Catalog = asyncgo.Spec(...)
 ```
 
 ## Conventions
@@ -133,8 +136,9 @@ asyncgo/
   `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
   Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
 - **Testing**: `go test ./... -race` must pass. The `internal/discovery` tests are
-  end-to-end: they run the generator against `examples/orders/` and assert the
-  committed `asyncapi.yaml` is reproduced exactly (golden test).
+  end-to-end: they run the generator against `examples/simple/` and
+  `examples/embedded/` and assert each committed `asyncapi.yaml` is reproduced
+  exactly (golden test).
 
   **Table-driven tests** — when a single test function covers multiple cases,
   use a table-driven test with `t.Run` subtests:
@@ -188,8 +192,8 @@ asyncgo/
   has no caller to return to.
 - **Module layout**: the root package is the public DSL (`asyncgo`); `spec` and
   `schema` are public subpackages; `internal/discovery` and `cmd/asyncgo` are
-  not part of the public API. `examples/orders` is a separate module joined via
-  `go.work`.
+  not part of the public API. `examples/simple` and `examples/embedded` are
+  separate modules joined via `go.work`.
 
 ## Commit Conventions
 
@@ -230,7 +234,7 @@ All commits must follow the
 | `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
 | `internal` | `internal/discovery/`                                     |
-| `examples` | `examples/orders/`                                        |
+| `examples` | `examples/simple/`, `examples/embedded/`                  |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
 
