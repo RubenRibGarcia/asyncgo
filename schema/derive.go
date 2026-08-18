@@ -5,6 +5,9 @@
 //   - Named struct types are always hoisted into the provided defs map under
 //     their fully-qualified name ("pkgPath.TypeName") and referenced via $ref
 //     into "#/components/schemas/...".
+//   - Anonymous embedded structs are flattened, matching encoding/json, unless
+//     tagged asyncgo:"allOf", in which case the embedded type is composed via
+//     allOf instead (opt-in).
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
 //   - asyncapi struct tags carry "required", "enum=a|b|...", "example=...",
@@ -35,6 +38,13 @@ func Name(t reflect.Type) string { return t.PkgPath() + "." + t.Name() }
 // Ref returns the $ref for a hoisted named type.
 func Ref(t reflect.Type) string {
 	return "#/components/schemas/" + escapePointer(Name(t))
+}
+
+// RefByName returns the $ref for a hoisted schema identified by its
+// fully-qualified name ("pkgPath.TypeName"), for combinator directives that
+// resolve names as strings rather than reflect.Type.
+func RefByName(fqn string) string {
+	return "#/components/schemas/" + escapePointer(fqn)
 }
 
 // escapePointer applies JSON Pointer escaping (RFC 6901): "~" -> "~0", "/" -> "~1".
@@ -107,24 +117,48 @@ func inlineStruct(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	return s
 }
 
+// fillObject derives the fields of t into s. Named embeds marked
+// `asyncgo:"allOf"` are composed via allOf; unmarked embeds are flattened
+// (matching encoding/json), and a flattened base is flattened fully — allOf
+// markers on its nested embeds are ignored.
 func fillObject(s *spec.Schema, t reflect.Type, defs map[string]*spec.Schema) {
-	if s.Properties == nil {
-		s.Properties = map[string]*spec.Schema{}
+	own := &spec.Schema{Type: "object", Properties: map[string]*spec.Schema{}}
+	var embedded []*spec.Schema
+	fillFields(own, &embedded, t, defs, false)
+
+	if len(embedded) == 0 {
+		s.Properties = own.Properties
+		s.Required = own.Required
+		return
 	}
+	s.AllOf = append(embedded, own)
+}
+
+// fillFields collects the fields of t into own, appending any `allOf`-marked
+// embedded struct refs to embedded. When flattening is true the fields are
+// being inlined into an enclosing struct, so allOf markers are ignored and
+// everything is flattened; markers are honored only at the level where the
+// type is derived standalone.
+func fillFields(
+	own *spec.Schema,
+	embedded *[]*spec.Schema,
+	t reflect.Type,
+	defs map[string]*spec.Schema,
+	flattening bool,
+) {
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.PkgPath != "" { // unexported
 			continue
 		}
 
-		// Anonymous embedded structs are flattened, matching encoding/json.
 		if f.Anonymous {
-			ft := f.Type
-			for ft.Kind() == reflect.Pointer {
-				ft = ft.Elem()
-			}
-			if ft.Kind() == reflect.Struct {
-				fillObject(s, ft, defs)
+			if ft, ok := structOf(f.Type); ok {
+				if !flattening && hasFlag(f.Tag.Get("asyncapi"), "allOf") {
+					*embedded = append(*embedded, FromType(f.Type, defs))
+					continue
+				}
+				fillFields(own, embedded, ft, defs, true)
 				continue
 			}
 		}
@@ -138,11 +172,47 @@ func fillObject(s *spec.Schema, t reflect.Type, defs map[string]*spec.Schema) {
 		if tag := f.Tag.Get("asyncapi"); tag != "" {
 			applyTag(prop, tag)
 			if hasFlag(tag, "required") {
-				s.Required = append(s.Required, name)
+				own.Required = append(own.Required, name)
+			}
+			if names, ok := combinatorNames(tag, "oneOf"); ok {
+				prop.OneOf = refs(names, t)
+			}
+			if names, ok := combinatorNames(tag, "anyOf"); ok {
+				prop.AnyOf = refs(names, t)
+			}
+			if names, ok := combinatorNames(tag, "allOf"); ok {
+				prop.AllOf = refs(names, t)
 			}
 		}
-		s.Properties[name] = prop
+		own.Properties[name] = prop
 	}
+}
+
+// structOf dereferences pointers and returns the struct type, or ok=false when
+// t is not a struct (possibly behind pointers).
+func structOf(t reflect.Type) (reflect.Type, bool) {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return nil, false
+	}
+	return t, true
+}
+
+// refs resolves combinator directive type names to $refs. A name containing
+// "/" is treated as a fully-qualified name (pkgPath.TypeName) and passed
+// through; otherwise it is resolved against the declaring struct's package.
+func refs(names []string, declaring reflect.Type) []*spec.Schema {
+	out := make([]*spec.Schema, 0, len(names))
+	for _, name := range names {
+		fqn := name
+		if !strings.Contains(name, "/") {
+			fqn = declaring.PkgPath() + "." + name
+		}
+		out = append(out, spec.Ref(RefByName(fqn)))
+	}
+	return out
 }
 
 // jsonName resolves the JSON field name from the "json" struct tag, falling

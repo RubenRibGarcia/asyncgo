@@ -12,6 +12,9 @@ import (
 //	enum=a|b|c       enumerated string values
 //	example=...      example value
 //	format=...       JSON Schema format (e.g. "date-time", "uuid", "email")
+//	oneOf=A|B        (handled by the caller via combinatorNames; ignored here)
+//	anyOf=A|B        (handled by the caller via combinatorNames; ignored here)
+//	allOf=A|B        (handled by the caller via combinatorNames; ignored here)
 //
 // Descriptions are not carried in the tag; the generator's discovery pass reads
 // them from the field's doc comment instead.
@@ -40,4 +43,21 @@ func hasFlag(tag, flag string) bool {
 		}
 	}
 	return false
+}
+
+// combinatorNames returns the "|"-separated type names for a combinator
+// directive (oneOf=/anyOf=/allOf=), or ok=false when the directive is absent.
+func combinatorNames(tag, key string) ([]string, bool) {
+	prefix := key + "="
+	for part := range strings.SplitSeq(tag, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, prefix) {
+			raw := strings.TrimPrefix(part, prefix)
+			if raw == "" {
+				return nil, false
+			}
+			return strings.Split(raw, "|"), true
+		}
+	}
+	return nil, false
 }
