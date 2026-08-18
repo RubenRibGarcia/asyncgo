@@ -13,7 +13,7 @@ How to use this template
 - **Created**: <YYYY-MM-DD>
 - **Status updated**: <YYYY-MM-DD>
 - **Scope**: `<packages/dirs touched, e.g. schema/, internal/discovery/>`
-- **Raw notes**: `<optional scratch/brainstorm file, gitignored — else delete this line>`
+- **Raw notes**: `<optional docs/scratch/<brainstorm file>, gitignored — else delete this line>`
 
 ## Summary
 

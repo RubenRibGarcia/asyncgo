@@ -2,7 +2,7 @@
 
 - **Status**: Proposed
 - **Scope**: `schema/`, `spec/`, `internal/discovery/`, `cmd/asyncgo`
-- **Raw notes**: `scratch/schema-composition-brainstorm.md` (gitignored)
+- **Raw notes**: `docs/scratch/schema-composition-brainstorm.md` (gitignored)
 
 ## Summary
 
