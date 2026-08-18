@@ -160,6 +160,201 @@ func TestRecursiveStructTerminates(t *testing.T) {
 	assert.Contains(t, defs, "github.com/RubenRibGarcia/asyncgo/schema.Node")
 }
 
+func TestAllOfEmbedding(t *testing.T) {
+	const (
+		composedKey = "github.com/RubenRibGarcia/asyncgo/schema.AllOfComposed"
+		flatKey     = "github.com/RubenRibGarcia/asyncgo/schema.FlatDefault"
+		topKey      = "github.com/RubenRibGarcia/asyncgo/schema.TopFlatten"
+		baseKey     = "github.com/RubenRibGarcia/asyncgo/schema.AllOfBase"
+		wrapperKey  = "github.com/RubenRibGarcia/asyncgo/schema.RecursiveAllOfWrapper"
+	)
+	tests := []struct {
+		name   string
+		typ    reflect.Type
+		verify func(t *testing.T, defs map[string]*spec.Schema)
+	}{
+		{
+			name: "should_compose_embedded_struct_with_allOf",
+			typ:  reflect.TypeOf(AllOfComposed{}),
+			verify: func(t *testing.T, defs map[string]*spec.Schema) {
+				composed := defs[composedKey]
+				require.NotNil(t, composed)
+				require.Len(t, composed.AllOf, 2)
+				assert.Equal(t, Ref(reflect.TypeOf(AllOfBase{})), composed.AllOf[0].Ref)
+				own := composed.AllOf[1]
+				require.NotNil(t, own)
+				assert.Equal(t, "object", own.Type)
+				assert.Contains(t, own.Properties, "amount")
+			},
+		},
+		{
+			name: "should_flatten_embedded_struct_by_default",
+			typ:  reflect.TypeOf(FlatDefault{}),
+			verify: func(t *testing.T, defs map[string]*spec.Schema) {
+				obj := defs[flatKey]
+				require.NotNil(t, obj)
+				assert.Empty(t, obj.AllOf)
+				assert.Contains(t, obj.Properties, "id")
+				assert.Contains(t, obj.Properties, "note")
+				assert.Equal(t, []string{"id"}, obj.Required)
+			},
+		},
+		{
+			name: "should_keep_required_local_per_allOf_member",
+			typ:  reflect.TypeOf(AllOfComposed{}),
+			verify: func(t *testing.T, defs map[string]*spec.Schema) {
+				composed := defs[composedKey]
+				require.NotNil(t, composed)
+				assert.Empty(t, composed.Required)
+				require.Len(t, composed.AllOf, 2)
+				assert.Equal(t, []string{"amount"}, composed.AllOf[1].Required)
+				base := defs[baseKey]
+				require.NotNil(t, base)
+				assert.Equal(t, []string{"id"}, base.Required)
+			},
+		},
+		{
+			name: "should_flatten_marked_base_fully_when_unmarked",
+			typ:  reflect.TypeOf(TopFlatten{}),
+			verify: func(t *testing.T, defs map[string]*spec.Schema) {
+				obj := defs[topKey]
+				require.NotNil(t, obj)
+				assert.Empty(t, obj.AllOf)
+				assert.Contains(t, obj.Properties, "id")
+				assert.Contains(t, obj.Properties, "extra")
+				assert.Contains(t, obj.Properties, "own")
+			},
+		},
+		{
+			name: "should_terminate_on_recursive_allOf",
+			typ:  reflect.TypeOf(RecursiveAllOfWrapper{}),
+			verify: func(t *testing.T, defs map[string]*spec.Schema) {
+				wrapper := defs[wrapperKey]
+				require.NotNil(t, wrapper)
+				require.Len(t, wrapper.AllOf, 2)
+				assert.Equal(t, Ref(reflect.TypeOf(RecursiveAllOfNode{})), wrapper.AllOf[0].Ref)
+				assert.Contains(
+					t,
+					defs,
+					"github.com/RubenRibGarcia/asyncgo/schema.RecursiveAllOfNode",
+				)
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defs := map[string]*spec.Schema{}
+			FromType(tc.typ, defs)
+			tc.verify(t, defs)
+		})
+	}
+}
+
+func TestCombinatorDirectives(t *testing.T) {
+	const key = "github.com/RubenRibGarcia/asyncgo/schema.CombinatorHolder"
+	tests := []struct {
+		name     string
+		field    string
+		accessor func(*spec.Schema) []*spec.Schema
+	}{
+		{
+			name:  "should_emit_oneOf_refs",
+			field: "one",
+			accessor: func(s *spec.Schema) []*spec.Schema {
+				return s.OneOf
+			},
+		},
+		{
+			name:  "should_emit_anyOf_refs",
+			field: "any",
+			accessor: func(s *spec.Schema) []*spec.Schema {
+				return s.AnyOf
+			},
+		},
+		{
+			name:  "should_emit_allOf_refs",
+			field: "all",
+			accessor: func(s *spec.Schema) []*spec.Schema {
+				return s.AllOf
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defs := map[string]*spec.Schema{}
+			FromType(reflect.TypeOf(CombinatorHolder{}), defs)
+			obj := defs[key]
+			require.NotNil(t, obj)
+			prop := obj.Properties[tc.field]
+			require.NotNil(t, prop)
+			got := tc.accessor(prop)
+			require.Len(t, got, 2)
+			assert.Equal(
+				t,
+				RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"),
+				got[0].Ref,
+			)
+			assert.Equal(
+				t,
+				RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB"),
+				got[1].Ref,
+			)
+		})
+	}
+}
+
+func TestCombinatorNameResolution(t *testing.T) {
+	t.Run("should_resolve_same_package_short_name", func(t *testing.T) {
+		defs := map[string]*spec.Schema{}
+		FromType(reflect.TypeOf(UnionHolder{}), defs)
+		obj := defs["github.com/RubenRibGarcia/asyncgo/schema.UnionHolder"]
+		require.NotNil(t, obj)
+		prop := obj.Properties["data"]
+		require.NotNil(t, prop)
+		require.Len(t, prop.OneOf, 2)
+		assert.Equal(
+			t,
+			RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"),
+			prop.OneOf[0].Ref,
+		)
+	})
+
+	t.Run("should_pass_through_fully_qualified_name", func(t *testing.T) {
+		defs := map[string]*spec.Schema{}
+		FromType(reflect.TypeOf(FQNUnionHolder{}), defs)
+		obj := defs["github.com/RubenRibGarcia/asyncgo/schema.FQNUnionHolder"]
+		require.NotNil(t, obj)
+		prop := obj.Properties["data"]
+		require.NotNil(t, prop)
+		require.Len(t, prop.OneOf, 1)
+		assert.Equal(t, RefByName("github.com/acme/orders.OrderPlaced"), prop.OneOf[0].Ref)
+	})
+}
+
+func TestFinalizeHoistsRegisteredTypes(t *testing.T) {
+	t.Run("should_hoist_referenced_types_on_finalize", func(t *testing.T) {
+		Register(UnionMemberA{}, UnionMemberB{})
+		doc := spec.New()
+		Finalize(doc)
+
+		require.NotNil(t, doc.Components)
+		require.Contains(
+			t,
+			doc.Components.Schemas,
+			"github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA",
+		)
+		require.Contains(
+			t,
+			doc.Components.Schemas,
+			"github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB",
+		)
+		a := doc.Components.Schemas["github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"]
+		require.NotNil(t, a)
+		assert.Contains(t, a.Properties, "a")
+		assert.Equal(t, []string{"a"}, a.Required)
+	})
+}
+
 func TestRefEscapesSlashes(t *testing.T) {
 	typ := reflect.TypeOf(Order{})
 	// Compute the expectation from the type's own package path so the test
@@ -193,4 +388,73 @@ func TestEscapePointer(t *testing.T) {
 type Node struct {
 	Value    string `json:"value"`
 	Children []Node `json:"children"`
+}
+
+// AllOfBase is the shared base composed via allOf in the embedding tests.
+type AllOfBase struct {
+	ID string `json:"id" asyncapi:"required"`
+}
+
+// AllOfComposed opts into allOf composition of AllOfBase.
+type AllOfComposed struct {
+	AllOfBase `        asyncapi:"allOf"`
+	Amount    float64 `asyncapi:"required" json:"amount"`
+}
+
+// FlatDefault embeds AllOfBase without a marker, so it is flattened.
+type FlatDefault struct {
+	AllOfBase
+	Note string `json:"note"`
+}
+
+// MidMarked marks its own embedded base as allOf.
+type MidMarked struct {
+	AllOfBase `       asyncapi:"allOf"`
+	Extra     string `                 json:"extra"`
+}
+
+// TopFlatten embeds MidMarked unmarked: MidMarked's allOf marker is ignored
+// and everything is flattened into TopFlatten.
+type TopFlatten struct {
+	MidMarked
+	Own string `json:"own"`
+}
+
+// RecursiveAllOfNode is a recursive type composed via allOf by the wrapper.
+type RecursiveAllOfNode struct {
+	Value string              `json:"value"`
+	Next  *RecursiveAllOfNode `json:"next"`
+}
+
+// RecursiveAllOfWrapper allOf-composes a recursive type.
+type RecursiveAllOfWrapper struct {
+	RecursiveAllOfNode `       asyncapi:"allOf"`
+	Label              string `                 json:"label"`
+}
+
+// UnionMemberA is one arm of a tag-driven union.
+type UnionMemberA struct {
+	A string `json:"a" asyncapi:"required"`
+}
+
+// UnionMemberB is another arm of a tag-driven union.
+type UnionMemberB struct {
+	B string `json:"b"`
+}
+
+// UnionHolder references two same-package types by short name.
+type UnionHolder struct {
+	Data any `json:"data" asyncapi:"oneOf=UnionMemberA|UnionMemberB"`
+}
+
+// FQNUnionHolder references a type by fully-qualified name.
+type FQNUnionHolder struct {
+	Data any `json:"data" asyncapi:"oneOf=github.com/acme/orders.OrderPlaced"`
+}
+
+// CombinatorHolder exercises oneOf, anyOf, and allOf directives side by side.
+type CombinatorHolder struct {
+	One any `json:"one" asyncapi:"oneOf=UnionMemberA|UnionMemberB"`
+	Any any `json:"any" asyncapi:"anyOf=UnionMemberA|UnionMemberB"`
+	All any `json:"all" asyncapi:"allOf=UnionMemberA|UnionMemberB"`
 }
