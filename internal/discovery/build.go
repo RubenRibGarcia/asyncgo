@@ -22,7 +22,7 @@ func Build(dir string) (*spec.AsyncAPI, int, error) {
 			dir,
 		)
 	}
-	docs, err := Materialize(dir, cats)
+	docs, err := Materialize(dir, cats, collectCombinatorRefs(pkgs, reachable))
 	if err != nil {
 		return nil, 0, fmt.Errorf("materializing catalogs: %w", err)
 	}

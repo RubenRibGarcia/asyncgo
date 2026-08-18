@@ -214,13 +214,27 @@ func applyDescriptions(doc *spec.AsyncAPI, desc descriptions) {
 	}
 	for name, fields := range desc {
 		schema, ok := doc.Components.Schemas[name]
-		if !ok || schema == nil || schema.Properties == nil {
+		if !ok || schema == nil {
 			continue
 		}
+		applySchemaDescriptions(schema, fields)
+	}
+}
+
+// applySchemaDescriptions applies the field descriptions to a schema and, for
+// allOf-composed structs, to the member that holds the struct's own fields.
+func applySchemaDescriptions(schema *spec.Schema, fields map[string]string) {
+	if schema == nil {
+		return
+	}
+	if schema.Properties != nil {
 		for jsonName, d := range fields {
 			if prop, ok := schema.Properties[jsonName]; ok && prop != nil {
 				prop.Description = d
 			}
 		}
+	}
+	for _, member := range schema.AllOf {
+		applySchemaDescriptions(member, fields)
 	}
 }
