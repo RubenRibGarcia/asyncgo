@@ -1,6 +1,6 @@
 package spec
 
-// Schema is a JSON Schema (Draft 2020-12, the dialect used by AsyncAPI 3.x).
+// Schema is a JSON Schema (Draft 07, the dialect used by AsyncAPI 3.x).
 // Only the keywords the generator emits — plus the ones a hand-authored catalog
 // is likely to need — are modeled; the type is straightforward to extend.
 type Schema struct {
@@ -19,11 +19,11 @@ type Schema struct {
 	Example any   `json:"example,omitempty" yaml:"example,omitempty"`
 	Default any   `json:"default,omitempty" yaml:"default,omitempty"`
 
-	Defs  map[string]*Schema `json:"$defs,omitempty" yaml:"$defs,omitempty"`
-	OneOf []*Schema          `json:"oneOf,omitempty" yaml:"oneOf,omitempty"`
-	AllOf []*Schema          `json:"allOf,omitempty" yaml:"allOf,omitempty"`
-	AnyOf []*Schema          `json:"anyOf,omitempty" yaml:"anyOf,omitempty"`
-	Not   *Schema            `json:"not,omitempty"   yaml:"not,omitempty"`
+	Definitions map[string]*Schema `json:"definitions,omitempty" yaml:"definitions,omitempty"`
+	OneOf       []*Schema          `json:"oneOf,omitempty"       yaml:"oneOf,omitempty"`
+	AllOf       []*Schema          `json:"allOf,omitempty"       yaml:"allOf,omitempty"`
+	AnyOf       []*Schema          `json:"anyOf,omitempty"       yaml:"anyOf,omitempty"`
+	Not         *Schema            `json:"not,omitempty"         yaml:"not,omitempty"`
 
 	// String constraints.
 	MinLength *uint64 `json:"minLength,omitempty" yaml:"minLength,omitempty"`

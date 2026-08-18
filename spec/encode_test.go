@@ -7,6 +7,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestEncodeDefinitions(t *testing.T) {
+	doc := New()
+	doc.Components = &Components{
+		Schemas: map[string]*Schema{
+			"Event": {
+				Definitions: map[string]*Schema{
+					"inner": {Type: "string"},
+				},
+			},
+		},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+
+	// Draft 07 uses `definitions` (not 2019-09+ `$defs`).
+	assert.Contains(t, string(out), "definitions:")
+	assert.NotContains(t, string(out), "$defs")
+}
+
 func TestEncodeYAML(t *testing.T) {
 	doc := New()
 	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
