@@ -107,6 +107,13 @@ asyncgo/
 ├── cmd/
 │   └── asyncgo/                # CLI: generate | check
 │       └── main.go
+├── docs/                       # development process (see "Development Workflow")
+│   ├── adr/                    #   Architecture Decision Records (MADR format)
+│   │   └── README.md           #     ADR workflow, naming, and index
+│   ├── designdoc/              #   design docs (proposal → review → ADR)
+│   │   ├── README.md           #     design-doc workflow, naming, and index
+│   │   └── schema-composition.md
+│   └── templates/              #   adr-template.md, design-doc-template.md
 ├── internal/
 │   └── discovery/              # catalog discovery + materialization (not public API)
 │       ├── discover.go         #   go/packages: locate *spec.AsyncAPI vars reachable from main
@@ -127,6 +134,34 @@ asyncgo/
         ├── schema.go           #   structs (schema source)
         └── catalog.go          #   var Catalog = asyncgo.Spec(...)
 ```
+
+## Development Workflow
+
+Every non-trivial change follows a **mandatory, documented process** before any
+code is written. The process is defined in two canonical files and is binding —
+skip a step only where explicitly allowed:
+
+- **[docs/designdoc/README.md](docs/designdoc/README.md)** — design docs. A
+  non-trivial change is proposed *before* it is built from
+  `docs/templates/design-doc-template.md`, then reviewed and accepted.
+- **[docs/adr/README.md](docs/adr/README.md)** — Architecture Decision Records
+  (MADR format). Accepted decisions are distilled into a numbered
+  `docs/adr/NNNN-kebab-case-title.md`, giving the repo a durable, in-repo
+  memory of *why* the code looks the way it does.
+
+**The workflow:**
+
+1. **Propose** — copy `docs/templates/design-doc-template.md` into
+   `docs/designdoc/`, fill it in with `Status: Proposed`.
+2. **Review & accept** — discuss and revise, then flip the design doc to
+   `Status: Accepted`.
+3. **Record** — distill the accepted decisions into a new ADR under `docs/adr/`
+   (from `docs/templates/adr-template.md`), linking back to the design doc.
+4. **Implement** — build the change with the design doc and ADR as the contract.
+
+For a small, self-contained decision the design-doc step may be skipped — but
+the ADR is **never** optional. An architectural change without a corresponding
+ADR is not complete.
 
 ## Conventions
 
