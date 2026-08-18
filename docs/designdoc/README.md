@@ -41,4 +41,4 @@ docs/designdoc/
 
 | Title                                       | Status   | Created    | Status updated | ADR |
 | ------------------------------------------- | -------- | ---------- | -------------- | --- |
-| [schema-composition](schema-composition.md) | Proposed | 2026-08-15 | 2026-08-15     | —   |
+| [schema-composition](schema-composition.md) | Accepted | 2026-08-15 | 2026-08-18     | [0001](../adr/0001-schema-composition-from-go-structs.md) |

@@ -51,4 +51,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 
 | # | Title           | Status | Created | Status updated |
 | - | --------------- | ------ | ------- | -------------- |
-|   | *(no ADRs yet)* |        |         |                |
+| [0001](0001-schema-composition-from-go-structs.md) | Derive allOf / oneOf / anyOf composition from Go structs | accepted | 2026-08-18 | 2026-08-18 |
