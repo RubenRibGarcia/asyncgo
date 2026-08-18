@@ -1,6 +1,8 @@
 # Design: allOf / oneOf / anyOf derivation from Go structs
 
-- **Status**: Proposed
+- **Status**: Accepted
+- **Created**: 2026-08-15
+- **Status updated**: 2026-08-18
 - **Scope**: `schema/`, `spec/`, `internal/discovery/`, `cmd/asyncgo`
 - **Raw notes**: `docs/scratch/schema-composition-brainstorm.md` (gitignored)
 
