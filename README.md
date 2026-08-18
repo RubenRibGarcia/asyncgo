@@ -13,8 +13,9 @@ touchpoints in your code.
 ### 1. The struct (data contract)
 
 Message payloads are derived from your Go structs via reflection. `json` tags
-drive field names; `asyncapi` tags carry `required`, `enum`, `example`, and
-`format`. Field descriptions are read from the field's doc comment.
+drive field names; `asyncapi` tags carry `required`, `enum`, `example`, `format`,
+and the `allOf`/`oneOf`/`anyOf` composition directives. Field descriptions are
+read from the field's doc comment.
 
 ```go
 type OrderPlaced struct {
@@ -68,6 +69,76 @@ harness to materialize them (never executing your `main` package).
   comment; `enum`, `example`, and `format` still come from the `asyncapi` tag.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
   inline types are inlined.
+- **Embedding** — embedded structs are flattened by default (matching
+  `encoding/json`); tag one with `asyncapi:"allOf"` to compose it instead.
+- **Union fields** — `asyncapi:"oneOf=A|B"`, `anyOf=A|B`, or `allOf=A|B` on a
+  field emits `$ref`s to the named types, which are hoisted automatically.
+
+## Schema composition
+
+Go struct composition maps onto the JSON Schema combinators `allOf`, `oneOf`,
+and `anyOf` — no hand-written schema required.
+
+### allOf from embedding
+
+Anonymous embedded fields are **flattened** by default (matching
+`encoding/json`). Tag an embedded field with `asyncapi:"allOf"` to keep it as a
+shared `$ref` and compose it via `allOf` instead. `required` stays local to each
+`allOf` member, per JSON Schema semantics.
+
+```go
+type Base struct {
+	ID string `json:"id" asyncapi:"required"`
+}
+
+type OrderPlaced struct {
+	Base   `asyncapi:"allOf"`
+	Amount float64 `json:"amount" asyncapi:"required"`
+}
+```
+
+```yaml
+# components.schemas (abridged; "..." elides the fully-qualified name):
+#   ...Base:
+#     type: object
+#     properties: { id: { type: string } }
+#     required: [id]
+#   ...OrderPlaced:
+#     type: object
+#     allOf:
+#       - $ref: "#/components/schemas/...Base"
+#       - type: object
+#         properties: { amount: { type: number } }
+#         required: [amount]
+```
+
+### oneOf / anyOf / allOf from a tag
+
+On a field, `oneOf=`, `anyOf=`, and `allOf=` emit the corresponding combinator of
+`$ref`s. Names may be same-package short names or fully-qualified
+`pkgPath.TypeName`. The generator discovers the referenced types and hoists them
+into `components.schemas` automatically — zero registration boilerplate.
+
+```go
+type OrderCancelled struct {
+	OrderID string `json:"order_id" asyncapi:"required"`
+}
+
+type OrderEvent struct {
+	Data any `json:"data" asyncapi:"required,oneOf=OrderPlaced|OrderCancelled"`
+}
+```
+
+```yaml
+# data:
+#   oneOf:
+#     - $ref: "#/components/schemas/...OrderPlaced"
+#     - $ref: "#/components/schemas/...OrderCancelled"
+```
+
+AsyncAPI 3.x Schema Objects are a superset of **JSON Schema Draft 07**, where
+`$ref` siblings are ignored — so a union field should be typed `any` (or an
+interface), not a concrete type.
 
 ## Layout
 
@@ -78,4 +149,4 @@ harness to materialize them (never executing your `main` package).
 | `cmd/asyncgo/` | `generate` / `check` CLI |
 | `internal/discovery/` | catalog discovery + materialization |
 | `examples/simple/` | runnable example (its own module) |
-| `examples/embedded/` | example with embedded structs (its own module) |
+| `examples/embedded/` | example with embedded structs, `allOf` embedding, and a `oneOf` union (its own module) |
