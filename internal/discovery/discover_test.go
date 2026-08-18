@@ -18,7 +18,7 @@ func TestFindMaterializeMerge(t *testing.T) {
 	assert.Equal(t, "github.com/RubenRibGarcia/asyncgo/examples/simple", cats[0].PkgPath)
 	assert.Equal(t, "Catalog", cats[0].VarName)
 
-	docs, err := Materialize(dir, cats)
+	docs, err := Materialize(dir, cats, nil)
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
 
