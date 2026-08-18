@@ -13,6 +13,18 @@ servers:
     description: Production Kafka cluster
 defaultContentType: application/json
 channels:
+  order-event:
+    address: order-event
+    messages:
+      OrderEvent:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1examples~1embedded.OrderEvent"
+        name: OrderEvent
+    description: Envelope carrying a union of order event types
+    bindings:
+      kafka:
+        partitions: 3
+        topic: order-events
   order-placed:
     address: order-placed
     messages:
@@ -26,6 +38,12 @@ channels:
         partitions: 3
         topic: order-placed
 operations:
+  order-event.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-event"
+    messages:
+    - $ref: "#/channels/order-event/messages/OrderEvent"
   order-placed.send:
     action: send
     channel:
@@ -34,18 +52,44 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/examples/embedded.OrderPlaced:
+    github.com/RubenRibGarcia/asyncgo/examples/embedded.BaseSchema:
       type: object
       properties:
-        amount:
-          type: number
-          format: double
         id:
           type: string
           description: Unique identifier for the order
-        note:
-          type: string
-          description: Optional note from the customer
       required:
       - id
-      - amount
+    github.com/RubenRibGarcia/asyncgo/examples/embedded.OrderCancelled:
+      type: object
+      properties:
+        order_id:
+          type: string
+        reason:
+          type: string
+          description: Reason for the cancellation
+      required:
+      - order_id
+    github.com/RubenRibGarcia/asyncgo/examples/embedded.OrderEvent:
+      type: object
+      properties:
+        data:
+          oneOf:
+          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1examples~1embedded.OrderPlaced"
+          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1examples~1embedded.OrderCancelled"
+      required:
+      - data
+    github.com/RubenRibGarcia/asyncgo/examples/embedded.OrderPlaced:
+      type: object
+      allOf:
+      - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1examples~1embedded.BaseSchema"
+      - type: object
+        properties:
+          amount:
+            type: number
+            format: double
+          note:
+            type: string
+            description: Optional note from the customer
+        required:
+        - amount
