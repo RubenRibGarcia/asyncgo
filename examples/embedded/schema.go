@@ -9,8 +9,20 @@ type BaseSchema struct {
 
 // OrderPlaced is the message emitted when an order is placed.
 type OrderPlaced struct {
-	BaseSchema
-	Amount float64 `json:"amount" asyncapi:"required"`
+	BaseSchema `        asyncapi:"allOf"`
+	Amount     float64 `asyncapi:"required" json:"amount"`
 	// Optional note from the customer
 	Note string `json:"note"`
+}
+
+// OrderCancelled is emitted when an order is cancelled.
+type OrderCancelled struct {
+	OrderID string `json:"order_id" asyncapi:"required"`
+	// Reason for the cancellation
+	Reason string `json:"reason"`
+}
+
+// OrderEvent is an envelope whose data field is a union of order event types.
+type OrderEvent struct {
+	Data any `json:"data" asyncapi:"required,oneOf=OrderPlaced|OrderCancelled"`
 }
