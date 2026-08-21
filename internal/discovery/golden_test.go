@@ -15,7 +15,7 @@ import (
 //
 //	go run ./cmd/asyncgo generate ./examples/<name>
 func TestGoldenExample(t *testing.T) {
-	for _, name := range []string{"simple", "embedded"} {
+	for _, name := range []string{"simple", "allof", "oneof", "anyof"} {
 		t.Run(name, func(t *testing.T) {
 			dir, err := filepath.Abs(filepath.Join("..", "..", "examples", name))
 			require.NoError(t, err)

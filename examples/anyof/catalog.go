@@ -1,6 +1,4 @@
-// Package orders contains the domain types and the AsyncAPI catalog for the
-// example orders service.
-package simple
+package anyof
 
 import (
 	"github.com/RubenRibGarcia/asyncgo"
@@ -24,14 +22,8 @@ var Catalog = asyncgo.Spec(
 	),
 
 	asyncgo.Channels(
-		asyncgo.Channel("order-placed").
-			Description("Emitted when an order is placed").
-			Send(asyncgo.Operation().
-				Message(asyncgo.MessageOf(OrderPlaced{}).Name("OrderPlaced"))).
-			Kafka(spec.KafkaChannelBinding{Topic: "order-placed", Partitions: 3}),
-
 		asyncgo.Channel("order-event").
-			Description("Envelope carrying a union of order event types").
+			Description("Envelope carrying any of the order event types").
 			Send(asyncgo.Operation().
 				Message(asyncgo.MessageOf(OrderEvent{}).Name("OrderEvent"))).
 			Kafka(spec.KafkaChannelBinding{Topic: "order-events", Partitions: 3}),

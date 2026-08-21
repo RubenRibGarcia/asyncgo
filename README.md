@@ -88,12 +88,12 @@ shared `$ref` and compose it via `allOf` instead. `required` stays local to each
 
 ```go
 type Base struct {
-	ID string `json:"id" asyncapi:"required"`
+ ID string `json:"id" asyncapi:"required"`
 }
 
 type OrderPlaced struct {
-	Base   `asyncapi:"allOf"`
-	Amount float64 `json:"amount" asyncapi:"required"`
+ Base   `asyncapi:"allOf"`
+ Amount float64 `json:"amount" asyncapi:"required"`
 }
 ```
 
@@ -121,11 +121,11 @@ into `components.schemas` automatically — zero registration boilerplate.
 
 ```go
 type OrderCancelled struct {
-	OrderID string `json:"order_id" asyncapi:"required"`
+ OrderID string `json:"order_id" asyncapi:"required"`
 }
 
 type OrderEvent struct {
-	Data any `json:"data" asyncapi:"required,oneOf=OrderPlaced|OrderCancelled"`
+ Data any `json:"data" asyncapi:"required,oneOf=OrderPlaced|OrderCancelled"`
 }
 ```
 
@@ -149,4 +149,6 @@ interface), not a concrete type.
 | `cmd/asyncgo/` | `generate` / `check` CLI |
 | `internal/discovery/` | catalog discovery + materialization |
 | `examples/simple/` | runnable example (its own module) |
-| `examples/embedded/` | example with embedded structs, `allOf` embedding, and a `oneOf` union (its own module) |
+| `examples/allof/` | embedded struct composed via `allOf` (its own module) |
+| `examples/oneof/` | `oneOf` union field (its own module) |
+| `examples/anyof/` | `anyOf` union field (its own module) |
