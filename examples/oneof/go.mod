@@ -1,4 +1,4 @@
-module github.com/RubenRibGarcia/asyncgo/examples/embedded
+module github.com/RubenRibGarcia/asyncgo/examples/oneof
 
 go 1.25.7
 

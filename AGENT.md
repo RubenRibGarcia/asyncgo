@@ -89,7 +89,7 @@ asyncgo/
 ├── README.md                   # User-facing docs
 ├── go.mod
 ├── go.sum
-├── go.work                     # multi-module workspace (root + examples/simple + examples/embedded)
+├── go.work                     # multi-module workspace (root + examples/simple + examples/allof + examples/oneof + examples/anyof)
 ├── doc.go                      # fluent DSL: Spec(), Info(), Server(), Channel(), Operation()
 ├── message.go                  #   MessageOf(T{})
 ├── bindings.go                 #   Kafka(...), AMQP(...), NATS(...), MQTT(...), Binding(...)
@@ -128,7 +128,17 @@ asyncgo/
     │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
     │   ├── schema.go           #   structs (schema source)
     │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
-    └── embedded/               # example with embedded structs (its own module)
+    ├── allof/                  # embedded struct -> allOf (its own module)
+    │   ├── go.mod              #   require + replace => ../..
+    │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
+    │   ├── schema.go           #   structs (schema source)
+    │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
+    ├── oneof/                  # oneOf union tag (its own module)
+    │   ├── go.mod              #   require + replace => ../..
+    │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
+    │   ├── schema.go           #   structs (schema source)
+    │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
+    └── anyof/                  # anyOf union tag (its own module)
         ├── go.mod              #   require + replace => ../..
         ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
         ├── schema.go           #   structs (schema source)
@@ -171,9 +181,9 @@ ADR is not complete.
   `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
   Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
 - **Testing**: `go test ./... -race` must pass. The `internal/discovery` tests are
-  end-to-end: they run the generator against `examples/simple/` and
-  `examples/embedded/` and assert each committed `asyncapi.yaml` is reproduced
-  exactly (golden test).
+  end-to-end: they run the generator against `examples/simple/`,
+  `examples/allof/`, `examples/oneof/`, and `examples/anyof/` and assert each
+  committed `asyncapi.yaml` is reproduced exactly (golden test).
 
   **Table-driven tests** — when a single test function covers multiple cases,
   use a table-driven test with `t.Run` subtests:
@@ -227,8 +237,9 @@ ADR is not complete.
   has no caller to return to.
 - **Module layout**: the root package is the public DSL (`asyncgo`); `spec` and
   `schema` are public subpackages; `internal/discovery` and `cmd/asyncgo` are
-  not part of the public API. `examples/simple` and `examples/embedded` are
-  separate modules joined via `go.work`.
+  not part of the public API. `examples/simple`, `examples/allof`,
+  `examples/oneof`, and `examples/anyof` are separate modules joined via
+  `go.work`.
 
 ## Commit Conventions
 
@@ -269,7 +280,7 @@ All commits must follow the
 | `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
 | `internal` | `internal/discovery/`                                     |
-| `examples` | `examples/simple/`, `examples/embedded/`                  |
+| `examples` | `examples/simple/`, `examples/allof/`, `examples/oneof/`, `examples/anyof/` |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
 

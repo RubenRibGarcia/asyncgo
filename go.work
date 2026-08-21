@@ -3,6 +3,8 @@ go 1.25.7
 use (
 	.
 	./examples/simple
-	./examples/embedded
+	./examples/allof
+	./examples/oneof
+	./examples/anyof
 	./tools
 )
