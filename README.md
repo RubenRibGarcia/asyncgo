@@ -160,7 +160,7 @@ type OrderEvent struct {
 #     - $ref: "#/components/schemas/...OrderCancelled"
 ```
 
-AsyncAPI 3.x Schema Objects are a superset of **JSON Schema Draft 07**, where
+AsyncAPI 3.1.0 Schema Objects are a superset of **JSON Schema Draft 07**, where
 `$ref` siblings are ignored — so a union field should be typed `any` (or an
 interface), not a concrete type.
 

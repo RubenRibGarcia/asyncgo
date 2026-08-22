@@ -1,4 +1,5 @@
-// Package schema derives JSON Schemas from Go types via reflection.
+// Package schema derives AsyncAPI 3.1.0 Schema Objects (a superset of JSON
+// Schema Draft 07) from Go types via reflection.
 //
 // Derivation rules (per the locked design decisions):
 //
