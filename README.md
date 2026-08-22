@@ -78,6 +78,9 @@ asyncgo generate ./...
 
 # fail CI when asyncapi.yaml is out of date
 asyncgo check ./...
+
+# print the asyncgo version (matches the git tag / release)
+asyncgo version
 ```
 
 The generator discovers catalogs **reachable from `main`**, then runs a small
