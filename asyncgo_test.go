@@ -60,6 +60,30 @@ func TestSpecBuildsDocument(t *testing.T) {
 	assert.Contains(t, ch.Bindings, spec.ProtocolKafka)
 }
 
+func TestChannelServers(t *testing.T) {
+	prod := Server("prod", "kafka").Host("broker:9092")
+	staging := Server("staging", "kafka").Host("broker-staging:9092")
+
+	doc := Spec(
+		Info("Orders Service", "1.0.0"),
+		Servers(prod, staging),
+		Channels(
+			Channel("order-placed").
+				Servers(prod, staging).
+				Send(Operation().Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
+		),
+	)
+
+	ch := doc.Channels["order-placed"]
+	require.Len(t, ch.Servers, 2)
+	assert.Equal(t, "#/servers/prod", ch.Servers[0].Ref)
+	assert.Equal(t, "#/servers/staging", ch.Servers[1].Ref)
+
+	// The referenced servers are declared in the root Servers object.
+	require.Contains(t, doc.Servers, "prod")
+	require.Contains(t, doc.Servers, "staging")
+}
+
 func TestMessageOfInfersName(t *testing.T) {
 	assert.Equal(t, "OrderPlaced", messageName(MessageOf(OrderPlaced{})))
 }

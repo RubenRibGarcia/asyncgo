@@ -21,6 +21,8 @@ channels:
           $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1examples~1simple.OrderPlaced"
         name: OrderPlaced
     description: Emitted when an order is placed
+    servers:
+    - $ref: "#/servers/prod"
     bindings:
       kafka:
         partitions: 3
