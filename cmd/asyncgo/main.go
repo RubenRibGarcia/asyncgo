@@ -5,6 +5,7 @@
 //
 //	asyncgo generate [dir]   write asyncapi.yaml for the module rooted at dir
 //	asyncgo check [dir]      fail if asyncapi.yaml is out of date
+//	asyncgo version          print the asyncgo version
 package main
 
 import (
@@ -12,9 +13,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/RubenRibGarcia/asyncgo/spec"
+)
+
+// Build metadata. The release workflow stamps these via
+// -ldflags "-X main.version=vX.Y.Z -X main.commit=<sha> -X main.date=<rfc3339>".
+// Untagged local builds report "devel".
+var (
+	version = "devel"
+	commit  = "unknown"
+	date    = "unknown"
 )
 
 func main() {
@@ -26,16 +37,40 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: asyncgo <generate|check> [dir]")
+		return fmt.Errorf("usage: asyncgo <generate|check|version> [dir]")
 	}
 	switch args[0] {
 	case "generate":
 		return generate(args[1:])
 	case "check":
 		return check(args[1:])
+	case "version":
+		printVersion()
+		return nil
 	default:
-		return fmt.Errorf("unknown command %q (want generate or check)", args[0])
+		return fmt.Errorf("unknown command %q (want generate, check, or version)", args[0])
 	}
+}
+
+// resolveVersion returns the build version, falling back to the module version
+// when installed via `go install ...@vX.Y.Z` (where -ldflags are not applied).
+func resolveVersion() string {
+	if version != "devel" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" &&
+		bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return "devel"
+}
+
+func printVersion() {
+	v := resolveVersion()
+	if commit != "unknown" {
+		v += fmt.Sprintf(" (commit %s, built %s)", commit, date)
+	}
+	fmt.Printf("asyncgo %s\n", v)
 }
 
 func resolveDir(args []string) (string, error) {
