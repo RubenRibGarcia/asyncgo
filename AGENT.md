@@ -180,7 +180,7 @@ ADR is not complete.
   `github.com/stretchr/testify` for test assertions,
   `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
   Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
-- **Testing**: `go test ./... -race` must pass. The `internal/discovery` tests are
+- **Testing**: `make test` must pass. The `internal/discovery` tests are
   end-to-end: they run the generator against `examples/simple/`,
   `examples/allof/`, `examples/oneof/`, and `examples/anyof/` and assert each
   committed `asyncapi.yaml` is reproduced exactly (golden test).
