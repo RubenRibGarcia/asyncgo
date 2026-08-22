@@ -94,6 +94,13 @@ asyncgo/
 ├── message.go                  #   MessageOf(T{})
 ├── bindings.go                 #   Kafka(...), AMQP(...), NATS(...), MQTT(...), Binding(...)
 ├── asyncgo_test.go             # DSL tests
+├── .goreleaser.yaml            # release build: cross-compile + version ldflags
+├── release-please-config.json  # release-please config (Conventional Commits -> semver)
+├── .release-please-manifest.json # current released version per package
+├── .github/
+│   └── workflows/
+│       ├── test.yaml           # CI: lint + test-with-coverage
+│       └── release.yml         # release-please -> goreleaser
 ├── spec/                       # Typed AsyncAPI 3.1.0 object model + codecs
 │   ├── spec.go                 #   AsyncAPI, Info, Server, Channel, Operation, Message, Components
 │   ├── schema.go               #   JSON Schema types + $defs/$ref
@@ -105,7 +112,7 @@ asyncgo/
 │   ├── tags.go                 #   asyncapi struct-tag parsing
 │   └── derive_test.go
 ├── cmd/
-│   └── asyncgo/                # CLI: generate | check
+│   └── asyncgo/                # CLI: generate | check | version
 │       └── main.go
 ├── docs/                       # development process (see "Development Workflow")
 │   ├── adr/                    #   Architecture Decision Records (MADR format)
@@ -172,6 +179,25 @@ skip a step only where explicitly allowed:
 For a small, self-contained decision the design-doc step may be skipped — but
 the ADR is **never** optional. An architectural change without a corresponding
 ADR is not complete.
+
+## Release
+
+Releases follow [semantic versioning](https://semver.org/) and are driven by
+[release-please](https://github.com/googleapis/release-please), which derives
+the next version and changelog from Conventional Commits:
+
+1. Manually dispatch the `release` workflow; release-please opens/updates a
+   **release PR** (version bump + `CHANGELOG.md`).
+2. Merge that PR. The `push` trigger runs release-please again, which detects
+   the merged PR and creates the `vX.Y.Z` tag.
+3. [goreleaser](https://goreleaser.com) (`.goreleaser.yaml`) builds the
+   `asyncgo` binary for linux/darwin/windows × amd64/arm64, stamps the version
+   via `-ldflags -X main.version=vX.Y.Z`, and attaches the archives to the
+   GitHub release.
+
+`asyncgo version` reports the stamped version (falling back to the module
+version for `go install ...@vX.Y.Z` installs, and `devel` for local builds).
+The version is the git tag — never stored in source.
 
 ## Conventions
 
