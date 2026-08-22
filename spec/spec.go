@@ -96,6 +96,7 @@ type Channel struct {
 	Messages    map[string]*Message   `json:"messages,omitempty"    yaml:"messages,omitempty"`
 	Title       string                `json:"title,omitempty"       yaml:"title,omitempty"`
 	Description string                `json:"description,omitempty" yaml:"description,omitempty"`
+	Servers     []*Reference          `json:"servers,omitempty"     yaml:"servers,omitempty"`
 	Parameters  map[string]*Parameter `json:"parameters,omitempty"  yaml:"parameters,omitempty"`
 	Tags        []Tag                 `json:"tags,omitempty"        yaml:"tags,omitempty"`
 	Bindings    ChannelBindings       `json:"bindings,omitempty"    yaml:"bindings,omitempty"`

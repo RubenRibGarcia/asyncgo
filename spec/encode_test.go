@@ -27,6 +27,32 @@ func TestEncodeDefinitions(t *testing.T) {
 	assert.NotContains(t, string(out), "$defs")
 }
 
+func TestEncodeChannelServers(t *testing.T) {
+	// Present: emits servers with $ref.
+	withServers := New()
+	withServers.Info = Info{Title: "Orders", Version: "1.0.0"}
+	withServers.Channels = map[string]*Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Servers: []*Reference{{Ref: "#/servers/prod"}},
+		},
+	}
+	out, err := withServers.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "servers:")
+	assert.Contains(t, string(out), "#/servers/prod")
+
+	// Omitted: a channel without servers has no `servers:` key.
+	noServers := New()
+	noServers.Info = Info{Title: "Orders", Version: "1.0.0"}
+	noServers.Channels = map[string]*Channel{
+		"order-placed": {Address: "order-placed"},
+	}
+	out, err = noServers.YAML()
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "servers:")
+}
+
 func TestEncodeYAML(t *testing.T) {
 	doc := New()
 	doc.Info = Info{Title: "Orders", Version: "1.0.0"}

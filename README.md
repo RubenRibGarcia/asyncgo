@@ -46,6 +46,30 @@ var Catalog = asyncgo.Spec(
 `MessageOf` *references* your struct rather than duplicating the shape, so the
 schema cannot drift from the data contract.
 
+### Servers on a channel
+
+A channel is available on all declared servers by default. To restrict it to a
+subset, reference the servers (declared via `Servers(...)`) on the channel:
+
+```go
+prod := asyncgo.Server("prod", "kafka").Host("broker:9092")
+
+var Catalog = asyncgo.Spec(
+ asyncgo.Servers(prod),
+ asyncgo.Channels(
+  asyncgo.Channel("order-placed").
+   Servers(prod).
+   Send(asyncgo.Operation().Message(asyncgo.MessageOf(OrderPlaced{}))),
+ ),
+)
+```
+
+```yaml
+# channels/order-placed:
+#   servers:
+#     - $ref: '#/servers/prod'
+```
+
 ### Generate & check
 
 ```bash

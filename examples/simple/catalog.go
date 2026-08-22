@@ -15,17 +15,19 @@ var Catalog = asyncgo.Spec(
 
 	asyncgo.DefaultContentType("application/json"),
 
-	asyncgo.Servers(
-		asyncgo.Server("prod", "kafka").
-			Host("broker.example.com:9092").
-			Description("Production Kafka cluster"),
-	),
+	asyncgo.Servers(prod),
 
 	asyncgo.Channels(
 		asyncgo.Channel("order-placed").
 			Description("Emitted when an order is placed").
+			Servers(prod).
 			Send(asyncgo.Operation().
 				Message(asyncgo.MessageOf(OrderPlaced{}).Name("OrderPlaced"))).
 			Kafka(spec.KafkaChannelBinding{Topic: "order-placed", Partitions: 3}),
 	),
 )
+
+// prod is the Kafka broker the service publishes to.
+var prod = asyncgo.Server("prod", "kafka").
+	Host("broker.example.com:9092").
+	Description("Production Kafka cluster")

@@ -153,6 +153,15 @@ func Channel(address string) *channel {
 func (c *channel) Title(t string) *channel       { c.s.Title = t; return c }
 func (c *channel) Description(d string) *channel { c.s.Description = d; return c }
 
+// Servers references the servers (declared via Servers(...)) on which this
+// channel is available. If empty, the channel is available on all servers.
+func (c *channel) Servers(s ...*server) *channel {
+	for _, sv := range s {
+		c.s.Servers = append(c.s.Servers, &spec.Reference{Ref: "#/servers/" + ptrEscape(sv.name)})
+	}
+	return c
+}
+
 // Send attaches a send operation to the channel.
 func (c *channel) Send(op *operation) *channel {
 	op.action = spec.ActionSend
