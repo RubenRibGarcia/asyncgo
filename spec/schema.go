@@ -1,8 +1,9 @@
 package spec
 
-// Schema is a JSON Schema (Draft 07, the dialect used by AsyncAPI 3.x).
-// Only the keywords the generator emits — plus the ones a hand-authored catalog
-// is likely to need — are modeled; the type is straightforward to extend.
+// Schema is an AsyncAPI 3.1.0 Schema Object (a superset of JSON Schema Draft
+// 07). Only the keywords the generator emits — plus the ones a hand-authored
+// catalog is likely to need — are modeled; the type is straightforward to
+// extend.
 type Schema struct {
 	Ref         string `json:"$ref,omitempty"        yaml:"$ref,omitempty"`
 	Type        string `json:"type,omitempty"        yaml:"type,omitempty"`
