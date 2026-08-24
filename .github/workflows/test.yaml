@@ -1,40 +1,40 @@
 name: Test & Coverage
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
 
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
+            - name: Setup Go
+              uses: actions/setup-go@v7
+              with:
+                  go-version-file: go.mod
 
-      - name: Prepare dependencies
-        run: make deps
+            - name: Prepare dependencies
+              run: make deps
 
-      - name: Run Lint
-        run: make lint
+            - name: Run Lint
+              run: make lint
 
-      - name: Test
-        run: make test-with-coverage
+            - name: Test
+              run: make test-with-coverage
 
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          files: ./coverage.out
-          flags: unittests
-          fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
+            - name: Upload to Codecov
+              uses: codecov/codecov-action@v7
+              with:
+                  files: ./coverage.out
+                  flags: unittests
+                  fail_ci_if_error: true
+                  token: ${{ secrets.CODECOV_TOKEN }}

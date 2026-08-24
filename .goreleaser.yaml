@@ -3,34 +3,34 @@ version: 2
 project_name: asyncgo
 
 builds:
-  - id: asyncgo
-    main: ./cmd/asyncgo
-    binary: asyncgo
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Tag}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+    - id: asyncgo
+      main: ./cmd/asyncgo
+      binary: asyncgo
+      env:
+          - CGO_ENABLED=0
+      goos:
+          - linux
+          - darwin
+          - windows
+      goarch:
+          - amd64
+          - arm64
+      ldflags:
+          - -s -w
+          - -X main.version={{.Tag}}
+          - -X main.commit={{.Commit}}
+          - -X main.date={{.Date}}
 
 archives:
-  - formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
+    - formats: [tar.gz]
+      format_overrides:
+          - goos: windows
+            formats: [zip]
 
 checksum:
-  name_template: checksums.txt
+    name_template: checksums.txt
 
 release:
-  # release-please already created the release with notes from Conventional
-  # Commits; keep those notes and just attach the built artifacts.
-  mode: keep-existing
+    # release-please already created the release with notes from Conventional
+    # Commits; keep those notes and just attach the built artifacts.
+    mode: keep-existing
