@@ -1,11 +1,7 @@
 # Changelog
 
-## 1.0.0 (2026-08-24)
+## 0.1.0 (2026-08-24)
 
-
-### ⚠ BREAKING CHANGES
-
-* spec.Overlay is removed; asyncgo generate/check no longer merge an asyncapi.fragment.yaml file over the generated document.
 
 ### Features
 
