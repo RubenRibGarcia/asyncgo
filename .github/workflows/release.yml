@@ -26,6 +26,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Syft
+        uses: anchore/sbom-action/download-syft@v0
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -33,3 +36,15 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest checksums
+        uses: actions/attest@v4
+        with:
+          subject-checksums: ./dist/asyncgo-${{ fromJSON(steps.goreleaser.outputs.metadata).version }}-checksums.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest digests
+        uses: actions/attest@v4
+        with:
+          subject-checksums: ./dist/digests.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
