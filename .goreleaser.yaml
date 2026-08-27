@@ -21,16 +21,51 @@ builds:
           - -X main.commit={{.Commit}}
           - -X main.date={{.Date}}
 
+sboms:
+    - id: archive
+      artifacts: archive
+
 archives:
-    - formats: [tar.gz]
+    - formats: ["tar.gz"]
+      wrap_in_directory: true
       format_overrides:
           - goos: windows
-            formats: [zip]
+            formats: ["zip"]
+      name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+      files:
+          - LICENSE
+          - README.md
+
+snapshot:
+    version_template: SNAPSHOT-{{ .Commit }}
 
 checksum:
-    name_template: checksums.txt
+    disable: false
+    name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+
+changelog:
+    sort: asc
+    filters:
+        exclude:
+            - "(?i)^docs?:"
+            - '(?i)^docs\([^:]+\):'
+            - '(?i)^docs\[[^:]+\]:'
+            - "^tests?:"
+            - "(?i)^dev:"
+            - "(?i)^chore:"
+            - '^build\(deps\): bump .* in /docs \(#\d+\)'
+            - '^build\(deps\): bump .* in /\.github/peril \(#\d+\)'
+            - '^build\(deps\): bump .* in /scripts/gen_github_action_config \(#\d+\)'
+            - Merge pull request
+            - Merge branch
 
 release:
-    # release-please already created the release with notes from Conventional
-    # Commits; keep those notes and just attach the built artifacts.
+    skip_upload: false
+    github:
+        owner: RubenRibGarcia
+        name: asyncgo
     mode: keep-existing
+
+source:
+    enabled: true
+    name_template: "{{ .ProjectName }}-{{ .Version }}-source"
