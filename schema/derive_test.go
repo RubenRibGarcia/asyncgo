@@ -33,10 +33,10 @@ const (
 
 func TestFromTypeHoistsNamedStructs(t *testing.T) {
 	defs := map[string]*spec.Schema{}
-	s := FromType(reflect.TypeOf(Order{}), defs)
+	s := FromType(reflect.TypeFor[Order](), defs)
 
 	require.NotEmpty(t, s.Ref)
-	assert.Equal(t, Ref(reflect.TypeOf(Order{})), s.Ref)
+	assert.Equal(t, Ref(reflect.TypeFor[Order]()), s.Ref)
 
 	require.Contains(t, defs, orderKey)
 	obj := defs[orderKey]
@@ -128,19 +128,19 @@ func TestFromTypeSpecials(t *testing.T) {
 	}{
 		{
 			name:       "should_return_date_time_for_time",
-			typ:        reflect.TypeOf(time.Time{}),
+			typ:        reflect.TypeFor[time.Time](),
 			wantType:   "string",
 			wantFormat: "date-time",
 		},
 		{
 			name:       "should_return_byte_string_for_byte_slice",
-			typ:        reflect.TypeOf([]byte{}),
+			typ:        reflect.TypeFor[[]byte](),
 			wantType:   "string",
 			wantFormat: "byte",
 		},
 		{
 			name:     "should_return_unconstrained_for_interface",
-			typ:      reflect.TypeOf((*any)(nil)).Elem(),
+			typ:      reflect.TypeFor[any](),
 			wantType: "",
 		},
 	}
@@ -155,7 +155,7 @@ func TestFromTypeSpecials(t *testing.T) {
 
 func TestRecursiveStructTerminates(t *testing.T) {
 	defs := map[string]*spec.Schema{}
-	s := FromType(reflect.TypeOf(Node{}), defs)
+	s := FromType(reflect.TypeFor[Node](), defs)
 	require.NotEmpty(t, s.Ref)
 	assert.Contains(t, defs, "github.com/RubenRibGarcia/asyncgo/schema.Node")
 }
@@ -175,12 +175,12 @@ func TestAllOfEmbedding(t *testing.T) {
 	}{
 		{
 			name: "should_compose_embedded_struct_with_allOf",
-			typ:  reflect.TypeOf(AllOfComposed{}),
+			typ:  reflect.TypeFor[AllOfComposed](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
 				composed := defs[composedKey]
 				require.NotNil(t, composed)
 				require.Len(t, composed.AllOf, 2)
-				assert.Equal(t, Ref(reflect.TypeOf(AllOfBase{})), composed.AllOf[0].Ref)
+				assert.Equal(t, Ref(reflect.TypeFor[AllOfBase]()), composed.AllOf[0].Ref)
 				own := composed.AllOf[1]
 				require.NotNil(t, own)
 				assert.Equal(t, "object", own.Type)
@@ -189,7 +189,7 @@ func TestAllOfEmbedding(t *testing.T) {
 		},
 		{
 			name: "should_flatten_embedded_struct_by_default",
-			typ:  reflect.TypeOf(FlatDefault{}),
+			typ:  reflect.TypeFor[FlatDefault](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
 				obj := defs[flatKey]
 				require.NotNil(t, obj)
@@ -201,7 +201,7 @@ func TestAllOfEmbedding(t *testing.T) {
 		},
 		{
 			name: "should_keep_required_local_per_allOf_member",
-			typ:  reflect.TypeOf(AllOfComposed{}),
+			typ:  reflect.TypeFor[AllOfComposed](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
 				composed := defs[composedKey]
 				require.NotNil(t, composed)
@@ -215,7 +215,7 @@ func TestAllOfEmbedding(t *testing.T) {
 		},
 		{
 			name: "should_flatten_marked_base_fully_when_unmarked",
-			typ:  reflect.TypeOf(TopFlatten{}),
+			typ:  reflect.TypeFor[TopFlatten](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
 				obj := defs[topKey]
 				require.NotNil(t, obj)
@@ -227,12 +227,12 @@ func TestAllOfEmbedding(t *testing.T) {
 		},
 		{
 			name: "should_terminate_on_recursive_allOf",
-			typ:  reflect.TypeOf(RecursiveAllOfWrapper{}),
+			typ:  reflect.TypeFor[RecursiveAllOfWrapper](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
 				wrapper := defs[wrapperKey]
 				require.NotNil(t, wrapper)
 				require.Len(t, wrapper.AllOf, 2)
-				assert.Equal(t, Ref(reflect.TypeOf(RecursiveAllOfNode{})), wrapper.AllOf[0].Ref)
+				assert.Equal(t, Ref(reflect.TypeFor[RecursiveAllOfNode]()), wrapper.AllOf[0].Ref)
 				assert.Contains(
 					t,
 					defs,
@@ -282,7 +282,7 @@ func TestCombinatorDirectives(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			defs := map[string]*spec.Schema{}
-			FromType(reflect.TypeOf(CombinatorHolder{}), defs)
+			FromType(reflect.TypeFor[CombinatorHolder](), defs)
 			obj := defs[key]
 			require.NotNil(t, obj)
 			prop := obj.Properties[tc.field]
@@ -306,7 +306,7 @@ func TestCombinatorDirectives(t *testing.T) {
 func TestCombinatorNameResolution(t *testing.T) {
 	t.Run("should_resolve_same_package_short_name", func(t *testing.T) {
 		defs := map[string]*spec.Schema{}
-		FromType(reflect.TypeOf(UnionHolder{}), defs)
+		FromType(reflect.TypeFor[UnionHolder](), defs)
 		obj := defs["github.com/RubenRibGarcia/asyncgo/schema.UnionHolder"]
 		require.NotNil(t, obj)
 		prop := obj.Properties["data"]
@@ -321,7 +321,7 @@ func TestCombinatorNameResolution(t *testing.T) {
 
 	t.Run("should_pass_through_fully_qualified_name", func(t *testing.T) {
 		defs := map[string]*spec.Schema{}
-		FromType(reflect.TypeOf(FQNUnionHolder{}), defs)
+		FromType(reflect.TypeFor[FQNUnionHolder](), defs)
 		obj := defs["github.com/RubenRibGarcia/asyncgo/schema.FQNUnionHolder"]
 		require.NotNil(t, obj)
 		prop := obj.Properties["data"]
@@ -356,7 +356,7 @@ func TestFinalizeHoistsRegisteredTypes(t *testing.T) {
 }
 
 func TestRefEscapesSlashes(t *testing.T) {
-	typ := reflect.TypeOf(Order{})
+	typ := reflect.TypeFor[Order]()
 	// Compute the expectation from the type's own package path so the test
 	// survives module renames: JSON Pointer escaping must turn "/" into "~1".
 	want := "#/components/schemas/" + strings.ReplaceAll(

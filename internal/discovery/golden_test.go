@@ -9,15 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGoldenExample regenerates each example's document and asserts it matches
-// the committed asyncapi.yaml. This locks the artifacts against drift; when the
-// generator output changes, regenerate with:
+// TestGoldenExample regenerates each test fixture's document and asserts it
+// matches the committed asyncapi.yaml. This locks the artifacts against drift;
+// when the generator output changes, regenerate with:
 //
-//	go run ./cmd/asyncgo generate ./examples/<name>
+//	go run ./cmd/asyncgo generate ./test/data/<name>
 func TestGoldenExample(t *testing.T) {
 	for _, name := range []string{"simple", "allof", "oneof", "anyof"} {
 		t.Run(name, func(t *testing.T) {
-			dir, err := filepath.Abs(filepath.Join("..", "..", "examples", name))
+			dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", name))
 			require.NoError(t, err)
 
 			doc, _, err := Build(dir)
@@ -31,7 +31,7 @@ func TestGoldenExample(t *testing.T) {
 				t,
 				string(want),
 				string(got),
-				"generated document differs from committed example; regenerate with `go run ./cmd/asyncgo generate ./examples/%s`",
+				"generated document differs from committed fixture; regenerate with `go run ./cmd/asyncgo generate ./test/data/%s`",
 				name,
 			)
 		})

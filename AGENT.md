@@ -89,7 +89,7 @@ asyncgo/
 ├── README.md                   # User-facing docs
 ├── go.mod
 ├── go.sum
-├── go.work                     # multi-module workspace (root + examples/simple + examples/allof + examples/oneof + examples/anyof)
+├── go.work                     # multi-module workspace (root + examples/* + test/data/* + tools)
 ├── doc.go                      # fluent DSL: Spec(), Info(), Server(), Channel(), Operation()
 ├── message.go                  #   MessageOf(T{})
 ├── bindings.go                 #   Kafka(...), AMQP(...), NATS(...), MQTT(...), Binding(...)
@@ -129,7 +129,7 @@ asyncgo/
 │       ├── descriptions.go     #   extract field doc comments + apply them to schemas
 │       ├── build.go            #   Build(): the full generate pipeline
 │       └── *_test.go
-└── examples/
+├── examples/
     ├── simple/                 # example service (its own Go module)
     │   ├── go.mod              #   require + replace => ../..
     │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
@@ -150,6 +150,14 @@ asyncgo/
         ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
         ├── schema.go           #   structs (schema source)
         └── catalog.go          #   var Catalog = asyncgo.Spec(...)
+└── test/
+    └── data/                   # discovery test fixtures (each its own Go module)
+        ├── simple/             #   minimal struct -> schema
+        ├── allof/              #   embedded struct -> allOf
+        ├── oneof/              #   oneOf union tag
+        └── anyof/              #   anyOf union tag
+        # Each fixture mirrors an example: go.mod (require + replace => ../../..),
+        # schema.go, catalog.go, and a committed asyncapi.yaml (golden-tested).
 ```
 
 ## Development Workflow
@@ -207,9 +215,10 @@ The version is the git tag — never stored in source.
   `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
   Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
 - **Testing**: `make test` must pass. The `internal/discovery` tests are
-  end-to-end: they run the generator against `examples/simple/`,
-  `examples/allof/`, `examples/oneof/`, and `examples/anyof/` and assert each
-  committed `asyncapi.yaml` is reproduced exactly (golden test).
+  end-to-end: they run the generator against the `test/data/` fixtures
+  (`simple`, `allof`, `oneof`, `anyof`) and assert each committed
+  `asyncapi.yaml` is reproduced exactly (golden test). The `examples/` directory
+  is user-facing documentation only — never use it as a test fixture.
 
   **Table-driven tests** — when a single test function covers multiple cases,
   use a table-driven test with `t.Run` subtests:
@@ -263,9 +272,9 @@ The version is the git tag — never stored in source.
   has no caller to return to.
 - **Module layout**: the root package is the public DSL (`asyncgo`); `spec` and
   `schema` are public subpackages; `internal/discovery` and `cmd/asyncgo` are
-  not part of the public API. `examples/simple`, `examples/allof`,
-  `examples/oneof`, and `examples/anyof` are separate modules joined via
-  `go.work`.
+  not part of the public API. `examples/*` and `test/data/*` are separate
+  modules joined via `go.work`; the former is documentation, the latter holds
+  discovery test fixtures.
 
 ## Commit Conventions
 
@@ -307,6 +316,7 @@ All commits must follow the
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
 | `internal` | `internal/discovery/`                                     |
 | `examples` | `examples/simple/`, `examples/allof/`, `examples/oneof/`, `examples/anyof/` |
+| `test`     | `test/data/` — discovery test fixtures                        |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
 

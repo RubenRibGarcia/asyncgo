@@ -1,0 +1,69 @@
+asyncapi: 3.1.0
+info:
+  title: Orders Service
+  version: 1.0.0
+  description: Order lifecycle events
+  contact:
+    name: Orders Team
+    email: orders@example.com
+servers:
+  prod:
+    host: broker.example.com:9092
+    protocol: kafka
+    description: Production Kafka cluster
+defaultContentType: application/json
+channels:
+  order-event:
+    address: order-event
+    messages:
+      OrderEvent:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1anyof.OrderEvent"
+        name: OrderEvent
+    description: Envelope carrying any of the order event types
+    bindings:
+      kafka:
+        partitions: 3
+        topic: order-events
+operations:
+  order-event.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-event"
+    messages:
+    - $ref: "#/channels/order-event/messages/OrderEvent"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/anyof.OrderCancelled:
+      type: object
+      properties:
+        order_id:
+          type: string
+        reason:
+          type: string
+          description: Reason for the cancellation
+      required:
+      - order_id
+    github.com/RubenRibGarcia/asyncgo/test/data/anyof.OrderEvent:
+      type: object
+      properties:
+        data:
+          anyOf:
+          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1anyof.OrderPlaced"
+          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1anyof.OrderCancelled"
+      required:
+      - data
+    github.com/RubenRibGarcia/asyncgo/test/data/anyof.OrderPlaced:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+        note:
+          type: string
+          description: Optional note from the customer
+        order_id:
+          type: string
+      required:
+      - order_id
+      - amount

@@ -6,5 +6,9 @@ use (
 	./examples/allof
 	./examples/oneof
 	./examples/anyof
+	./test/data/simple
+	./test/data/allof
+	./test/data/oneof
+	./test/data/anyof
 	./tools
 )

@@ -1,0 +1,16 @@
+extends: default
+
+# Generated AsyncAPI documents use goccy/go-yaml, which emits:
+#   - "indentless" block sequences (`key:` followed by `- item` at the same
+#     indent), which the default indentation rule rejects; and
+#   - long `$ref` JSON-pointer URIs that cannot be line-wrapped.
+# These are legitimate output shapes, so relax the two rules that would flag
+# every committed asyncapi.yaml (examples/ and test/data/).
+rules:
+  document-start: disable
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+  indentation:
+    indent-sequences: false

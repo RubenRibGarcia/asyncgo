@@ -28,7 +28,7 @@ func TestResolveCombinatorName(t *testing.T) {
 
 func TestCollectCombinatorRefs(t *testing.T) {
 	t.Run("should_collect_union_members_from_example", func(t *testing.T) {
-		dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "oneof"))
+		dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "oneof"))
 		require.NoError(t, err)
 
 		pkgs, err := load(dir)
@@ -36,7 +36,7 @@ func TestCollectCombinatorRefs(t *testing.T) {
 
 		refs := collectCombinatorRefs(pkgs, reachableFromMain(pkgs))
 
-		const pkg = "github.com/RubenRibGarcia/asyncgo/examples/oneof"
+		const pkg = "github.com/RubenRibGarcia/asyncgo/test/data/oneof"
 		require.Contains(t, refs, combinatorRef{ImportPath: pkg, TypeName: "OrderPlaced"})
 		require.Contains(t, refs, combinatorRef{ImportPath: pkg, TypeName: "OrderCancelled"})
 	})
