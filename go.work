@@ -6,5 +6,6 @@ use (
 	./test/data/allof
 	./test/data/oneof
 	./test/data/anyof
+	./test/data/provider
 	./tools
 )

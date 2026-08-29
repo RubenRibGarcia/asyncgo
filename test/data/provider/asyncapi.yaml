@@ -1,0 +1,49 @@
+asyncapi: 3.1.0
+info:
+  title: Orders Service
+  version: 1.0.0
+  description: Order lifecycle events
+  contact:
+    name: Orders Team
+    email: orders@example.com
+servers:
+  prod:
+    host: broker.example.com:9092
+    protocol: kafka
+    description: Production Kafka cluster
+defaultContentType: application/json
+channels:
+  order-placed:
+    address: order-placed
+    messages:
+      OrderPlaced:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.OrderPlaced"
+        name: OrderPlaced
+    description: Emitted when an order is placed
+    bindings:
+      kafka:
+        partitions: 3
+        topic: order-placed
+operations:
+  order-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-placed"
+    messages:
+    - $ref: "#/channels/order-placed/messages/OrderPlaced"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/provider.Money:
+      type: string
+      example: 12.34 USD
+      pattern: "^\\d+\\.\\d{2} [A-Z]{3}$"
+    github.com/RubenRibGarcia/asyncgo/test/data/provider.OrderPlaced:
+      type: object
+      properties:
+        order_id:
+          type: string
+        price:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.Money"
+      required:
+      - order_id

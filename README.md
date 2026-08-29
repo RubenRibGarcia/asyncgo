@@ -100,6 +100,8 @@ harness to materialize them (never executing your `main` package).
   `encoding/json`); tag one with `asyncapi:"allOf"` to compose it instead.
 - **Union fields** — `asyncapi:"oneOf=A|B"`, `anyOf=A|B`, or `allOf=A|B` on a
   field emits `$ref`s to the named types, which are hoisted automatically.
+- **Custom types** — a named struct implementing `spec.SchemaProvider` overrides
+  derivation: its `AsyncAPISchema()` result is hoisted as-is.
 
 ## Schema composition
 
@@ -166,6 +168,46 @@ type OrderEvent struct {
 AsyncAPI 3.1.0 Schema Objects are a superset of **JSON Schema Draft 07**, where
 `$ref` siblings are ignored — so a union field should be typed `any` (or an
 interface), not a concrete type.
+
+## Custom schema providers
+
+A type with custom (de)serialization — `MarshalJSON`/`UnmarshalJSON`,
+`encoding.TextMarshaler`, and the like — changes its wire format, so
+reflection-derived derivation no longer matches. Implement
+[`spec.SchemaProvider`](https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo/spec#SchemaProvider)
+to declare the wire schema yourself; it is hoisted under the type's
+fully-qualified name like any other named struct.
+
+```go
+type Money struct {
+ Amount   int64
+ Currency string
+}
+
+// Wire format is a single "12.34 USD" string, not an object.
+func (Money) AsyncAPISchema() *spec.Schema {
+ return &spec.Schema{
+  Type:    "string",
+  Pattern: `^\d+\.\d{2} [A-Z]{3}$`,
+  Example: "12.34 USD",
+ }
+}
+```
+
+```yaml
+# components.schemas (abridged; "..." elides the fully-qualified name):
+#   ...Money:
+#     type: string
+#     pattern: "^\d+\.\d{2} [A-Z]{3}$"
+#     example: "12.34 USD"
+```
+
+`AsyncAPISchema` is invoked on a zero value, so it must describe the *type*
+(not an instance): be pure, deterministic, and panic-free. Return `nil` to fall
+back to reflection-derived derivation, or `&spec.Schema{}` for an explicitly
+unconstrained schema. Detection honors both value and pointer receivers, and a
+custom type referenced from a `oneOf`/`anyOf`/`allOf` field is hoisted
+automatically.
 
 ## Layout
 

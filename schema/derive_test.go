@@ -458,3 +458,142 @@ type CombinatorHolder struct {
 	Any any `json:"any" asyncapi:"anyOf=UnionMemberA|UnionMemberB"`
 	All any `json:"all" asyncapi:"allOf=UnionMemberA|UnionMemberB"`
 }
+
+// CustomString is a SchemaProvider on the value receiver.
+type CustomString struct {
+	Raw string `json:"raw"`
+}
+
+func (CustomString) AsyncAPISchema() *spec.Schema {
+	return &spec.Schema{Type: "string", Format: "uuid"}
+}
+
+// CustomPointer is a SchemaProvider on the pointer receiver.
+type CustomPointer struct {
+	Raw string `json:"raw"`
+}
+
+func (*CustomPointer) AsyncAPISchema() *spec.Schema {
+	return &spec.Schema{Type: "integer"}
+}
+
+// NilProvider returns nil, so reflection derivation must be used.
+type NilProvider struct {
+	Value string `json:"value" asyncapi:"required"`
+}
+
+func (NilProvider) AsyncAPISchema() *spec.Schema { return nil }
+
+// EmptyProvider returns an empty (non-nil) schema → unconstrained.
+type EmptyProvider struct {
+	Value string `json:"value"`
+}
+
+func (EmptyProvider) AsyncAPISchema() *spec.Schema { return &spec.Schema{} }
+
+// PlainStruct is a non-provider control for fall-back behavior.
+type PlainStruct struct {
+	Value string `json:"value" asyncapi:"required"`
+}
+
+func TestSchemaProvider(t *testing.T) {
+	const (
+		customStringKey  = "github.com/RubenRibGarcia/asyncgo/schema.CustomString"
+		customPointerKey = "github.com/RubenRibGarcia/asyncgo/schema.CustomPointer"
+		nilProviderKey   = "github.com/RubenRibGarcia/asyncgo/schema.NilProvider"
+		emptyProviderKey = "github.com/RubenRibGarcia/asyncgo/schema.EmptyProvider"
+		plainKey         = "github.com/RubenRibGarcia/asyncgo/schema.PlainStruct"
+	)
+
+	tests := []struct {
+		name   string
+		typ    reflect.Type
+		verify func(*testing.T, *spec.Schema, map[string]*spec.Schema)
+	}{
+		{
+			name: "should_use_custom_schema_for_provider_struct",
+			typ:  reflect.TypeFor[CustomString](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				require.NotEmpty(t, s.Ref)
+				assert.Equal(t, Ref(reflect.TypeFor[CustomString]()), s.Ref)
+				custom := defs[customStringKey]
+				require.NotNil(t, custom)
+				assert.Equal(t, "string", custom.Type)
+				assert.Equal(t, "uuid", custom.Format)
+			},
+		},
+		{
+			name: "should_hoist_custom_schema_under_fqn",
+			typ:  reflect.TypeFor[CustomString](),
+			verify: func(t *testing.T, _ *spec.Schema, defs map[string]*spec.Schema) {
+				require.Contains(t, defs, customStringKey)
+			},
+		},
+		{
+			name: "should_detect_pointer_receiver_provider",
+			typ:  reflect.TypeFor[CustomPointer](),
+			verify: func(t *testing.T, _ *spec.Schema, defs map[string]*spec.Schema) {
+				custom := defs[customPointerKey]
+				require.NotNil(t, custom)
+				assert.Equal(t, "integer", custom.Type)
+			},
+		},
+		{
+			name: "should_fall_back_to_reflection_on_nil_schema",
+			typ:  reflect.TypeFor[NilProvider](),
+			verify: func(t *testing.T, _ *spec.Schema, defs map[string]*spec.Schema) {
+				obj := defs[nilProviderKey]
+				require.NotNil(t, obj)
+				assert.Contains(t, obj.Properties, "value")
+				assert.Equal(t, []string{"value"}, obj.Required)
+			},
+		},
+		{
+			name: "should_fall_back_to_reflection_when_not_provider",
+			typ:  reflect.TypeFor[PlainStruct](),
+			verify: func(t *testing.T, _ *spec.Schema, defs map[string]*spec.Schema) {
+				obj := defs[plainKey]
+				require.NotNil(t, obj)
+				assert.Contains(t, obj.Properties, "value")
+				assert.Equal(t, []string{"value"}, obj.Required)
+			},
+		},
+		{
+			name: "should_hoist_empty_schema_as_unconstrained",
+			typ:  reflect.TypeFor[EmptyProvider](),
+			verify: func(t *testing.T, _ *spec.Schema, defs map[string]*spec.Schema) {
+				custom := defs[emptyProviderKey]
+				require.NotNil(t, custom)
+				assert.Empty(t, custom.Type)
+				assert.Empty(t, custom.Properties)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defs := map[string]*spec.Schema{}
+			s := FromType(tc.typ, defs)
+			tc.verify(t, s, defs)
+		})
+	}
+}
+
+func TestSchemaProviderFinalize(t *testing.T) {
+	t.Run("should_honor_provider_via_finalize", func(t *testing.T) {
+		Register(CustomString{})
+		doc := spec.New()
+		Finalize(doc)
+
+		require.NotNil(t, doc.Components)
+		require.Contains(
+			t,
+			doc.Components.Schemas,
+			"github.com/RubenRibGarcia/asyncgo/schema.CustomString",
+		)
+		custom := doc.Components.Schemas["github.com/RubenRibGarcia/asyncgo/schema.CustomString"]
+		require.NotNil(t, custom)
+		assert.Equal(t, "string", custom.Type)
+		assert.Equal(t, "uuid", custom.Format)
+	})
+}

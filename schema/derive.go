@@ -15,6 +15,9 @@
 //     and "format=...". Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
 //     cannot see comments.
+//   - A named struct type implementing spec.SchemaProvider overrides
+//     derivation: its AsyncAPISchema() result is hoisted under the type's
+//     fully-qualified name as-is.
 package schema
 
 import (
@@ -27,9 +30,10 @@ import (
 )
 
 var (
-	timeType       = reflect.TypeFor[time.Time]()
-	rawMessageType = reflect.TypeFor[json.RawMessage]()
-	byteSliceType  = reflect.TypeFor[[]byte]()
+	timeType           = reflect.TypeFor[time.Time]()
+	rawMessageType     = reflect.TypeFor[json.RawMessage]()
+	byteSliceType      = reflect.TypeFor[[]byte]()
+	schemaProviderType = reflect.TypeFor[spec.SchemaProvider]()
 )
 
 // Name returns the fully-qualified schema name for a named type:
@@ -101,14 +105,39 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 
 // hoistStruct registers t in defs (once) and returns a $ref to it. The schema
 // is pre-registered before filling so recursive types terminate.
+// asSchemaProvider detects a SchemaProvider on t or *t, mirroring
+// encoding/json's value-then-addressable rule. t must be a struct type
+// (pointers are dereferenced before this is called).
+func asSchemaProvider(t reflect.Type) (spec.SchemaProvider, bool) {
+	if t.Implements(schemaProviderType) {
+		return reflect.New(t).Elem().Interface().(spec.SchemaProvider), true
+	}
+	if reflect.PointerTo(t).Implements(schemaProviderType) {
+		return reflect.New(t).Interface().(spec.SchemaProvider), true
+	}
+	return nil, false
+}
+
 func hoistStruct(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	name := Name(t)
 	if _, ok := defs[name]; ok {
 		return spec.Ref(Ref(t))
 	}
+
 	s := &spec.Schema{Type: "object"}
-	defs[name] = s
-	fillObject(s, t, defs)
+	defs[name] = s // pre-register for recursion termination
+
+	var custom *spec.Schema
+	if p, ok := asSchemaProvider(t); ok {
+		custom = p.AsyncAPISchema()
+	}
+	if custom != nil {
+		s = custom
+		defs[name] = s
+	} else {
+		fillObject(s, t, defs)
+	}
+
 	return spec.Ref(Ref(t))
 }
 
