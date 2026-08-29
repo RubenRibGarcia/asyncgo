@@ -87,100 +87,67 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 asyncgo/
 ├── AGENT.md                    # This file — project plan & conventions
 ├── README.md                   # User-facing docs
-├── go.mod
-├── go.sum
+├── go.mod / go.sum
 ├── go.work                     # multi-module workspace (root + test/data/* + tools)
-├── doc.go                      # fluent DSL: Spec(), Info(), Server(), Channel(), Operation()
-├── message.go                  #   MessageOf(T{})
-├── bindings.go                 #   Kafka(...), AMQP(...), NATS(...), MQTT(...), Binding(...)
-├── asyncgo_test.go             # DSL tests
 ├── .goreleaser.yaml            # release build: cross-compile + version ldflags
-├── release-please-config.json  # release-please config (Conventional Commits -> semver)
-├── .release-please-manifest.json # current released version per package
-├── .github/
-│   └── workflows/
-│       ├── test.yaml           # CI: lint + test-with-coverage
-│       └── release.yml         # release-please -> goreleaser
+├── .github/workflows/          # CI (test.yaml) + release (release.yml)
 ├── spec/                       # Typed AsyncAPI 3.1.0 object model + codecs
-│   ├── spec.go                 #   AsyncAPI, Info, Server, Channel, Operation, Message, Components
-│   ├── schema.go               #   JSON Schema types + $defs/$ref
-│   ├── bindings.go             #   Kafka, AMQP, NATS, MQTT bindings (+ extensible *Bindings maps)
-│   ├── encode.go               #   YAML/JSON marshal
-│   └── *_test.go
-├── schema/                     # struct -> JSON Schema (the "data contract" half)
-│   ├── derive.go               #   FromType(reflect.Type) -> spec.Schema
-│   ├── tags.go                 #   asyncapi struct-tag parsing
-│   └── derive_test.go
-├── cmd/
-│   └── asyncgo/                # CLI: generate | check | version
-│       └── main.go
+├── schema/                     # struct → JSON Schema (the "data contract" half)
+├── cmd/asyncgo/                # CLI: generate | check | version
 ├── docs/                       # development process (see "Development Workflow")
 │   ├── adr/                    #   Architecture Decision Records (MADR format)
-│   │   └── README.md           #     ADR workflow, naming, and index
 │   ├── designdoc/              #   design docs (proposal → review → ADR)
-│   │   ├── README.md           #     design-doc workflow, naming, and index
-│   │   └── schema-composition.md
-│   └── templates/              #   adr-template.md, design-doc-template.md
-├── internal/
-│   └── discovery/              # catalog discovery + materialization (not public API)
-│       ├── discover.go         #   go/packages: locate *spec.AsyncAPI vars reachable from main
-│       ├── materialize.go      #   run a generated harness to materialize catalogs
-│       ├── merge.go            #   merge multiple catalogs into one document
-│       ├── descriptions.go     #   extract field doc comments + apply them to schemas
-│       ├── build.go            #   Build(): the full generate pipeline
-│       └── *_test.go
-└── test/
-    └── data/                   # discovery test fixtures (each its own Go module)
-        ├── simple/             #   minimal struct -> schema
-        ├── allof/              #   embedded struct -> allOf
-        ├── oneof/              #   oneOf union tag
-        └── anyof/              #   anyOf union tag
-        # Each fixture is a self-contained module: go.mod (require + replace => ../../..),
-        # schema.go, catalog.go, and a committed asyncapi.yaml (golden-tested).
+│   └── templates/              #   adr/design-doc templates
+├── internal/discovery/         # catalog discovery + materialization (not public API)
+└── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof — each its own Go module)
 ```
+
+The root package (top-level `.go` files) is the fluent DSL. See
+[Public API](#public-api) for the symbols each area exposes.
 
 ## Development Workflow
 
-Every non-trivial change follows a **mandatory, documented process** before any
-code is written. The process is defined in two canonical files and is binding —
-skip a step only where explicitly allowed:
+Major features and significant changes follow a documented design process. The
+process exists to give the repo a durable, in-repo memory of *why* decisions
+were made, and is defined in two canonical files:
 
 - **[docs/designdoc/README.md](docs/designdoc/README.md)** — design docs. A
-  non-trivial change is proposed *before* it is built from
+  major feature is proposed *before* it is built from
   `docs/templates/design-doc-template.md`, then reviewed and accepted.
 - **[docs/adr/README.md](docs/adr/README.md)** — Architecture Decision Records
   (MADR format). Accepted decisions are distilled into a numbered
-  `docs/adr/NNNN-kebab-case-title.md`, giving the repo a durable, in-repo
-  memory of *why* the code looks the way it does.
+  `docs/adr/NNNN-kebab-case-title.md`.
 
-**The workflow:**
+When a change warrants it, the workflow is:
 
 1. **Propose** — copy `docs/templates/design-doc-template.md` into
    `docs/designdoc/`, fill it in with `Status: Proposed`.
 2. **Review & accept** — discuss and revise, then flip the design doc to
    `Status: Accepted`.
-3. **Record** — distill the accepted decisions into a new ADR under `docs/adr/`
-   (from `docs/templates/adr-template.md`), linking back to the design doc.
-4. **Implement** — build the change with the design doc and ADR as the contract.
+3. **Record** — distill the accepted decisions into a new ADR under
+   `docs/adr/` (from `docs/templates/adr-template.md`), linking back to the
+   design doc.
+4. **Implement** — build the change with the design doc and ADR as the
+   contract.
 
-For a small, self-contained decision the design-doc step may be skipped — but
-the ADR is **never** optional. An architectural change without a corresponding
-ADR is not complete.
+This process applies to major features and big changes. Small, routine changes
+(e.g. bug fixes, minor refactors) don't require a design doc or ADR — use
+judgment, and refer to the canonical files above when unsure.
 
 ## Release
 
-Releases follow [semantic versioning](https://semver.org/) and are driven by
-[release-please](https://github.com/googleapis/release-please), which derives
-the next version and changelog from Conventional Commits:
+Releases follow [semantic versioning](https://semver.org/). A release is made
+manually by pushing a new git tag following semver:
 
-1. Manually dispatch the `release` workflow; release-please opens/updates a
-   **release PR** (version bump + `CHANGELOG.md`).
-2. Merge that PR. The `push` trigger runs release-please again, which detects
-   the merged PR and creates the `vX.Y.Z` tag.
-3. [goreleaser](https://goreleaser.com) (`.goreleaser.yaml`) builds the
-   `asyncgo` binary for linux/darwin/windows × amd64/arm64, stamps the version
-   via `-ldflags -X main.version=vX.Y.Z`, and attaches the archives to the
-   GitHub release.
+1. Tag the commit to release (`git tag vX.Y.Z`) and push it
+   (`git push origin vX.Y.Z`).
+2. Pushing the `v*` tag triggers the `release` workflow
+   (`.github/workflows/release.yml`), which runs
+   [goreleaser](https://goreleaser.com) (`.goreleaser.yaml`).
+3. GoReleaser builds the `asyncgo` binary for linux/darwin/windows ×
+   amd64/arm64, stamps the version via `-ldflags -X main.version=vX.Y.Z`, and
+   creates the GitHub release with the archives, checksums, and source tarball.
+   The workflow then attests the checksums and digests.
 
 `asyncgo version` reports the stamped version (falling back to the module
 version for `go install ...@vX.Y.Z` installs, and `devel` for local builds).
@@ -239,6 +206,9 @@ The version is the git tag — never stored in source.
   assert.Error(t, err)
   ```
 
+- **Lint & format**: `make lint` must pass. It runs `golangci-lint` (pinned in the
+  `tools` module and invoked via `go tool golangci-lint`), executing both
+  `golangci-lint run` (linter) and `golangci-lint fmt` (formatter).
 - **Error handling**: wrap errors with context using `fmt.Errorf("...: %w", err)`.
 - **Naming**:
   - Files: `snake_case.go`
