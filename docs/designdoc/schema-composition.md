@@ -386,9 +386,9 @@ components:
     `should_resolve_same_package_short_name`,
     `should_pass_through_fully_qualified_name`,
     `should_hoist_referenced_types_on_finalize`.
-  - `internal/discovery` golden test: extend an example with a union field and
+  - `internal/discovery` golden test: extend a fixture with a union field and
     assert the committed `asyncapi.yaml` reproduces (the existing
-    `examples/*/asyncapi.yaml` golden pattern).
+    `test/data/*/asyncapi.yaml` golden pattern).
 - **Race**: `go test ./... -race` per AGENT.md.
 
 ## Open / deferred

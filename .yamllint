@@ -5,7 +5,7 @@ extends: default
 #     indent), which the default indentation rule rejects; and
 #   - long `$ref` JSON-pointer URIs that cannot be line-wrapped.
 # These are legitimate output shapes, so relax the two rules that would flag
-# every committed asyncapi.yaml (examples/ and test/data/).
+# every committed asyncapi.yaml (test/data/).
 rules:
   document-start: disable
   line-length:

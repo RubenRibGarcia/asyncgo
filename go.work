@@ -2,10 +2,6 @@ go 1.25.7
 
 use (
 	.
-	./examples/simple
-	./examples/allof
-	./examples/oneof
-	./examples/anyof
 	./test/data/simple
 	./test/data/allof
 	./test/data/oneof

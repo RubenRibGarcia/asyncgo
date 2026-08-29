@@ -175,7 +175,3 @@ interface), not a concrete type.
 | `schema/` | `struct → JSON Schema` reflection |
 | `cmd/asyncgo/` | `generate` / `check` CLI |
 | `internal/discovery/` | catalog discovery + materialization |
-| `examples/simple/` | runnable example (its own module) |
-| `examples/allof/` | embedded struct composed via `allOf` (its own module) |
-| `examples/oneof/` | `oneOf` union field (its own module) |
-| `examples/anyof/` | `anyOf` union field (its own module) |

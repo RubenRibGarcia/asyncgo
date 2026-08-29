@@ -89,7 +89,7 @@ asyncgo/
 ├── README.md                   # User-facing docs
 ├── go.mod
 ├── go.sum
-├── go.work                     # multi-module workspace (root + examples/* + test/data/* + tools)
+├── go.work                     # multi-module workspace (root + test/data/* + tools)
 ├── doc.go                      # fluent DSL: Spec(), Info(), Server(), Channel(), Operation()
 ├── message.go                  #   MessageOf(T{})
 ├── bindings.go                 #   Kafka(...), AMQP(...), NATS(...), MQTT(...), Binding(...)
@@ -129,34 +129,13 @@ asyncgo/
 │       ├── descriptions.go     #   extract field doc comments + apply them to schemas
 │       ├── build.go            #   Build(): the full generate pipeline
 │       └── *_test.go
-├── examples/
-    ├── simple/                 # example service (its own Go module)
-    │   ├── go.mod              #   require + replace => ../..
-    │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
-    │   ├── schema.go           #   structs (schema source)
-    │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
-    ├── allof/                  # embedded struct -> allOf (its own module)
-    │   ├── go.mod              #   require + replace => ../..
-    │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
-    │   ├── schema.go           #   structs (schema source)
-    │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
-    ├── oneof/                  # oneOf union tag (its own module)
-    │   ├── go.mod              #   require + replace => ../..
-    │   ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
-    │   ├── schema.go           #   structs (schema source)
-    │   └── catalog.go          #   var Catalog = asyncgo.Spec(...)
-    └── anyof/                  # anyOf union tag (its own module)
-        ├── go.mod              #   require + replace => ../..
-        ├── asyncapi.yaml       #   committed generated artifact (golden-tested)
-        ├── schema.go           #   structs (schema source)
-        └── catalog.go          #   var Catalog = asyncgo.Spec(...)
 └── test/
     └── data/                   # discovery test fixtures (each its own Go module)
         ├── simple/             #   minimal struct -> schema
         ├── allof/              #   embedded struct -> allOf
         ├── oneof/              #   oneOf union tag
         └── anyof/              #   anyOf union tag
-        # Each fixture mirrors an example: go.mod (require + replace => ../../..),
+        # Each fixture is a self-contained module: go.mod (require + replace => ../../..),
         # schema.go, catalog.go, and a committed asyncapi.yaml (golden-tested).
 ```
 
@@ -217,8 +196,7 @@ The version is the git tag — never stored in source.
 - **Testing**: `make test` must pass. The `internal/discovery` tests are
   end-to-end: they run the generator against the `test/data/` fixtures
   (`simple`, `allof`, `oneof`, `anyof`) and assert each committed
-  `asyncapi.yaml` is reproduced exactly (golden test). The `examples/` directory
-  is user-facing documentation only — never use it as a test fixture.
+  `asyncapi.yaml` is reproduced exactly (golden test).
 
   **Table-driven tests** — when a single test function covers multiple cases,
   use a table-driven test with `t.Run` subtests:
@@ -272,9 +250,8 @@ The version is the git tag — never stored in source.
   has no caller to return to.
 - **Module layout**: the root package is the public DSL (`asyncgo`); `spec` and
   `schema` are public subpackages; `internal/discovery` and `cmd/asyncgo` are
-  not part of the public API. `examples/*` and `test/data/*` are separate
-  modules joined via `go.work`; the former is documentation, the latter holds
-  discovery test fixtures.
+  not part of the public API. `test/data/*` are separate modules joined via
+  `go.work`, holding discovery test fixtures.
 
 ## Commit Conventions
 
@@ -315,7 +292,6 @@ All commits must follow the
 | `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
 | `internal` | `internal/discovery/`                                     |
-| `examples` | `examples/simple/`, `examples/allof/`, `examples/oneof/`, `examples/anyof/` |
 | `test`     | `test/data/` — discovery test fixtures                        |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
