@@ -1,6 +1,6 @@
 .SILENT:
 
-.PHONY: deps test test-with-coverage build clean lint
+.PHONY: deps test pipeline-test build clean lint
 
 deps:
 	go mod tidy
@@ -10,7 +10,7 @@ test:
 	go tool gotestsum --format pkgname-and-test-fails -- ./... -race -coverprofile=coverage.out -covermode=atomic
 	go tool go-test-coverage --config=.testcoverage.yaml
 
-test-with-coverage:
+pipeline-test:
 	go tool gotestsum --format pkgname-and-test-fails -- ./... -race -coverprofile=coverage.out -covermode=atomic
 
 build:
