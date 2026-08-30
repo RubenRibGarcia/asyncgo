@@ -1,10 +1,11 @@
-package discovery
+package integration
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,10 +18,10 @@ import (
 func TestGoldenExample(t *testing.T) {
 	for _, name := range []string{"simple", "allof", "oneof", "anyof", "provider"} {
 		t.Run(name, func(t *testing.T) {
-			dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", name))
+			dir, err := filepath.Abs(filepath.Join("..", "data", name))
 			require.NoError(t, err)
 
-			doc, _, err := Build(dir)
+			doc, _, err := discovery.Build(dir)
 			require.NoError(t, err)
 			got, err := doc.YAML()
 			require.NoError(t, err)

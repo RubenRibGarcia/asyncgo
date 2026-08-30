@@ -99,7 +99,8 @@ asyncgo/
 │   ├── designdoc/              #   design docs (proposal → review → ADR)
 │   └── templates/              #   adr/design-doc templates
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-└── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider — each its own Go module)
+└── test/integration/           # end-to-end golden test against the test/data/ fixtures
 ```
 
 The root package (top-level `.go` files) is the fluent DSL. See
@@ -160,10 +161,10 @@ The version is the git tag — never stored in source.
   `github.com/stretchr/testify` for test assertions,
   `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
   Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
-- **Testing**: `make test` must pass. The `internal/discovery` tests are
-  end-to-end: they run the generator against the `test/data/` fixtures
-  (`simple`, `allof`, `oneof`, `anyof`) and assert each committed
-  `asyncapi.yaml` is reproduced exactly (golden test).
+- **Testing**: `make test` must pass. The `test/integration` golden test is
+  end-to-end: it runs the generator against the `test/data/` fixtures
+  (`simple`, `allof`, `oneof`, `anyof`, `provider`) and asserts each committed
+  `asyncapi.yaml` is reproduced exactly.
 
   **Table-driven tests** — when a single test function covers multiple cases,
   use a table-driven test with `t.Run` subtests:
