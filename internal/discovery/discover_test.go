@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"go/types"
 	"path/filepath"
 	"testing"
 
@@ -33,4 +34,41 @@ func TestFindMaterializeMerge(t *testing.T) {
 	const key = "github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced"
 	require.Contains(t, merged.Components.Schemas, key)
 	assert.Len(t, merged.Components.Schemas[key].Required, 2)
+}
+
+func TestLoadErrors(t *testing.T) {
+	_, err := load(filepath.Join(t.TempDir(), "does-not-exist"))
+	require.Error(t, err)
+}
+
+func TestFindErrors(t *testing.T) {
+	_, err := Find(filepath.Join(t.TempDir(), "does-not-exist"))
+	require.Error(t, err)
+}
+
+func TestIsAsyncAPI(t *testing.T) {
+	t.Run("should_report_true_for_pointer_to_async_api", func(t *testing.T) {
+		dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
+		require.NoError(t, err)
+		pkgs, err := load(dir)
+		require.NoError(t, err)
+
+		var catType types.Type
+		for _, p := range pkgs {
+			if obj := p.Types.Scope().Lookup("Catalog"); obj != nil {
+				catType = obj.Type()
+				break
+			}
+		}
+		require.NotNil(t, catType)
+		assert.True(t, isAsyncAPI(catType))
+	})
+
+	t.Run("should_report_false_for_non_pointer", func(t *testing.T) {
+		assert.False(t, isAsyncAPI(types.Typ[types.String]))
+	})
+
+	t.Run("should_report_false_for_pointer_to_non_named", func(t *testing.T) {
+		assert.False(t, isAsyncAPI(types.NewPointer(types.Typ[types.String])))
+	})
 }

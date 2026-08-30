@@ -53,6 +53,16 @@ func TestEncodeChannelServers(t *testing.T) {
 	assert.NotContains(t, string(out), "servers:")
 }
 
+func TestEncodeJSON(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+
+	out, err := doc.JSON()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), `"asyncapi":"3.1.0"`)
+	assert.Contains(t, string(out), `"title":"Orders"`)
+}
+
 func TestEncodeYAML(t *testing.T) {
 	doc := New()
 	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
