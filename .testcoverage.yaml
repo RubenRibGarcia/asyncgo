@@ -7,6 +7,6 @@ threshold:
 
 exclude:
     paths:
-        - ^model/
+    - ^cmd/asyncgo/
 
 force-annotation-comment: true

@@ -53,3 +53,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | - | --------------- | ------ | ------- | -------------- |
 | [0001](0001-schema-composition-from-go-structs.md) | Derive allOf / oneOf / anyOf composition from Go structs | accepted | 2026-08-18 | 2026-08-18 |
 | [0002](0002-custom-schema-providers.md) | Custom schema providers for types with custom (de)serialization | accepted | 2026-08-29 | 2026-08-29 |
+| [0003](0003-adopt-cobra-for-cli.md) | Adopt Cobra for the CLI command structure | accepted | 2026-08-31 | 2026-08-31 |

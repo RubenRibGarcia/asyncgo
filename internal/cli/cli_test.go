@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -12,78 +12,96 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// execute builds a fresh command tree, runs it with args, and captures stdout
+// and stderr separately.
+func execute(t *testing.T, bi BuildInfo, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	root := newRootCmd(bi)
+	var out, errOut bytes.Buffer
+	root.SetArgs(args)
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	err = root.Execute()
+	return out.String(), errOut.String(), err
+}
+
 func TestResolveVersion(t *testing.T) {
 	t.Run("should_return_injected_version", func(t *testing.T) {
-		old := version
-		defer func() { version = old }()
-		version = "v1.2.3"
-		assert.Equal(t, "v1.2.3", resolveVersion())
+		assert.Equal(t, "v1.2.3", resolveVersion("v1.2.3"))
 	})
 
 	t.Run("should_fall_back_to_devel_when_untagged", func(t *testing.T) {
-		old := version
-		defer func() { version = old }()
-		version = "devel"
 		// A `go test` binary carries "(devel)" as its main module version.
-		assert.Equal(t, "devel", resolveVersion())
+		assert.Equal(t, "devel", resolveVersion("devel"))
+	})
+
+	t.Run("should_fall_back_to_devel_when_empty", func(t *testing.T) {
+		assert.Equal(t, "devel", resolveVersion(""))
 	})
 }
 
-func TestRunVersion(t *testing.T) {
-	old := version
-	defer func() { version = old }()
-	version = "v1.2.3"
+func TestFormatVersion(t *testing.T) {
+	t.Run("should_return_bare_version", func(t *testing.T) {
+		assert.Equal(t, "v1.2.3", formatVersion(BuildInfo{Version: "v1.2.3"}))
+	})
 
+	t.Run("should_append_commit_and_date", func(t *testing.T) {
+		got := formatVersion(BuildInfo{
+			Version: "v1.2.3",
+			Commit:  "abc1234",
+			Date:    "2026-08-18T00:00:00Z",
+		})
+		assert.Equal(t, "v1.2.3 (commit abc1234, built 2026-08-18T00:00:00Z)", got)
+	})
+}
+
+func TestExecute(t *testing.T) {
 	out := captureStdout(t, func() {
-		require.NoError(t, run([]string{"version"}))
+		require.NoError(t, Execute([]string{"version"}, BuildInfo{Version: "v1.2.3"}))
 	})
 	assert.Equal(t, "asyncgo v1.2.3\n", out)
 }
 
-func TestRunVersionWithCommit(t *testing.T) {
-	oldVersion, oldCommit, oldDate := version, commit, date
-	defer func() { version, commit, date = oldVersion, oldCommit, oldDate }()
-	version, commit, date = "v1.2.3", "abc1234", "2026-08-18T00:00:00Z"
+func TestVersionCommand(t *testing.T) {
+	out, _, err := execute(t, BuildInfo{Version: "v1.2.3"}, "version")
+	require.NoError(t, err)
+	assert.Equal(t, "asyncgo v1.2.3\n", out)
+}
 
-	out := captureStdout(t, func() {
-		require.NoError(t, run([]string{"version"}))
-	})
+func TestVersionCommandWithCommit(t *testing.T) {
+	out, _, err := execute(t, BuildInfo{
+		Version: "v1.2.3",
+		Commit:  "abc1234",
+		Date:    "2026-08-18T00:00:00Z",
+	}, "version")
+	require.NoError(t, err)
 	assert.Equal(t, "asyncgo v1.2.3 (commit abc1234, built 2026-08-18T00:00:00Z)\n", out)
 }
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
+func TestVersionFlag(t *testing.T) {
+	out, _, err := execute(t, BuildInfo{Version: "v1.2.3"}, "--version")
 	require.NoError(t, err)
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
-
-	fn()
-
-	require.NoError(t, w.Close())
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, r)
-	require.NoError(t, err)
-	return buf.String()
+	assert.Equal(t, "asyncgo v1.2.3\n", out)
 }
 
-func TestRunUsageError(t *testing.T) {
-	err := run(nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "usage:")
+func TestNoArgsShowsHelp(t *testing.T) {
+	stdout, _, err := execute(t, BuildInfo{})
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "Usage:")
+	assert.Contains(t, stdout, "generate")
+	assert.Contains(t, stdout, "check")
 }
 
-func TestRunUnknownCommand(t *testing.T) {
-	err := run([]string{"bogus"})
+func TestUnknownCommand(t *testing.T) {
+	_, _, err := execute(t, BuildInfo{}, "bogus")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown command")
 }
 
-func TestRunBadFlag(t *testing.T) {
-	err := run([]string{"generate", "-x"})
+func TestBadFlag(t *testing.T) {
+	_, _, err := execute(t, BuildInfo{}, "generate", "-x")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "usage:")
+	assert.Contains(t, err.Error(), "unknown shorthand flag")
 }
 
 func TestResolveDir(t *testing.T) {
@@ -144,19 +162,36 @@ func absPath(t *testing.T, p string) string {
 	return abs
 }
 
-func TestRunGenerateAndCheck(t *testing.T) {
+// captureStdout runs fn with os.Stdout redirected to a pipe and returns what
+// was written. It is used to exercise Execute, which writes to os.Stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
+
+	fn()
+
+	require.NoError(t, w.Close())
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	return buf.String()
+}
+
+func TestGenerateAndCheck(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	dir := copySimpleFixture(t)
 
-	out := captureStdout(t, func() {
-		require.NoError(t, run([]string{"generate", dir}))
-	})
+	out, _, err := execute(t, BuildInfo{}, "generate", dir)
+	require.NoError(t, err)
 	assert.Contains(t, out, "wrote ")
 	assert.Contains(t, out, "(1 catalog(s))")
 
-	out = captureStdout(t, func() {
-		require.NoError(t, run([]string{"check", dir}))
-	})
+	out, _, err = execute(t, BuildInfo{}, "check", dir)
+	require.NoError(t, err)
 	assert.Contains(t, out, "is up to date")
 }
 
@@ -165,9 +200,8 @@ func TestGenerateOutputFlag(t *testing.T) {
 	dir := copySimpleFixture(t)
 	dst := filepath.Join(t.TempDir(), "spec.yaml")
 
-	out := captureStdout(t, func() {
-		require.NoError(t, run([]string{"generate", "-o", dst, dir}))
-	})
+	out, _, err := execute(t, BuildInfo{}, "generate", "-o", dst, dir)
+	require.NoError(t, err)
 	assert.Contains(t, out, "wrote "+dst)
 	require.FileExists(t, dst)
 	require.NoFileExists(t, filepath.Join(dir, "asyncapi.yaml"))
@@ -178,9 +212,8 @@ func TestGenerateOutputDirFlag(t *testing.T) {
 	dir := copySimpleFixture(t)
 	outDir := t.TempDir()
 
-	out := captureStdout(t, func() {
-		require.NoError(t, run([]string{"generate", "-o", outDir + string(os.PathSeparator), dir}))
-	})
+	out, _, err := execute(t, BuildInfo{}, "generate", "-o", outDir+string(os.PathSeparator), dir)
+	require.NoError(t, err)
 	dst := filepath.Join(outDir, "asyncapi.yaml")
 	assert.Contains(t, out, "wrote "+dst)
 	require.FileExists(t, dst)
@@ -191,7 +224,7 @@ func TestGenerateNoCatalogs(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "spec"))
 	require.NoError(t, err)
 
-	err = generate([]string{dir})
+	_, _, err = execute(t, BuildInfo{}, "generate", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no AsyncAPI catalogs")
 }
@@ -206,7 +239,7 @@ func TestCheckOutOfDate(t *testing.T) {
 		0o644,
 	))
 
-	err := check([]string{dir})
+	_, _, err := execute(t, BuildInfo{}, "check", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "out of date")
 }
@@ -215,7 +248,7 @@ func TestCheckMissing(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	dir := copySimpleFixture(t)
 
-	err := check([]string{dir})
+	_, _, err := execute(t, BuildInfo{}, "check", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -224,7 +257,7 @@ func TestCheckNoCatalogs(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "spec"))
 	require.NoError(t, err)
 
-	err = check([]string{dir})
+	_, _, err = execute(t, BuildInfo{}, "check", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no AsyncAPI catalogs")
 }
@@ -235,7 +268,7 @@ func TestGenerateWriteError(t *testing.T) {
 	// A directory in place of asyncapi.yaml forces os.WriteFile to fail.
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "asyncapi.yaml"), 0o755))
 
-	err := generate([]string{dir})
+	_, _, err := execute(t, BuildInfo{}, "generate", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "writing ")
 }
@@ -247,7 +280,7 @@ func TestCheckReadError(t *testing.T) {
 	// non-IsNotExist error.
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "asyncapi.yaml"), 0o755))
 
-	err := check([]string{dir})
+	_, _, err := execute(t, BuildInfo{}, "check", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reading ")
 }

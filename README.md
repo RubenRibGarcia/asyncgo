@@ -84,6 +84,11 @@ asyncgo check .
 
 # print the asyncgo version (matches the git tag / release)
 asyncgo version
+
+# built-in help, --version flag, and shell completion (via Cobra)
+asyncgo --help
+asyncgo --version
+asyncgo completion bash
 ```
 
 The generator discovers catalogs **reachable from `main`**, then runs a small

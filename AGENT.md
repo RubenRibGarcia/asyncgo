@@ -39,7 +39,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 └───────┬───────────────┘   └─────────────────────────────┘
         │
 ┌───────▼─────────────────────────────────────────────────┐
-│         internal/discovery + cmd/asyncgo                │
+│         internal/discovery + internal/cli               │
 │  1. go/packages: find *spec.AsyncAPI vars reachable     │
 │     from main (static, no execution)                    │
 │  2. Generate a harness that imports catalog packages    │
@@ -93,11 +93,12 @@ asyncgo/
 ├── .github/workflows/          # CI (test.yaml) + release (release.yml)
 ├── spec/                       # Typed AsyncAPI 3.1.0 object model + codecs
 ├── schema/                     # struct → JSON Schema (the "data contract" half)
-├── cmd/asyncgo/                # CLI: generate | check | version
+├── cmd/asyncgo/                # thin main: build metadata + cli.Execute
 ├── docs/                       # development process (see "Development Workflow")
 │   ├── adr/                    #   Architecture Decision Records (MADR format)
 │   ├── designdoc/              #   design docs (proposal → review → ADR)
 │   └── templates/              #   adr/design-doc templates
+├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
 ├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider — each its own Go module)
 └── test/integration/           # end-to-end golden test against the test/data/ fixtures
@@ -159,8 +160,10 @@ The version is the git tag — never stored in source.
 - **Go version**: 1.25+
 - **Dependencies**: `github.com/goccy/go-yaml` for YAML,
   `github.com/stretchr/testify` for test assertions,
-  `golang.org/x/tools/go/packages` for discovery, standard library for JSON.
-  Avoid heavy frameworks. No code generation — the DSL and model are hand-written.
+  `golang.org/x/tools/go/packages` for discovery, `github.com/spf13/cobra`
+  for the CLI command tree, standard library for JSON. Avoid heavy frameworks
+  in the library itself — the CLI uses Cobra (see docs/adr/0003). No code
+  generation — the DSL and model are hand-written.
 - **Testing**: `make test` must pass. The `test/integration` golden test is
   end-to-end: it runs the generator against the `test/data/` fixtures
   (`simple`, `allof`, `oneof`, `anyof`, `provider`) and asserts each committed
@@ -220,8 +223,9 @@ The version is the git tag — never stored in source.
   is the one exception — it may `panic` on unrecoverable write errors since it
   has no caller to return to.
 - **Module layout**: the root package is the public DSL (`asyncgo`); `spec` and
-  `schema` are public subpackages; `internal/discovery` and `cmd/asyncgo` are
-  not part of the public API. `test/data/*` are separate modules joined via
+  `schema` are public subpackages; `internal/discovery`, `internal/cli`, and
+  `cmd/asyncgo` are not part of the public API. `test/data/*` are separate
+  modules joined via
   `go.work`, holding discovery test fixtures.
 
 ## Commit Conventions
@@ -262,7 +266,7 @@ All commits must follow the
 | `schema`   | `schema/` — struct → JSON Schema reflection               |
 | `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
-| `internal` | `internal/discovery/`                                     |
+| `internal` | `internal/discovery/`, `internal/cli/`                    |
 | `test`     | `test/data/` — discovery test fixtures                        |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
