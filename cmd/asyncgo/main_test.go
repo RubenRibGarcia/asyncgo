@@ -80,6 +80,12 @@ func TestRunUnknownCommand(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown command")
 }
 
+func TestRunBadFlag(t *testing.T) {
+	err := run([]string{"generate", "-x"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "usage:")
+}
+
 func TestResolveDir(t *testing.T) {
 	t.Run("should_default_to_current_directory", func(t *testing.T) {
 		got, err := resolveDir(nil)
@@ -98,6 +104,46 @@ func TestResolveDir(t *testing.T) {
 	})
 }
 
+func TestResolveOutput(t *testing.T) {
+	dir := filepath.Join("some", "dir")
+
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{
+			name: "should_default_to_dir_asyncapi_yaml",
+			want: filepath.Join(dir, "asyncapi.yaml"),
+		},
+		{
+			name:   "should_join_filename_for_trailing_separator",
+			output: "out/",
+			want:   filepath.Join("out", "asyncapi.yaml"),
+		},
+		{
+			name:   "should_absolutize_explicit_file",
+			output: "custom.yaml",
+			want:   absPath(t, "custom.yaml"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveOutput(dir, tc.output)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func absPath(t *testing.T, p string) string {
+	t.Helper()
+	abs, err := filepath.Abs(p)
+	require.NoError(t, err)
+	return abs
+}
+
 func TestRunGenerateAndCheck(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	dir := copySimpleFixture(t)
@@ -112,6 +158,33 @@ func TestRunGenerateAndCheck(t *testing.T) {
 		require.NoError(t, run([]string{"check", dir}))
 	})
 	assert.Contains(t, out, "is up to date")
+}
+
+func TestGenerateOutputFlag(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+	dst := filepath.Join(t.TempDir(), "spec.yaml")
+
+	out := captureStdout(t, func() {
+		require.NoError(t, run([]string{"generate", "-o", dst, dir}))
+	})
+	assert.Contains(t, out, "wrote "+dst)
+	require.FileExists(t, dst)
+	require.NoFileExists(t, filepath.Join(dir, "asyncapi.yaml"))
+}
+
+func TestGenerateOutputDirFlag(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+	outDir := t.TempDir()
+
+	out := captureStdout(t, func() {
+		require.NoError(t, run([]string{"generate", "-o", outDir + string(os.PathSeparator), dir}))
+	})
+	dst := filepath.Join(outDir, "asyncapi.yaml")
+	assert.Contains(t, out, "wrote "+dst)
+	require.FileExists(t, dst)
+	require.NoFileExists(t, filepath.Join(dir, "asyncapi.yaml"))
 }
 
 func TestGenerateNoCatalogs(t *testing.T) {

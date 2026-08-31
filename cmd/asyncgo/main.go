@@ -3,17 +3,20 @@
 //
 // Usage:
 //
-//	asyncgo generate [dir]   write asyncapi.yaml for the module rooted at dir
+//	asyncgo generate [dir] [-o output]   write asyncapi.yaml for the module rooted at dir
 //	asyncgo check [dir]      fail if asyncapi.yaml is out of date
 //	asyncgo version          print the asyncgo version
 package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/RubenRibGarcia/asyncgo/spec"
@@ -85,6 +88,24 @@ func resolveDir(args []string) (string, error) {
 	return abs, nil
 }
 
+// resolveOutput computes the destination path for the generated document. An
+// empty output defaults to <dir>/asyncapi.yaml; a trailing path separator
+// writes asyncapi.yaml inside the given directory; any other value is treated
+// as the exact output file path (made absolute).
+func resolveOutput(dir, output string) (string, error) {
+	if output == "" {
+		return filepath.Join(dir, "asyncapi.yaml"), nil
+	}
+	if strings.HasSuffix(output, string(os.PathSeparator)) || strings.HasSuffix(output, "/") {
+		return filepath.Join(output, "asyncapi.yaml"), nil
+	}
+	abs, err := filepath.Abs(output)
+	if err != nil {
+		return "", fmt.Errorf("resolving output %q: %w", output, err)
+	}
+	return abs, nil
+}
+
 // buildDocument derives the document from the catalogs reachable from main. It
 // returns the document and the number of catalogs found.
 func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
@@ -92,7 +113,16 @@ func buildDocument(dir string) (*spec.AsyncAPI, int, error) {
 }
 
 func generate(args []string) error {
-	dir, err := resolveDir(args)
+	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var output string
+	fs.StringVar(&output, "o", "", "output file or directory (default: <dir>/asyncapi.yaml)")
+	fs.StringVar(&output, "output", "", "alias for -o")
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("generate: %w (usage: asyncgo generate [dir] [-o output])", err)
+	}
+
+	dir, err := resolveDir(fs.Args())
 	if err != nil {
 		return fmt.Errorf("generating: %w", err)
 	}
@@ -105,7 +135,10 @@ func generate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("encoding document: %w", err)
 	}
-	path := filepath.Join(dir, "asyncapi.yaml")
+	path, err := resolveOutput(dir, output)
+	if err != nil {
+		return fmt.Errorf("generating: %w", err)
+	}
 	if err := os.WriteFile(path, out, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}

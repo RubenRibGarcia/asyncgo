@@ -74,10 +74,13 @@ var Catalog = asyncgo.Spec(
 
 ```bash
 # write asyncapi.yaml (committed artifact)
-asyncgo generate ./...
+asyncgo generate .
+
+# write to a custom location (a file path, or a directory with a trailing slash)
+asyncgo generate . -o ./docs/asyncapi.yaml
 
 # fail CI when asyncapi.yaml is out of date
-asyncgo check ./...
+asyncgo check .
 
 # print the asyncgo version (matches the git tag / release)
 asyncgo version

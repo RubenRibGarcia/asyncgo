@@ -79,7 +79,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 | DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `Channels`, `Channel`, `Operation`, `MessageOf`, `Kafka`/`AMQP`/`NATS`/`MQTT`/`Binding` helpers |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `Channel`, `Operation`, `Message`, `Schema`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
-| CLI | `asyncgo generate [dir]`, `asyncgo check [dir]` |
+| CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]` |
 
 ## Directory Structure
 
