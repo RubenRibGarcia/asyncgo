@@ -27,3 +27,6 @@ Thumbs.db
 
 # Serena (don't version cache)
 .serena/cache/
+
+# ASDF
+.tool-versions
