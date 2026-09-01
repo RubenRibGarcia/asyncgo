@@ -1,6 +1,6 @@
 module github.com/RubenRibGarcia/asyncgo/test/data/anyof
 
-go 1.25.7
+go 1.26.8
 
 require github.com/RubenRibGarcia/asyncgo v0.0.0
 

@@ -157,7 +157,7 @@ The version is the git tag — never stored in source.
 
 ## Conventions
 
-- **Go version**: 1.25+
+- **Go version**: 1.26+
 - **Dependencies**: `github.com/goccy/go-yaml` for YAML,
   `github.com/stretchr/testify` for test assertions,
   `golang.org/x/tools/go/packages` for discovery, `github.com/spf13/cobra`

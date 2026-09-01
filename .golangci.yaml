@@ -13,4 +13,4 @@ formatters:
 run:
     timeout: 5m
     allow-parallel-runners: true
-    go: '1.25'
+    go: '1.26'
