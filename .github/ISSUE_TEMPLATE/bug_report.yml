@@ -1,0 +1,74 @@
+name: Bug report
+description: Report something that behaves incorrectly.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much of
+        this form as you can — the clearer the reproduction, the faster the fix.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect to happen instead?
+      placeholder: >-
+        When I run `asyncgo generate` with a server that has no host, it
+        succeeds instead of failing.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `asyncgo version`.
+      placeholder: "v1.2.3"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Minimal steps (or a small Go snippet) that triggers the problem.
+        For catalog issues, include the relevant `asyncgo.Spec(...)` fragment.
+      placeholder: |
+        1. Declare `var Catalog = asyncgo.Spec(...)` with ...
+        2. Run `asyncgo generate .`
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened.
+    validations:
+      required: false
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: >-
+        What actually happened (include error output / generated YAML if
+        relevant).
+      render: shell
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the codebase does this touch?
+      multiple: true
+      options:
+        - "dsl (root package: doc.go, message.go, bindings.go)"
+        - "spec (object model, codecs, bindings)"
+        - "schema (struct -> JSON Schema)"
+        - "internal/discovery (catalog discovery + materialization)"
+        - "internal/cli (generate/check)"
+        - "docs"
+        - "test/data fixtures"
+    validations:
+      required: true

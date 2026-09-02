@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AsyncAPI 3.1.0 specification
+    url: https://www.asyncapi.com/docs/reference/specification/v3.1.0
+    about: Reference for the specification asyncgo generates against.
+  - name: Design docs
+    url: https://github.com/RubenRibGarcia/asyncgo/tree/master/docs/designdoc
+    about: In-repo design docs, including deferred (Non-goals / Open) work.
+  - name: ADR
+    url: https://github.com/RubenRibGarcia/asyncgo/tree/master/docs/adr
+    about: Architecture decision records (ADR) for asyncgo.

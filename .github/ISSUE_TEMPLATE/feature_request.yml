@@ -1,0 +1,71 @@
+name: Feature / enhancement
+description: >-
+  Propose an enhancement — e.g. a deferred DSL validation or generator
+  capability.
+title: "[feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to propose new behavior. Many of the repo's planned
+        items are deferred from a design doc — if yours is, link it under
+        "Related design doc" below.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What gap or pain point does this address? Why now?
+      placeholder: >-
+        e.g. A channel can reference a server that was never declared via
+        `Servers(...)`, producing a dangling `$ref`.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        What should change? For DSL validation, describe the error returned at
+        `apply` time and the message the user should see.
+      placeholder: >-
+        e.g. Validate in `channel.apply` that every server referenced by
+        `Channel.Servers(...)` is present in `builder.doc.Servers`, returning
+        `channel "x": references unknown server "y"`.
+    validations:
+      required: true
+  - type: input
+    id: design_doc
+    attributes:
+      label: Related design doc
+      description: >-
+        Path under `docs/designdoc/` if this tracks a deferred item
+        (Non-goals / Open).
+      placeholder: "docs/designdoc/fluent-dsl-validation.md"
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the codebase does this touch?
+      multiple: true
+      options:
+        - "dsl (root package: doc.go, message.go, bindings.go)"
+        - "spec (object model, codecs, bindings)"
+        - "schema (struct -> JSON Schema)"
+        - "internal/discovery (catalog discovery + materialization)"
+        - "internal/cli (generate/check)"
+        - "docs"
+        - "test/data fixtures"
+    validations:
+      required: true
+  - type: checkboxes
+    id: tracks_deferred
+    attributes:
+      label: Tracking
+      description: >-
+        Help reviewers triage this against the repo's design-doc workflow.
+      options:
+        - label: >-
+            This tracks a deferred item (Non-goals / Open) from a design doc
