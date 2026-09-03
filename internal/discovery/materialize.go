@@ -197,7 +197,12 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	for _, e := range catEntries {
 		fmt.Fprintf(&b, "\t{\n")
 		fmt.Fprintf(&b, "\t\tc := catalogOutcome{PkgPath: %q, VarName: %q}\n", e.pkgPath, e.varName)
-		fmt.Fprintf(&b, "\t\tif errs := %s.%s.ValidationErrors(); len(errs) > 0 {\n", e.alias, e.varName)
+		fmt.Fprintf(
+			&b,
+			"\t\tif errs := %s.%s.ValidationErrors(); len(errs) > 0 {\n",
+			e.alias,
+			e.varName,
+		)
 		b.WriteString("\t\t\tfor _, e := range errs {\n")
 		b.WriteString("\t\t\t\tc.Errors = append(c.Errors, e.Error())\n")
 		b.WriteString("\t\t\t}\n")
@@ -207,7 +212,9 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 		b.WriteString("\t\tout.Catalogs = append(out.Catalogs, c)\n")
 		b.WriteString("\t}\n")
 	}
-	b.WriteString("\tfor _, c := range out.Catalogs {\n\t\tif c.Doc != nil {\n\t\t\tschema.Finalize(c.Doc)\n\t\t}\n\t}\n")
+	b.WriteString(
+		"\tfor _, c := range out.Catalogs {\n\t\tif c.Doc != nil {\n\t\t\tschema.Finalize(c.Doc)\n\t\t}\n\t}\n",
+	)
 	b.WriteString(
 		"\toutBytes, err := yaml.Marshal(out)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tif _, err := os.Stdout.Write(outBytes); err != nil {\n\t\tpanic(err)\n\t}\n}\n",
 	)

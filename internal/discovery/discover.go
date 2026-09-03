@@ -119,7 +119,8 @@ func isSpecResult(t types.Type) bool {
 		return false
 	}
 	obj := named.Obj()
-	return obj.Pkg() != nil && obj.Pkg().Path() == specResultType.PkgPath() && obj.Name() == specResultType.Name()
+	return obj.Pkg() != nil && obj.Pkg().Path() == specResultType.PkgPath() &&
+		obj.Name() == specResultType.Name()
 }
 
 // reachableFromMain returns the set of package IDs reachable from any main

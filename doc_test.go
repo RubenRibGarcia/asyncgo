@@ -126,7 +126,10 @@ func TestValidationErrors(t *testing.T) {
 		{
 			name: "should_return_nil_error_for_valid_catalog",
 			spec: func() *SpecResult {
-				return Spec(Info("Orders", "1.0.0"), Servers(Server("prod", "kafka", "broker:9092")))
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Servers(Server("prod", "kafka", "broker:9092")),
+				)
 			},
 			want: "",
 		},
