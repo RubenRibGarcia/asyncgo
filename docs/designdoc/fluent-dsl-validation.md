@@ -1,16 +1,16 @@
-# Design: Fluent DSL validation with a Result type
+# Design: Fluent DSL validation with a SpecResult type
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Created**: 2026-09-01
-- **Status updated**: 2026-09-01
+- **Status updated**: 2026-09-03
 - **Scope**: root DSL (`asyncgo`: `doc.go`, `message.go`, `bindings.go`), `internal/discovery/`, `test/data/`, `docs/`
 
 ## Summary
 
 Give the fluent DSL a first-class way to report that a catalog was assembled
 incorrectly. `Item.apply` gains an `error` return, and `Spec` returns a new
-`Result` value that bundles the assembled `*spec.AsyncAPI` with the validation
-errors found. The discovery harness materializes `Result` and reports failures
+`SpecResult` value that bundles the assembled `*spec.AsyncAPI` with the validation
+errors found. The discovery harness materializes `SpecResult` and reports failures
 as a per-catalog report, so `asyncgo generate` / `asyncgo check` fail with a
 clear, contextualized message at generation time.
 
@@ -91,31 +91,31 @@ prevent.
 
 ## Design decisions
 
-### D1 — `Item.apply` returns `error`; `Spec` returns `*Result`
+### D1 — `Item.apply` returns `error`; `Spec` returns `*SpecResult`
 
 ```go
-type Result struct {
+type SpecResult struct {
     Doc *spec.AsyncAPI
     Err error
 }
 
 type Item interface { apply(b *builder) error }
 
-func Spec(items ...Item) *Result
+func Spec(items ...Item) *SpecResult
 ```
 
 `Spec` accumulates per-item errors with `errors.Join` into `Err`, and also keeps
-the individual errors available via `Result.ValidationErrors()` so the harness
+the individual errors available via `SpecResult.ValidationErrors()` so the harness
 can render the per-catalog report:
 
 ```go
 // ValidationErrors returns the individual validation errors that Err joins,
 // or nil when the catalog is valid. The generator harness uses this to render
 // the per-catalog report.
-func (r *Result) ValidationErrors() []error { return r.errs }
+func (r *SpecResult) ValidationErrors() []error { return r.errs }
 ```
 
-`Result.Doc` is always populated (the document is assembled best-effort, but is
+`SpecResult.Doc` is always populated (the document is assembled best-effort, but is
 only consumed when `Err == nil`).
 
 **Rationale**: a catalog must remain a single package-level `var` so discovery
@@ -127,7 +127,7 @@ error:
   (`func Catalog() (*spec.AsyncAPI, error)`), which changes the discovery
   contract from "value" to "call", or two exported vars (`Catalog`,
   `CatalogErr`) with fragile name-pairing and a leaked symbol. The function
-  form is idiomatic but is a larger conceptual shift; `Result` keeps the
+  form is idiomatic but is a larger conceptual shift; `SpecResult` keeps the
   existing "catalog is a value" model (AGENT.md decision #5).
 - **A separate `Validate(doc) error` pass** — clean, but the user explicitly
   wants errors returned "when applying the item", and a separate pass can't
@@ -141,9 +141,9 @@ error:
 harness report *which* violations a specific catalog has, instead of one opaque
 string.
 
-### D2 — `Result` lives in the root `asyncgo` package, with exported fields
+### D2 — `SpecResult` lives in the root `asyncgo` package, with exported fields
 
-`Result` is a DSL artifact, not part of the object model, so it belongs next to
+`SpecResult` is a DSL artifact, not part of the object model, so it belongs next to
 `Spec`, not in `spec`. Exported `Doc`/`Err` fields and the `ValidationErrors()`
 method (rather than unexported state) keep the harness — which reads them from
 a generated `main` — trivial.
@@ -209,22 +209,22 @@ string, which lets the report be rendered on the Go side (not inside generated
 code). Parsing stderr (the current failure path) intermixes `go run` noise and
 can't distinguish per-catalog errors.
 
-### D6 — Discovery detects `*asyncgo.Result` (replaces `isAsyncAPI`)
+### D6 — Discovery detects `*asyncgo.SpecResult` (replaces `isAsyncAPI`)
 
 `discover.go` computes the identity from the real type and checks for a pointer
 to it:
 
 ```go
-var resultType = reflect.TypeFor[asyncgo.Result]()
+var specResultType = reflect.TypeFor[asyncgo.SpecResult]()
 
-func isResult(t types.Type) bool {
+func isSpecResult(t types.Type) bool {
     ptr, ok := t.(*types.Pointer)
     if !ok { return false }
     named, ok := ptr.Elem().(*types.Named)
     if !ok { return false }
     obj := named.Obj()
-    return obj.Pkg() != nil && obj.Pkg().Path() == resultType.PkgPath() &&
-        obj.Name() == resultType.Name()
+    return obj.Pkg() != nil && obj.Pkg().Path() == specResultType.PkgPath() &&
+        obj.Name() == specResultType.Name()
 }
 ```
 
@@ -268,7 +268,7 @@ the user sees:
 invalid AsyncAPI catalog(s): 1
 
 example.com/app.Catalog:
-  - server "prod": host is required
+  - server.prod.host: is required
 ```
 
 **Rationale**: both dimensions of the report — *which catalog* and *which
@@ -280,14 +280,14 @@ dedicated report later; v1 simply prints the returned error.
 
 ### 1. Root DSL — `doc.go`
 
-Add `"errors"` and `"fmt"` imports, the `Result` type, the new `Item` shape,
+Add `"errors"` and `"fmt"` imports, the `SpecResult` type, the new `Item` shape,
 and the new `Spec`:
 
 ```go
-// Result is the outcome of building a catalog: the assembled document plus any
+// SpecResult is the outcome of building a catalog: the assembled document plus any
 // validation errors encountered while applying its items. Doc is always
 // non-nil; Err is nil when the catalog is valid.
-type Result struct {
+type SpecResult struct {
     Doc  *spec.AsyncAPI
     Err  error
     errs []error
@@ -296,9 +296,9 @@ type Result struct {
 // ValidationErrors returns the individual validation errors that Err joins, or
 // nil when the catalog is valid. The generator harness uses this to render the
 // per-catalog report.
-func (r *Result) ValidationErrors() []error { return r.errs }
+func (r *SpecResult) ValidationErrors() []error { return r.errs }
 
-func Spec(items ...Item) *Result {
+func Spec(items ...Item) *SpecResult {
     b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
     var errs []error
     for _, it := range items {
@@ -310,7 +310,7 @@ func Spec(items ...Item) *Result {
         c := b.components()
         maps.Copy(c.Schemas, b.defs)
     }
-    return &Result{Doc: b.doc, Err: errors.Join(errs...), errs: errs}
+    return &SpecResult{Doc: b.doc, Err: errors.Join(errs...), errs: errs}
 }
 ```
 
@@ -342,17 +342,21 @@ func Server(name, protocol, host string) *server {
 }
 ```
 
-Error convention: `<kind> "<name>": <field> is required` (name omitted where
-the kind has no name, e.g. `info`).
+Error convention: `<path>: <constraint message>`, where `<path>` is a
+dot-separated, JSON-Pointer-like path to the offending attribute and
+`<constraint message>` states the violated constraint (e.g. `is required`).
+Kind and name are joined into the path — `server.<name>.host`, `info.title`,
+`channel.address` — and array elements use an index segment
+(`<array_attr>.<index>.<field>`).
 
 ```go
 func (i *infoBuilder) apply(b *builder) error {
     var errs []error
     if i.info.Title == "" {
-        errs = append(errs, fmt.Errorf("info: title is required"))
+        errs = append(errs, fmt.Errorf("info.title: is required"))
     }
     if i.info.Version == "" {
-        errs = append(errs, fmt.Errorf("info: version is required"))
+        errs = append(errs, fmt.Errorf("info.version: is required"))
     }
     b.doc.Info = i.info
     return errors.Join(errs...)
@@ -361,29 +365,29 @@ func (i *infoBuilder) apply(b *builder) error {
 func (s *server) apply(b *builder) error {
     var errs []error
     if s.name == "" {
-        errs = append(errs, fmt.Errorf("server: name is required"))
+        errs = append(errs, fmt.Errorf("server.name: is required"))
     }
     if s.s.Protocol == "" {
-        errs = append(errs, fmt.Errorf("server %q: protocol is required", s.name))
+        errs = append(errs, fmt.Errorf("server.%s.protocol: is required", s.name))
     }
     if s.s.Host == "" {
-        errs = append(errs, fmt.Errorf("server %q: host is required", s.name))
+        errs = append(errs, fmt.Errorf("server.%s.host: is required", s.name))
     }
     b.doc.Servers[s.name] = &s.s
     return errors.Join(errs...)
 }
 ```
 
-`channel.apply` adds a single check — `channel: address is required` when
+`channel.apply` adds a single check — `channel.address: is required` when
 `c.address == ""` — returning it alongside the existing build logic.
 
 ### 3. Discovery — `internal/discovery/discover.go`
 
 - Replace the `asyncAPIPkgPath`/`asyncAPIName` vars and `isAsyncAPI` with
-  `resultType` + `isResult` (D6).
+  `specResultType` + `isSpecResult` (D6).
 - `scanFile`'s var walk is unchanged; the `isAsyncAPI(obj.Type())` call becomes
-  `isResult(obj.Type())`.
-- Update the package doc comment: variables of type `*asyncgo.Result`.
+  `isSpecResult(obj.Type())`.
+- Update the package doc comment: variables of type `*asyncgo.SpecResult`.
 
 ### 4. Harness — `internal/discovery/materialize.go`
 
@@ -476,7 +480,7 @@ $ asyncgo generate .
 Error: invalid AsyncAPI catalog(s): 1
 
 example.com/app.Catalog:
-  - server "prod": host is required
+  - server.prod.host: is required
 ```
 
 ## Edge cases
@@ -486,7 +490,7 @@ example.com/app.Catalog:
 - **Empty host / protocol / name** — still possible at runtime (empty strings);
   each is reported by `server.apply`.
 - **Multiple violations, one catalog** — all listed under that catalog
-  (`server "prod": host is required` and `server "prod": protocol is required`).
+  (`server.prod.host: is required` and `server.prod.protocol: is required`).
 - **Multiple catalogs** — each invalid catalog gets its own
   `<pkgPath>.<VarName>:` block in the report; valid catalogs are absent from it.
 - **Empty server name** — `Server("", "kafka", ...)` now errors; previously it
@@ -497,23 +501,26 @@ example.com/app.Catalog:
 - **`errors.Join` with all-nil** — returns `nil`, so valid catalogs carry
   `Err == nil` and an empty `ValidationErrors()`; the harness emits `Doc` only.
 - **Raw `*spec.AsyncAPI` vars** — hand-built `var X = &spec.AsyncAPI{...}`
-  catalogs are no longer discovered (only `*asyncgo.Result` is). This is an
+  catalogs are no longer discovered (only `*asyncgo.SpecResult` is). This is an
   accepted consequence of D6 for v1; the documented way is `Spec`.
 - **No catalogs** — `Materialize` still returns `(nil, nil)` early when
   `len(cats) == 0`; unchanged.
 
 ## Rollout plan
 
-1. **Stage 0 — `host` into the `Server` constructor** (`feat(dsl)!`): change
+> Note: the `!` breaking-change marker is omitted below because asyncgo has not
+> had a released version yet — pre-release API changes are not semver-breaking.
+
+1. **Stage 0 — `host` into the `Server` constructor** (`feat(dsl)`): change
    `Server(name, protocol)` → `Server(name, protocol, host string)`; delete
-   `Host`. Update fixtures, README, and tests. Breaking, but no behavior change
-   for valid catalogs (they inline the host they already passed via `.Host`).
-2. **Stage 1 — `Result` plumbing** (`feat(dsl)!` + `feat(internal)`): introduce
-   `Result` + `ValidationErrors()`, change `Item.apply` → `error` and
-   `Spec` → `*Result` with every `apply` returning `nil`; update `discover.go`
-   (`isResult`) and `materialize.go` (structured envelope, `CatalogErrors`).
+   `Host`. Update fixtures, README, and tests. No behavior change for valid
+   catalogs (they inline the host they already passed via `.Host`).
+2. **Stage 1 — `SpecResult` plumbing** (`feat(dsl)` + `feat(internal)`): introduce
+   `SpecResult` + `ValidationErrors()`, change `Item.apply` → `error` and
+   `Spec` → `*SpecResult` with every `apply` returning `nil`; update `discover.go`
+   (`isSpecResult`) and `materialize.go` (structured envelope, `CatalogErrors`).
    Behaviorally neutral — golden YAML is byte-identical and the error path never
-   fires. Breaking because the public `Spec` signature changes.
+   fires.
 3. **Stage 2 — validations + report** (`feat(dsl)` + `feat(internal)`): add the
    `info`, `server`, and `channel` required-field checks; exercise the
    `CatalogErrors` report end-to-end with a `test/data/invalid` fixture.
@@ -526,7 +533,7 @@ example.com/app.Catalog:
   signature; integration golden test and `cli_test.go` stay green.
 - **Stage 1**: existing tests updated mechanically (`asyncgo_test.go` unwraps
   `res.Doc` + `require.NoError(t, res.Err)`; `doc_test.go` handles `apply`'s
-  return; `discover_test.go` renames `TestIsAsyncAPI`→`TestIsResult`;
+  return; `discover_test.go` renames `TestIsAsyncAPI`→`TestIsSpecResult`;
   `materialize_test.go`'s `TestHarness` asserts the envelope). Golden YAML
   unchanged.
 - **Stage 2** (`doc_test.go`, table-driven):
