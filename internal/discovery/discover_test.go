@@ -46,8 +46,8 @@ func TestFindErrors(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestIsAsyncAPI(t *testing.T) {
-	t.Run("should_report_true_for_pointer_to_async_api", func(t *testing.T) {
+func TestIsSpecResult(t *testing.T) {
+	t.Run("should_report_true_for_pointer_to_spec_result", func(t *testing.T) {
 		dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
 		require.NoError(t, err)
 		pkgs, err := load(dir)
@@ -61,14 +61,14 @@ func TestIsAsyncAPI(t *testing.T) {
 			}
 		}
 		require.NotNil(t, catType)
-		assert.True(t, isAsyncAPI(catType))
+		assert.True(t, isSpecResult(catType))
 	})
 
 	t.Run("should_report_false_for_non_pointer", func(t *testing.T) {
-		assert.False(t, isAsyncAPI(types.Typ[types.String]))
+		assert.False(t, isSpecResult(types.Typ[types.String]))
 	})
 
 	t.Run("should_report_false_for_pointer_to_non_named", func(t *testing.T) {
-		assert.False(t, isAsyncAPI(types.NewPointer(types.Typ[types.String])))
+		assert.False(t, isSpecResult(types.NewPointer(types.Typ[types.String])))
 	})
 }

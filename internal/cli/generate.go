@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -22,6 +23,10 @@ func newGenerateCmd() *cobra.Command {
 
 			doc, n, err := discovery.Build(dir)
 			if err != nil {
+				var catErrs discovery.CatalogErrors
+				if errors.As(err, &catErrs) {
+					return catErrs
+				}
 				return fmt.Errorf("generating: %w", err)
 			}
 			out, err := doc.YAML()

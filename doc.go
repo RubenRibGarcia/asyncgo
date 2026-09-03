@@ -1,10 +1,12 @@
 // Package asyncgo is the developer-facing fluent DSL for declaring an AsyncAPI
-// document. A catalog is a package-level variable of type *spec.AsyncAPI built
+// document. A catalog is a package-level variable of type *SpecResult built
 // with Spec(...); the asyncgo CLI discovers such variables reachable from main
 // and statically interprets them into an AsyncAPI document.
 package asyncgo
 
 import (
+	"errors"
+	"fmt"
 	"maps"
 	"strings"
 
@@ -15,7 +17,7 @@ import (
 // this package implement it; the method is unexported so the set of Items is
 // closed — users compose them only via the exported constructor functions.
 type Item interface {
-	apply(b *builder)
+	apply(b *builder) error
 }
 
 // builder accumulates a document and the hoisted schemas it references.
@@ -24,17 +26,34 @@ type builder struct {
 	defs map[string]*spec.Schema
 }
 
+// SpecResult is the outcome of building a catalog: the assembled document plus
+// any validation errors encountered while applying its items. Doc is always
+// non-nil; Err is nil when the catalog is valid.
+type SpecResult struct {
+	Doc  *spec.AsyncAPI
+	Err  error
+	errs []error
+}
+
+// ValidationErrors returns the individual validation errors that Err joins, or
+// nil when the catalog is valid. The generator harness uses this to render the
+// per-catalog report.
+func (r *SpecResult) ValidationErrors() []error { return r.errs }
+
 // Spec assembles an AsyncAPI document from the given fragments.
-func Spec(items ...Item) *spec.AsyncAPI {
+func Spec(items ...Item) *SpecResult {
 	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	var errs []error
 	for _, it := range items {
-		it.apply(b)
+		if err := it.apply(b); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if len(b.defs) > 0 {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
 	}
-	return b.doc
+	return &SpecResult{Doc: b.doc, Err: errors.Join(errs...), errs: errs}
 }
 
 func (b *builder) components() *spec.Components {
@@ -71,7 +90,17 @@ func (i *infoBuilder) Contact(c spec.Contact) *infoBuilder  { i.info.Contact = &
 func (i *infoBuilder) License(l spec.License) *infoBuilder  { i.info.License = &l; return i }
 func (i *infoBuilder) Tags(tags ...spec.Tag) *infoBuilder   { i.info.Tags = tags; return i }
 
-func (i *infoBuilder) apply(b *builder) { b.doc.Info = i.info }
+func (i *infoBuilder) apply(b *builder) error {
+	var errs []error
+	if i.info.Title == "" {
+		errs = append(errs, fmt.Errorf("info.title: is required"))
+	}
+	if i.info.Version == "" {
+		errs = append(errs, fmt.Errorf("info.version: is required"))
+	}
+	b.doc.Info = i.info
+	return errors.Join(errs...)
+}
 
 // --- default content type ----------------------------------------------------
 
@@ -80,7 +109,7 @@ type contentTypeItem string
 // DefaultContentType sets the document's default content type.
 func DefaultContentType(s string) Item { return contentTypeItem(s) }
 
-func (c contentTypeItem) apply(b *builder) { b.doc.DefaultContentType = string(c) }
+func (c contentTypeItem) apply(b *builder) error { b.doc.DefaultContentType = string(c); return nil }
 
 // --- servers -----------------------------------------------------------------
 
@@ -89,13 +118,17 @@ type serversItem []*server
 // Servers adds one or more servers to the document.
 func Servers(s ...*server) Item { return serversItem(s) }
 
-func (s serversItem) apply(b *builder) {
+func (s serversItem) apply(b *builder) error {
 	if b.doc.Servers == nil {
 		b.doc.Servers = map[string]*spec.Server{}
 	}
+	var errs []error
 	for _, sv := range s {
-		sv.apply(b)
+		if err := sv.apply(b); err != nil {
+			errs = append(errs, err)
+		}
 	}
+	return errors.Join(errs...)
 }
 
 type server struct {
@@ -103,12 +136,11 @@ type server struct {
 	s    spec.Server
 }
 
-// Server declares a server (broker) with a name and protocol.
-func Server(name, protocol string) *server {
-	return &server{name: name, s: spec.Server{Protocol: protocol}}
+// Server declares a server (broker) with a name, protocol, and host.
+func Server(name, protocol, host string) *server {
+	return &server{name: name, s: spec.Server{Protocol: protocol, Host: host}}
 }
 
-func (s *server) Host(h string) *server            { s.s.Host = h; return s }
 func (s *server) ProtocolVersion(v string) *server { s.s.ProtocolVersion = v; return s }
 func (s *server) Description(d string) *server     { s.s.Description = d; return s }
 
@@ -121,7 +153,20 @@ func (s *server) Variable(name string, v spec.ServerVariable) *server {
 	return s
 }
 
-func (s *server) apply(b *builder) { b.doc.Servers[s.name] = &s.s }
+func (s *server) apply(b *builder) error {
+	var errs []error
+	if s.name == "" {
+		errs = append(errs, fmt.Errorf("server.name: is required"))
+	}
+	if s.s.Protocol == "" {
+		errs = append(errs, fmt.Errorf("server.%s.protocol: is required", s.name))
+	}
+	if s.s.Host == "" {
+		errs = append(errs, fmt.Errorf("server.%s.host: is required", s.name))
+	}
+	b.doc.Servers[s.name] = &s.s
+	return errors.Join(errs...)
+}
 
 // --- channels ----------------------------------------------------------------
 
@@ -130,13 +175,17 @@ type channelsItem []*channel
 // Channels adds one or more channels to the document.
 func Channels(c ...*channel) Item { return channelsItem(c) }
 
-func (c channelsItem) apply(b *builder) {
+func (c channelsItem) apply(b *builder) error {
 	if b.doc.Channels == nil {
 		b.doc.Channels = map[string]*spec.Channel{}
 	}
+	var errs []error
 	for _, ch := range c {
-		ch.apply(b)
+		if err := ch.apply(b); err != nil {
+			errs = append(errs, err)
+		}
 	}
+	return errors.Join(errs...)
 }
 
 type channel struct {
@@ -176,7 +225,11 @@ func (c *channel) Receive(op *operation) *channel {
 	return c
 }
 
-func (c *channel) apply(b *builder) {
+func (c *channel) apply(b *builder) error {
+	var errs []error
+	if c.address == "" {
+		errs = append(errs, fmt.Errorf("channel.address: is required"))
+	}
 	if b.doc.Channels == nil {
 		b.doc.Channels = map[string]*spec.Channel{}
 	}
@@ -208,6 +261,7 @@ func (c *channel) apply(b *builder) {
 		}
 		b.doc.Operations[c.address+"."+op.action] = specOp
 	}
+	return errors.Join(errs...)
 }
 
 // --- operation ---------------------------------------------------------------

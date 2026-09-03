@@ -15,10 +15,10 @@ type OrderPlaced struct {
 }
 
 func TestSpecBuildsDocument(t *testing.T) {
-	doc := Spec(
+	res := Spec(
 		Info("Orders Service", "1.0.0").Description("Order lifecycle events"),
 		DefaultContentType("application/json"),
-		Servers(Server("prod", "kafka").Host("broker:9092")),
+		Servers(Server("prod", "kafka", "broker:9092")),
 		Channels(
 			Channel("order-placed").
 				Description("Emitted when an order is placed").
@@ -27,6 +27,8 @@ func TestSpecBuildsDocument(t *testing.T) {
 				Kafka(spec.KafkaChannelBinding{Topic: "order-placed"}),
 		),
 	)
+	require.NoError(t, res.Err)
+	doc := res.Doc
 
 	assert.Equal(t, "3.1.0", doc.AsyncAPI)
 	assert.Equal(t, "Orders Service", doc.Info.Title)
@@ -61,10 +63,10 @@ func TestSpecBuildsDocument(t *testing.T) {
 }
 
 func TestChannelServers(t *testing.T) {
-	prod := Server("prod", "kafka").Host("broker:9092")
-	staging := Server("staging", "kafka").Host("broker-staging:9092")
+	prod := Server("prod", "kafka", "broker:9092")
+	staging := Server("staging", "kafka", "broker-staging:9092")
 
-	doc := Spec(
+	res := Spec(
 		Info("Orders Service", "1.0.0"),
 		Servers(prod, staging),
 		Channels(
@@ -73,6 +75,8 @@ func TestChannelServers(t *testing.T) {
 				Send(Operation().Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
 		),
 	)
+	require.NoError(t, res.Err)
+	doc := res.Doc
 
 	ch := doc.Channels["order-placed"]
 	require.Len(t, ch.Servers, 2)

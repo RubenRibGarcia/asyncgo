@@ -10,39 +10,39 @@ import (
 
 func TestServerBindings(t *testing.T) {
 	t.Run("should_set_kafka_binding", func(t *testing.T) {
-		s := Server("prod", "kafka").Kafka(spec.KafkaServerBinding{SchemaRegistryURL: "http://r"})
+		s := Server("prod", "kafka", "broker:9092").Kafka(spec.KafkaServerBinding{SchemaRegistryURL: "http://r"})
 		b, ok := s.s.Bindings[spec.ProtocolKafka].(*spec.KafkaServerBinding)
 		require.True(t, ok)
 		assert.Equal(t, "http://r", b.SchemaRegistryURL)
 	})
 
 	t.Run("should_set_amqp_binding", func(t *testing.T) {
-		s := Server("prod", "amqp").AMQP(spec.AMQPServerBinding{BindingVersion: "0.3.0"})
+		s := Server("prod", "amqp", "broker:9092").AMQP(spec.AMQPServerBinding{BindingVersion: "0.3.0"})
 		b, ok := s.s.Bindings[spec.ProtocolAMQP].(*spec.AMQPServerBinding)
 		require.True(t, ok)
 		assert.Equal(t, "0.3.0", b.BindingVersion)
 	})
 
 	t.Run("should_set_nats_binding", func(t *testing.T) {
-		s := Server("prod", "nats").NATS(spec.NATSServerBinding{BindingVersion: "0.1.0"})
+		s := Server("prod", "nats", "broker:9092").NATS(spec.NATSServerBinding{BindingVersion: "0.1.0"})
 		_, ok := s.s.Bindings[spec.ProtocolNATS].(*spec.NATSServerBinding)
 		assert.True(t, ok)
 	})
 
 	t.Run("should_set_mqtt_binding", func(t *testing.T) {
-		s := Server("prod", "mqtt").MQTT(spec.MQTTServerBinding{ClientID: "c"})
+		s := Server("prod", "mqtt", "broker:9092").MQTT(spec.MQTTServerBinding{ClientID: "c"})
 		b, ok := s.s.Bindings[spec.ProtocolMQTT].(*spec.MQTTServerBinding)
 		require.True(t, ok)
 		assert.Equal(t, "c", b.ClientID)
 	})
 
 	t.Run("should_set_generic_binding", func(t *testing.T) {
-		s := Server("prod", "kafka").Binding("custom", "value")
+		s := Server("prod", "kafka", "broker:9092").Binding("custom", "value")
 		assert.Equal(t, "value", s.s.Bindings["custom"])
 	})
 
 	t.Run("should_initialize_bindings_when_nil", func(t *testing.T) {
-		s := Server("prod", "kafka")
+		s := Server("prod", "kafka", "broker:9092")
 		assert.Nil(t, s.s.Bindings)
 		s.Kafka(spec.KafkaServerBinding{})
 		assert.NotNil(t, s.s.Bindings)

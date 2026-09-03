@@ -27,6 +27,5 @@ var Catalog = asyncgo.Spec(
 )
 
 // prod is the Kafka broker the service publishes to.
-var prod = asyncgo.Server("prod", "kafka").
-	Host("broker.example.com:9092").
+var prod = asyncgo.Server("prod", "kafka", "broker.example.com:9092").
 	Description("Production Kafka cluster")

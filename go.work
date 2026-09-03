@@ -7,5 +7,6 @@ use (
 	./test/data/oneof
 	./test/data/anyof
 	./test/data/provider
+	./test/data/invalid
 	./tools
 )

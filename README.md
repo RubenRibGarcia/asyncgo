@@ -33,7 +33,7 @@ Channels and operations are declared once in a typed, compiler-checked catalog:
 ```go
 var Catalog = asyncgo.Spec(
  asyncgo.Info("Orders Service", "1.0.0"),
- asyncgo.Servers(asyncgo.Server("prod", "kafka").Host("broker:9092")),
+ asyncgo.Servers(asyncgo.Server("prod", "kafka", "broker:9092")),
  asyncgo.Channels(
   asyncgo.Channel("order-placed").
    Send(asyncgo.Operation().
@@ -52,7 +52,7 @@ A channel is available on all declared servers by default. To restrict it to a
 subset, reference the servers (declared via `Servers(...)`) on the channel:
 
 ```go
-prod := asyncgo.Server("prod", "kafka").Host("broker:9092")
+prod := asyncgo.Server("prod", "kafka", "broker:9092")
 
 var Catalog = asyncgo.Spec(
  asyncgo.Servers(prod),

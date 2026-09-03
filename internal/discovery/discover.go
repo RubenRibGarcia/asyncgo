@@ -1,6 +1,7 @@
 // Package discovery locates AsyncAPI catalogs (exported package-level
-// variables of type *spec.AsyncAPI) in a Go module, restricted to packages
-// reachable from a main package, and materializes them into documents.
+// variables of type *asyncgo.SpecResult) in a Go module, restricted to
+// packages reachable from a main package, and materializes them into
+// documents.
 package discovery
 
 import (
@@ -11,7 +12,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/RubenRibGarcia/asyncgo/spec"
+	"github.com/RubenRibGarcia/asyncgo"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -21,12 +22,9 @@ type Catalog struct {
 	VarName string // exported variable name
 }
 
-// asyncAPI identity, derived from the real type so it stays correct if the
-// module path changes.
-var (
-	asyncAPIPkgPath = reflect.TypeFor[spec.AsyncAPI]().PkgPath()
-	asyncAPIName    = reflect.TypeFor[spec.AsyncAPI]().Name()
-)
+// specResultType is the identity of *asyncgo.SpecResult, derived from the real
+// type so it stays correct if the module path changes.
+var specResultType = reflect.TypeFor[asyncgo.SpecResult]()
 
 // load loads all packages in the module rooted at dir with the syntax and type
 // information needed for catalog discovery and comment extraction.
@@ -47,9 +45,10 @@ func load(dir string) ([]*packages.Package, error) {
 	return pkgs, nil
 }
 
-// Find discovers exported package-level variables of type *spec.AsyncAPI in the
-// module rooted at dir, restricted to packages reachable from a main package.
-// If the module has no main package, all module packages are considered.
+// Find discovers exported package-level variables of type *asyncgo.SpecResult
+// in the module rooted at dir, restricted to packages reachable from a main
+// package. If the module has no main package, all module packages are
+// considered.
 func Find(dir string) ([]Catalog, error) {
 	pkgs, err := load(dir)
 	if err != nil {
@@ -100,7 +99,7 @@ func scanFile(pkg *packages.Package, file *ast.File) []Catalog {
 				if obj == nil {
 					continue
 				}
-				if isAsyncAPI(obj.Type()) {
+				if isSpecResult(obj.Type()) {
 					out = append(out, Catalog{PkgPath: pkg.PkgPath, VarName: name.Name})
 				}
 			}
@@ -109,8 +108,8 @@ func scanFile(pkg *packages.Package, file *ast.File) []Catalog {
 	return out
 }
 
-// isAsyncAPI reports whether t is *spec.AsyncAPI.
-func isAsyncAPI(t types.Type) bool {
+// isSpecResult reports whether t is *asyncgo.SpecResult.
+func isSpecResult(t types.Type) bool {
 	ptr, ok := t.(*types.Pointer)
 	if !ok {
 		return false
@@ -120,7 +119,7 @@ func isAsyncAPI(t types.Type) bool {
 		return false
 	}
 	obj := named.Obj()
-	return obj.Pkg() != nil && obj.Pkg().Path() == asyncAPIPkgPath && obj.Name() == asyncAPIName
+	return obj.Pkg() != nil && obj.Pkg().Path() == specResultType.PkgPath() && obj.Name() == specResultType.Name()
 }
 
 // reachableFromMain returns the set of package IDs reachable from any main

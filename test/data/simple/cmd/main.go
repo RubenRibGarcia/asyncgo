@@ -11,5 +11,5 @@ import (
 )
 
 func main() {
-	fmt.Println(simple.Catalog.Info.Title)
+	fmt.Println(simple.Catalog.Doc.Info.Title)
 }

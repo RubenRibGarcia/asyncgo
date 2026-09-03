@@ -15,8 +15,7 @@ var Catalog = asyncgo.Spec(
 	asyncgo.DefaultContentType("application/json"),
 
 	asyncgo.Servers(
-		asyncgo.Server("prod", "kafka").
-			Host("broker.example.com:9092").
+		asyncgo.Server("prod", "kafka", "broker.example.com:9092").
 			Description("Production Kafka cluster"),
 	),
 

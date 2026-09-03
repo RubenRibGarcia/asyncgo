@@ -229,6 +229,17 @@ func TestGenerateNoCatalogs(t *testing.T) {
 	assert.Contains(t, err.Error(), "no AsyncAPI catalogs")
 }
 
+func TestGenerateValidationError(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copyFixture(t, "invalid")
+
+	_, _, err := execute(t, BuildInfo{}, "generate", dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid AsyncAPI catalog(s): 1")
+	assert.Contains(t, err.Error(), "test/data/invalid.Catalog:")
+	assert.Contains(t, err.Error(), "server.prod.host: is required")
+}
+
 func TestCheckOutOfDate(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	dir := copySimpleFixture(t)
@@ -285,16 +296,21 @@ func TestCheckReadError(t *testing.T) {
 	assert.Contains(t, err.Error(), "reading ")
 }
 
-// copySimpleFixture copies the simple test fixture into a fresh temp directory,
-// rewrites its replace directive to the absolute repo root, and removes the
-// committed asyncapi.yaml so generate/check operate on a clean slate without
-// racing the integration golden test over the shared fixture files.
+// copySimpleFixture copies the simple test fixture into a fresh temp directory.
 func copySimpleFixture(t *testing.T) string {
+	return copyFixture(t, "simple")
+}
+
+// copyFixture copies the named test fixture into a fresh temp directory,
+// rewrites its replace directive to the absolute repo root, and removes the
+// committed asyncapi.yaml (when present) so generate/check operate on a clean
+// slate without racing the integration golden test over the shared files.
+func copyFixture(t *testing.T, name string) string {
 	t.Helper()
 
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	require.NoError(t, err)
-	src := filepath.Join(repoRoot, "test", "data", "simple")
+	src := filepath.Join(repoRoot, "test", "data", name)
 
 	dst := t.TempDir()
 	require.NoError(t, os.CopyFS(dst, os.DirFS(src)))
@@ -304,7 +320,9 @@ func copySimpleFixture(t *testing.T) string {
 	replaced := strings.ReplaceAll(string(goMod), "=> ../../../", "=> "+repoRoot)
 	require.NoError(t, os.WriteFile(filepath.Join(dst, "go.mod"), []byte(replaced), 0o644))
 
-	require.NoError(t, os.Remove(filepath.Join(dst, "asyncapi.yaml")))
+	if _, err := os.Stat(filepath.Join(dst, "asyncapi.yaml")); err == nil {
+		require.NoError(t, os.Remove(filepath.Join(dst, "asyncapi.yaml")))
+	}
 
 	return dst
 }

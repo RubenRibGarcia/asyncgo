@@ -18,13 +18,13 @@ func Build(dir string) (*spec.AsyncAPI, int, error) {
 	cats := scanCatalogs(pkgs, reachable)
 	if len(cats) == 0 {
 		return nil, 0, fmt.Errorf(
-			"no AsyncAPI catalogs (*spec.AsyncAPI vars) reachable from main in %s",
+			"no AsyncAPI catalogs (*asyncgo.SpecResult vars) reachable from main in %s",
 			dir,
 		)
 	}
 	docs, err := Materialize(dir, cats, collectCombinatorRefs(pkgs, reachable))
 	if err != nil {
-		return nil, 0, fmt.Errorf("materializing catalogs: %w", err)
+		return nil, 0, err
 	}
 	doc := Merge(docs...)
 	applyDescriptions(doc, extractDescriptions(pkgs, reachable))

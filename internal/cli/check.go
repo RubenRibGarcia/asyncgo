@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +24,10 @@ func newCheckCmd() *cobra.Command {
 
 			doc, _, err := discovery.Build(dir)
 			if err != nil {
+				var catErrs discovery.CatalogErrors
+				if errors.As(err, &catErrs) {
+					return catErrs
+				}
 				return fmt.Errorf("checking: %w", err)
 			}
 			got, err := doc.YAML()

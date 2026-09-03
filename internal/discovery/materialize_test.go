@@ -52,7 +52,29 @@ func TestHarness(t *testing.T) {
 		assert.Contains(t, src, "pkg3.U1{}")
 
 		// Catalog values are referenced by their import alias.
-		assert.Contains(t, src, "pkg0.Cat,")
-		assert.Contains(t, src, "pkg1.Cat2,")
+		assert.Contains(t, src, "pkg0.Cat.ValidationErrors()")
+		assert.Contains(t, src, "pkg0.Cat.Doc")
+		assert.Contains(t, src, "pkg1.Cat2.ValidationErrors()")
+		assert.Contains(t, src, "pkg1.Cat2.Doc")
+	})
+}
+
+func TestCatalogErrorsError(t *testing.T) {
+	t.Run("should_report_errors_grouped_by_catalog", func(t *testing.T) {
+		errs := CatalogErrors{
+			{
+				PkgPath: "example.com/app",
+				VarName: "Catalog",
+				Errors: []string{
+					"server.prod.host: is required",
+					"server.staging.host: is required",
+				},
+			},
+		}
+		assert.Equal(
+			t,
+			"invalid AsyncAPI catalog(s): 1\n\nexample.com/app.Catalog:\n  - server.prod.host: is required\n  - server.staging.host: is required",
+			errs.Error(),
+		)
 	})
 }
