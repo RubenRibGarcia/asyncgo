@@ -255,7 +255,11 @@ func (c *channel) apply(b *builder) error {
 			Bindings:    op.bindings,
 		}
 		for _, m := range op.messages {
-			sm := m.build(b)
+			sm, err := m.build(b)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
 			if ch.Messages == nil {
 				ch.Messages = map[string]*spec.Message{}
 			}

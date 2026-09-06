@@ -43,4 +43,15 @@ func TestMessageName(t *testing.T) {
 	t.Run("should_fallback_to_message_for_anonymous_type", func(t *testing.T) {
 		assert.Equal(t, "message", messageName(MessageOf(struct{ X int }{})))
 	})
+
+	t.Run("should_fallback_to_message_for_nil_type", func(t *testing.T) {
+		assert.Equal(t, "message", messageName(MessageOf(nil)))
+	})
+}
+
+func TestMessageBuildNilType(t *testing.T) {
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	sm, err := MessageOf(nil).build(b)
+	assert.Nil(t, sm)
+	assert.EqualError(t, err, "message: nil payload type")
 }

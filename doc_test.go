@@ -133,6 +133,19 @@ func TestValidationErrors(t *testing.T) {
 			},
 			want: "",
 		},
+		{
+			name: "should_return_error_when_message_payload_type_is_nil",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().Message(MessageOf(nil))),
+					),
+				)
+			},
+			want: "message: nil payload type",
+		},
 	}
 
 	for _, tc := range tests {
