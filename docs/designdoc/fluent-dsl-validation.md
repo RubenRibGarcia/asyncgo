@@ -84,7 +84,6 @@ prevent.
 - Full AsyncAPI 3.1.0 schema validation. Only the required-field checks above.
 - Cross-item reference integrity (e.g. `Channel.Servers(sv)` pointing at a
   server never declared via `Servers(...)`).
-- `MessageOf(nil)` nil-type guard (currently a latent panic in `schema.FromType`).
 - Duplicate server-name / channel-address detection within a single `Spec`.
 - Dedicated CLI rendering (color, no `Error:` prefix) — v1 prints the returned
   error via Cobra.
@@ -524,8 +523,8 @@ example.com/app.Catalog:
 3. **Stage 2 — validations + report** (`feat(dsl)` + `feat(internal)`): add the
    `info`, `server`, and `channel` required-field checks; exercise the
    `CatalogErrors` report end-to-end with a `test/data/invalid` fixture.
-4. **Stage 3 — deferred**: cross-item reference integrity, `MessageOf(nil)`
-   guard, duplicate-name detection, dedicated CLI rendering.
+4. **Stage 3 — deferred**: cross-item reference integrity, duplicate-name
+   detection, dedicated CLI rendering.
 
 ## Testing plan
 
