@@ -198,7 +198,11 @@ func (s *server) apply(b *builder) error {
 	if s.s.Host == "" {
 		errs = append(errs, fmt.Errorf("server.%s.host: is required", s.name))
 	}
-	b.doc.Servers[s.name] = &s.s
+	if _, dup := b.doc.Servers[s.name]; dup && s.name != "" {
+		errs = append(errs, fmt.Errorf("server.%s: duplicate name", s.name))
+	} else {
+		b.doc.Servers[s.name] = &s.s
+	}
 	return errors.Join(errs...)
 }
 
@@ -272,7 +276,11 @@ func (c *channel) apply(b *builder) error {
 	}
 
 	ch := &c.s
-	b.doc.Channels[c.address] = ch
+	if _, dup := b.doc.Channels[c.address]; dup && c.address != "" {
+		errs = append(errs, fmt.Errorf("channel.%s: duplicate address", c.address))
+	} else {
+		b.doc.Channels[c.address] = ch
+	}
 
 	for _, op := range c.ops {
 		specOp := &spec.Operation{
