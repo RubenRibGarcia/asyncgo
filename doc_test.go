@@ -146,6 +146,48 @@ func TestValidationErrors(t *testing.T) {
 			},
 			want: "message: nil payload type",
 		},
+		{
+			name: "should_return_error_when_channel_references_unknown_server",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Servers(Server("prod", "kafka", "broker:9092")),
+					),
+				)
+			},
+			want: `channel.order-placed: references unknown server "prod"`,
+		},
+		{
+			name: "should_join_multiple_unknown_server_references",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Servers(
+								Server("prod", "kafka", "broker:9092"),
+								Server("staging", "kafka", "broker-staging:9092"),
+							),
+					),
+				)
+			},
+			want: "channel.order-placed: references unknown server \"prod\"\n" +
+				"channel.order-placed: references unknown server \"staging\"",
+		},
+		{
+			name: "should_allow_channel_to_reference_server_declared_after_it",
+			spec: func() *SpecResult {
+				prod := Server("prod", "kafka", "broker:9092")
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("order-placed").Servers(prod)),
+					Servers(prod),
+				)
+			},
+			want: "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -158,6 +200,24 @@ func TestValidationErrors(t *testing.T) {
 			}
 			require.Error(t, res.Err)
 			assert.Equal(t, tc.want, res.Err.Error())
+		})
+	}
+}
+
+func TestPtrRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{name: "should_round_trip_plain_name", in: "prod"},
+		{name: "should_round_trip_name_with_slash", in: "dev/prod"},
+		{name: "should_round_trip_name_with_tilde", in: "dev~prod"},
+		{name: "should_round_trip_name_with_tilde_one", in: "dev~1prod"},
+		{name: "should_round_trip_empty_name", in: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.in, ptrUnescape(ptrEscape(tc.in)))
 		})
 	}
 }

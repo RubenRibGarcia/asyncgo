@@ -238,6 +238,7 @@ func TestGenerateValidationError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid AsyncAPI catalog(s): 1")
 	assert.Contains(t, err.Error(), "test/data/invalid.Catalog:")
 	assert.Contains(t, err.Error(), "server.prod.host: is required")
+	assert.Contains(t, err.Error(), `channel.order-placed: references unknown server "staging"`)
 }
 
 func TestCheckOutOfDate(t *testing.T) {
