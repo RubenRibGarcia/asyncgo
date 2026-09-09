@@ -49,6 +49,7 @@ func Spec(items ...Item) *SpecResult {
 			errs = append(errs, err)
 		}
 	}
+	errs = append(errs, b.validateServerRefs()...)
 	if len(b.defs) > 0 {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
@@ -71,6 +72,34 @@ func ptrEscape(s string) string {
 	s = strings.ReplaceAll(s, "~", "~0")
 	s = strings.ReplaceAll(s, "/", "~1")
 	return s
+}
+
+// ptrUnescape reverses the JSON Pointer escaping applied by ptrEscape
+// (RFC 6901).
+func ptrUnescape(s string) string {
+	s = strings.ReplaceAll(s, "~1", "/")
+	s = strings.ReplaceAll(s, "~0", "~")
+	return s
+}
+
+// validateServerRefs checks that every channel server reference points at a
+// server declared via Servers(...). It is a post-pass: it runs after all items
+// are applied because declaration order is arbitrary (a channel may be applied
+// before the server it references).
+func (b *builder) validateServerRefs() []error {
+	var errs []error
+	for addr, ch := range b.doc.Channels {
+		for _, ref := range ch.Servers {
+			name := ptrUnescape(strings.TrimPrefix(ref.Ref, "#/servers/"))
+			if _, ok := b.doc.Servers[name]; !ok {
+				errs = append(
+					errs,
+					fmt.Errorf("channel.%s: references unknown server %q", addr, name),
+				)
+			}
+		}
+	}
+	return errs
 }
 
 // --- info -------------------------------------------------------------------
