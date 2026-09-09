@@ -30,3 +30,6 @@ Thumbs.db
 
 # ASDF
 .tool-versions
+
+# local agent scratch
+.tmp/
