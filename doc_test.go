@@ -100,6 +100,67 @@ func TestValidationErrors(t *testing.T) {
 			want: "server.name: is required",
 		},
 		{
+			name: "should_return_error_when_server_name_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Servers(
+						Server("prod", "kafka", "broker:9092"),
+						Server("prod", "kafka", "broker-staging:9092"),
+					),
+				)
+			},
+			want: "server.prod: duplicate name",
+		},
+		{
+			name: "should_return_error_when_server_name_is_duplicate_across_servers_calls",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Servers(Server("prod", "kafka", "broker:9092")),
+					Servers(Server("prod", "kafka", "broker-staging:9092")),
+				)
+			},
+			want: "server.prod: duplicate name",
+		},
+		{
+			name: "should_return_error_when_channel_address_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed"),
+						Channel("order-placed"),
+					),
+				)
+			},
+			want: "channel.order-placed: duplicate address",
+		},
+		{
+			name: "should_return_error_when_channel_address_is_duplicate_across_channels_calls",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("order-placed")),
+					Channels(Channel("order-placed")),
+				)
+			},
+			want: "channel.order-placed: duplicate address",
+		},
+		{
+			name: "should_join_duplicate_and_field_validation_errors",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Servers(
+						Server("prod", "kafka", "broker:9092"),
+						Server("prod", "kafka", ""),
+					),
+				)
+			},
+			want: "server.prod.host: is required\nserver.prod: duplicate name",
+		},
+		{
 			name: "should_return_error_when_info_title_is_missing",
 			spec: func() *SpecResult {
 				return Spec(Info("", "1.0.0"))
@@ -202,6 +263,35 @@ func TestValidationErrors(t *testing.T) {
 			assert.Equal(t, tc.want, res.Err.Error())
 		})
 	}
+}
+
+func TestDuplicateKeepsFirstEntry(t *testing.T) {
+	t.Run("should_keep_first_server_on_duplicate_name", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			Servers(
+				Server("prod", "kafka", "broker:9092"),
+				Server("prod", "amqp", "broker-staging:5672"),
+			),
+		)
+		require.Error(t, res.Err)
+		require.Contains(t, res.Doc.Servers, "prod")
+		assert.Equal(t, "kafka", res.Doc.Servers["prod"].Protocol)
+		assert.Equal(t, "broker:9092", res.Doc.Servers["prod"].Host)
+	})
+
+	t.Run("should_keep_first_channel_on_duplicate_address", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			Channels(
+				Channel("order-placed").Title("First"),
+				Channel("order-placed").Title("Second"),
+			),
+		)
+		require.Error(t, res.Err)
+		require.Contains(t, res.Doc.Channels, "order-placed")
+		assert.Equal(t, "First", res.Doc.Channels["order-placed"].Title)
+	})
 }
 
 func TestPtrRoundTrip(t *testing.T) {
