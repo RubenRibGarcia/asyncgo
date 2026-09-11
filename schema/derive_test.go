@@ -367,23 +367,6 @@ func TestRefEscapesSlashes(t *testing.T) {
 	assert.Equal(t, want, Ref(typ))
 }
 
-func TestEscapePointer(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{name: "should_escape_slash", in: "a/b", want: "a~1b"},
-		{name: "should_escape_tilde", in: "a~b", want: "a~0b"},
-		{name: "should_escape_slash_and_tilde", in: "a/b~c", want: "a~1b~0c"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, escapePointer(tc.in))
-		})
-	}
-}
-
 // Node is a self-referential type used to verify cycle termination.
 type Node struct {
 	Value    string `json:"value"`

@@ -293,21 +293,3 @@ func TestDuplicateKeepsFirstEntry(t *testing.T) {
 		assert.Equal(t, "First", res.Doc.Channels["order-placed"].Title)
 	})
 }
-
-func TestPtrRoundTrip(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-	}{
-		{name: "should_round_trip_plain_name", in: "prod"},
-		{name: "should_round_trip_name_with_slash", in: "dev/prod"},
-		{name: "should_round_trip_name_with_tilde", in: "dev~prod"},
-		{name: "should_round_trip_name_with_tilde_one", in: "dev~1prod"},
-		{name: "should_round_trip_empty_name", in: ""},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.in, ptrUnescape(ptrEscape(tc.in)))
-		})
-	}
-}

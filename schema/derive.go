@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
@@ -42,21 +43,14 @@ func Name(t reflect.Type) string { return t.PkgPath() + "." + t.Name() }
 
 // Ref returns the $ref for a hoisted named type.
 func Ref(t reflect.Type) string {
-	return "#/components/schemas/" + escapePointer(Name(t))
+	return "#/components/schemas/" + jsonpointer.Escape(Name(t))
 }
 
 // RefByName returns the $ref for a hoisted schema identified by its
 // fully-qualified name ("pkgPath.TypeName"), for combinator directives that
 // resolve names as strings rather than reflect.Type.
 func RefByName(fqn string) string {
-	return "#/components/schemas/" + escapePointer(fqn)
-}
-
-// escapePointer applies JSON Pointer escaping (RFC 6901): "~" -> "~0", "/" -> "~1".
-func escapePointer(s string) string {
-	s = strings.ReplaceAll(s, "~", "~0")
-	s = strings.ReplaceAll(s, "/", "~1")
-	return s
+	return "#/components/schemas/" + jsonpointer.Escape(fqn)
 }
 
 // FromType derives a JSON Schema for t. Named struct types are hoisted into

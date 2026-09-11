@@ -10,6 +10,7 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
@@ -67,21 +68,6 @@ func (b *builder) components() *spec.Components {
 	return b.doc.Components
 }
 
-// ptrEscape applies JSON Pointer escaping (RFC 6901) to a reference token.
-func ptrEscape(s string) string {
-	s = strings.ReplaceAll(s, "~", "~0")
-	s = strings.ReplaceAll(s, "/", "~1")
-	return s
-}
-
-// ptrUnescape reverses the JSON Pointer escaping applied by ptrEscape
-// (RFC 6901).
-func ptrUnescape(s string) string {
-	s = strings.ReplaceAll(s, "~1", "/")
-	s = strings.ReplaceAll(s, "~0", "~")
-	return s
-}
-
 // validateServerRefs checks that every channel server reference points at a
 // server declared via Servers(...). It is a post-pass: it runs after all items
 // are applied because declaration order is arbitrary (a channel may be applied
@@ -90,7 +76,7 @@ func (b *builder) validateServerRefs() []error {
 	var errs []error
 	for addr, ch := range b.doc.Channels {
 		for _, ref := range ch.Servers {
-			name := ptrUnescape(strings.TrimPrefix(ref.Ref, "#/servers/"))
+			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, "#/servers/"))
 			if _, ok := b.doc.Servers[name]; !ok {
 				errs = append(
 					errs,
@@ -244,7 +230,10 @@ func (c *channel) Description(d string) *channel { c.s.Description = d; return c
 // channel is available. If empty, the channel is available on all servers.
 func (c *channel) Servers(s ...*server) *channel {
 	for _, sv := range s {
-		c.s.Servers = append(c.s.Servers, &spec.Reference{Ref: "#/servers/" + ptrEscape(sv.name)})
+		c.s.Servers = append(
+			c.s.Servers,
+			&spec.Reference{Ref: "#/servers/" + jsonpointer.Escape(sv.name)},
+		)
 	}
 	return c
 }
@@ -285,7 +274,7 @@ func (c *channel) apply(b *builder) error {
 	for _, op := range c.ops {
 		specOp := &spec.Operation{
 			Action:      op.action,
-			Channel:     &spec.Reference{Ref: "#/channels/" + ptrEscape(c.address)},
+			Channel:     &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(c.address)},
 			Title:       op.title,
 			Summary:     op.summary,
 			Description: op.description,
@@ -302,7 +291,11 @@ func (c *channel) apply(b *builder) error {
 			}
 			ch.Messages[sm.Name] = sm
 			specOp.Messages = append(specOp.Messages, &spec.Reference{
-				Ref: "#/channels/" + ptrEscape(c.address) + "/messages/" + ptrEscape(sm.Name),
+				Ref: "#/channels/" + jsonpointer.Escape(
+					c.address,
+				) + "/messages/" + jsonpointer.Escape(
+					sm.Name,
+				),
 			})
 		}
 		b.doc.Operations[c.address+"."+op.action] = specOp
