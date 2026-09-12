@@ -216,12 +216,3 @@ back to reflection-derived derivation, or `&spec.Schema{}` for an explicitly
 unconstrained schema. Detection honors both value and pointer receivers, and a
 custom type referenced from a `oneOf`/`anyOf`/`allOf` field is hoisted
 automatically.
-
-## Layout
-
-| Path | Purpose |
-| --- | --- |
-| `spec/` | Typed AsyncAPI 3.1.0 model + codecs + Kafka/AMQP/NATS/MQTT bindings |
-| `schema/` | `struct → JSON Schema` reflection |
-| `cmd/asyncgo/` | `generate` / `check` CLI |
-| `internal/discovery/` | catalog discovery + materialization |
