@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -61,6 +62,35 @@ func TestFromTypeHoistsNamedStructs(t *testing.T) {
 	assert.NotContains(t, obj.Properties, "hidden")
 }
 
+func TestFromTypeInlineAnonymousStruct(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+	typ := reflect.TypeOf(struct {
+		Name string `json:"name"`
+	}{})
+	s := FromType(typ, defs)
+
+	// Anonymous structs are inlined, not hoisted to a $ref.
+	assert.Empty(t, s.Ref)
+	assert.Equal(t, "object", s.Type)
+	require.Contains(t, s.Properties, "name")
+	assert.Equal(t, "string", s.Properties["name"].Type)
+}
+
+func TestFromTypeUnexportedFieldSkipped(t *testing.T) {
+	// Touch the unexported field so the `unused` linter considers it used;
+	// derivation must still skip it.
+	_ = withUnexported{}.hidden
+
+	defs := map[string]*spec.Schema{}
+	s := FromType(reflect.TypeFor[withUnexported](), defs)
+
+	obj := defs["github.com/RubenRibGarcia/asyncgo/schema.withUnexported"]
+	require.NotNil(t, obj)
+	assert.Contains(t, obj.Properties, "public")
+	assert.NotContains(t, obj.Properties, "hidden")
+	assert.NotEmpty(t, s.Ref)
+}
+
 func TestFromTypeScalars(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	tests := []struct {
@@ -95,6 +125,15 @@ func TestFromTypeCollections(t *testing.T) {
 		{
 			name: "should_return_array_schema_for_slice",
 			v:    []string{},
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "array", s.Type)
+				require.NotNil(t, s.Items)
+				assert.Equal(t, "string", s.Items.Type)
+			},
+		},
+		{
+			name: "should_return_array_schema_for_array",
+			v:    [3]string{},
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Equal(t, "array", s.Type)
 				require.NotNil(t, s.Items)
@@ -151,6 +190,12 @@ func TestFromTypeSpecials(t *testing.T) {
 			assert.Equal(t, tc.wantFormat, s.Format)
 		})
 	}
+}
+
+func TestFromTypeRawMessage(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+	s := FromType(reflect.TypeFor[json.RawMessage](), defs)
+	assert.Empty(t, s.Type) // unconstrained
 }
 
 func TestRecursiveStructTerminates(t *testing.T) {
@@ -355,6 +400,53 @@ func TestFinalizeHoistsRegisteredTypes(t *testing.T) {
 	})
 }
 
+func TestJSONNamePlainTag(t *testing.T) {
+	name, skip := jsonName(reflect.StructField{Name: "Plain", Tag: `json:"plain"`})
+	assert.False(t, skip)
+	assert.Equal(t, "plain", name)
+}
+
+func TestStructOf(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  reflect.Type
+		want reflect.Type
+		ok   bool
+	}{
+		{
+			name: "should_return_struct",
+			typ:  reflect.TypeFor[Order](),
+			want: reflect.TypeFor[Order](),
+			ok:   true,
+		},
+		{
+			name: "should_dereference_pointer_to_struct",
+			typ:  reflect.TypeFor[*Order](),
+			want: reflect.TypeFor[Order](),
+			ok:   true,
+		},
+		{
+			name: "should_return_false_for_non_struct",
+			typ:  reflect.TypeFor[int](),
+			ok:   false,
+		},
+		{
+			name: "should_return_false_for_pointer_to_non_struct",
+			typ:  reflect.TypeFor[*int](),
+			ok:   false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := structOf(tc.typ)
+			assert.Equal(t, tc.ok, ok)
+			if tc.ok {
+				assert.Equal(t, tc.want, got)
+			}
+		})
+	}
+}
+
 func TestRefEscapesSlashes(t *testing.T) {
 	typ := reflect.TypeFor[Order]()
 	// Compute the expectation from the type's own package path so the test
@@ -365,6 +457,12 @@ func TestRefEscapesSlashes(t *testing.T) {
 		"~1",
 	) + "." + typ.Name()
 	assert.Equal(t, want, Ref(typ))
+}
+
+// withUnexported has an unexported field that must be skipped during derivation.
+type withUnexported struct {
+	Public string `json:"public"`
+	hidden string
 }
 
 // Node is a self-referential type used to verify cycle termination.
