@@ -70,7 +70,12 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
    statically via `go/packages`; their values are materialized by running a
    generated harness (which executes only the catalog packages' `init`, never
    `main`). This avoids executing user code while still giving `schema/` a real
-   `reflect.Type`.
+   `reflect.Type`. The harness is written to a transient `_asyncgo-harness-*`
+   directory inside the catalog's own directory; the leading underscore is
+   load-bearing, because the static pass matches packages with `./...` and the go
+   tool ignores directories starting with `_`. Without it a concurrent discovery
+   run can enumerate a harness that is being removed and fail with
+   `error(s) loading packages`.
 
 ## Public API
 
@@ -88,7 +93,7 @@ asyncgo/
 ├── AGENT.md                    # This file — project plan & conventions
 ├── README.md                   # User-facing docs
 ├── go.mod / go.sum
-├── go.work                     # multi-module workspace (root + test/data/* + tools)
+├── go.work                     # multi-module workspace (root + test/data/* + test/integration + tools)
 ├── .goreleaser.yaml            # release build: cross-compile + version ldflags
 ├── .github/workflows/          # CI (test.yaml) + release (release.yml)
 ├── spec/                       # Typed AsyncAPI 3.1.0 object model + codecs
@@ -101,7 +106,7 @@ asyncgo/
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
 ├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider — each its own Go module)
-└── test/integration/           # end-to-end golden test against the test/data/ fixtures
+└── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
 The root package (top-level `.go` files) is the fluent DSL. See
@@ -161,13 +166,39 @@ The version is the git tag — never stored in source.
 - **Dependencies**: `github.com/goccy/go-yaml` for YAML,
   `github.com/stretchr/testify` for test assertions,
   `golang.org/x/tools/go/packages` for discovery, `github.com/spf13/cobra`
-  for the CLI command tree, standard library for JSON. Avoid heavy frameworks
-  in the library itself — the CLI uses Cobra (see docs/adr/0003). No code
-  generation — the DSL and model are hand-written.
-- **Testing**: `make test` must pass. The `test/integration` golden test is
-  end-to-end: it runs the generator against the `test/data/` fixtures
-  (`simple`, `allof`, `oneof`, `anyof`, `provider`) and asserts each committed
-  `asyncapi.yaml` is reproduced exactly.
+  for the CLI command tree, standard library for JSON. `test/integration` is its
+  own module and owns `github.com/testcontainers/testcontainers-go`, used to run
+  the AsyncAPI CLI in a container, so the library's `go.mod` stays free of
+  test-only dependencies. Avoid heavy frameworks in the library itself — the
+  CLI uses Cobra (see docs/adr/0003). No code generation — the DSL and model are
+  hand-written.
+- **Testing**: `make test` must pass. The `test/integration` test is end-to-end
+  and asserts two independent things for each `test/data/` fixture (`simple`,
+  `allof`, `oneof`, `anyof`, `provider`):
+
+  1. **Golden** — the generator output reproduces the committed `asyncapi.yaml`
+     exactly.
+  2. **Spec validity** — the freshly generated document is accepted by the real
+     `asyncapi validate` from the AsyncAPI CLI, run in a container.
+
+  Both matter: the golden check cannot see a document that is regenerated
+  *wrongly*, since it would match a wrongly committed artifact, whereas the CLI
+  check validates the document against the specification itself. This makes
+  Docker a hard requirement of `make test` — the test fails rather than skips
+  without a daemon. The image is pinned (`asyncapi/cli:6.1.0`) so a new CLI
+  release cannot break the build without a deliberate version bump.
+
+  A container that runs to completion must be checked for its exit code
+  explicitly: `wait.ForExit()` only waits for the container to stop and ignores
+  the status, so an invalid document would otherwise pass silently. Assert on
+  `container.State(ctx).ExitCode` and surface the CLI's own diagnostics.
+
+  Because the test is its own module, it is invisible to a root-level `./...` —
+  a directory pattern does not cross workspace modules, and a bare
+  `golangci-lint run` stops at the root module the same way. `make test`,
+  `make pipeline-test` and `make lint` therefore all pass
+  `./... ./test/integration/...`. Any new workspace module has to be added to
+  those patterns explicitly.
 
   **Table-driven tests** — when a single test function covers multiple cases,
   use a table-driven test with `t.Run` subtests:
@@ -190,6 +221,10 @@ The version is the git tag — never stored in source.
   **Subtest names** — use `snake_case` and start with `should_`:
   - `should_return_X` for success paths
   - `should_return_error` / `should_return_nil` for error and boundary cases
+
+  `test/integration` is the one exception: its subtests are named after the
+  fixture under test (`simple`, `allof`, …), because the fixture — not the
+  assertion — is what distinguishes them.
 
   **Assertions** — use `testify/assert` and `testify/require` for all
   assertions. Never call `t.Error`/`t.Errorf`/`t.Fatal`/`t.Fatalf` directly.
@@ -225,8 +260,17 @@ The version is the git tag — never stored in source.
 - **Module layout**: the root package is the public DSL (`asyncgo`); `spec` and
   `schema` are public subpackages; `internal/discovery`, `internal/cli`, and
   `cmd/asyncgo` are not part of the public API. `test/data/*` are separate
-  modules joined via
-  `go.work`, holding discovery test fixtures.
+  modules joined via `go.work`, holding discovery test fixtures;
+  `test/integration` is a separate module too, holding the end-to-end test and
+  its testcontainers dependency.
+
+  That module's path is `github.com/RubenRibGarcia/asyncgo/test/integration` —
+  nested under the root module deliberately. Go resolves the internal rule on
+  import path, not on module boundaries, so a module under this prefix may still
+  import `asyncgo/internal/...`; a module named anything else could not, and the
+  test would have to reach the generator some other way. It consumes the library
+  source through a `replace` directive (`=> ../..`) rather than a published
+  version, so it always tests the working tree.
 
 ## Commit Conventions
 
@@ -267,7 +311,7 @@ All commits must follow the
 | `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
 | `internal` | `internal/discovery/`, `internal/cli/`                    |
-| `test`     | `test/data/` — discovery test fixtures                        |
+| `test`     | `test/data/` fixtures and `test/integration/` tests       |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
 
