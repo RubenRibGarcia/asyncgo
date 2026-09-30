@@ -65,7 +65,12 @@ func Materialize(dir string, cats []Catalog, refs []combinatorRef) ([]*spec.Asyn
 		return nil, nil
 	}
 
-	tmp, err := os.MkdirTemp(dir, "asyncgo-harness-")
+	// The underscore prefix is load-bearing: the go tool ignores directories whose
+	// name starts with "_" when matching patterns, so load()'s `./...` scan cannot
+	// see this transient directory. Without it, a concurrent load() in the same
+	// directory can enumerate the harness and then fail when it is removed
+	// mid-scan, reporting "error(s) loading packages".
+	tmp, err := os.MkdirTemp(dir, "_asyncgo-harness-")
 	if err != nil {
 		return nil, fmt.Errorf("creating harness directory: %w", err)
 	}
