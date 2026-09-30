@@ -5,7 +5,8 @@ specification document from Go code — the *code → spec* direction that most 
 AsyncAPI tooling (which goes *spec → code*) leaves unserved.
 
 `asyncgo` is a **documentation generator**, not a messaging framework. It does
-not route your actual messaging; it derives a committed `asyncapi.yaml` from two
+not route your actual messaging; it derives a committed AsyncAPI document
+(`asyncapi.yaml`, or `asyncapi.json` with `generate --format json`) from two
 touchpoints in your code.
 
 ## How it works
@@ -76,10 +77,17 @@ var Catalog = asyncgo.Spec(
 # write asyncapi.yaml (committed artifact)
 asyncgo generate .
 
+# write asyncapi.json instead (2-space indented, newline-terminated)
+asyncgo generate . --format json
+
 # write to a custom location (a file path, or a directory with a trailing slash)
 asyncgo generate . -o ./docs/asyncapi.yaml
+asyncgo generate . -o ./docs/ --format json    # -> ./docs/asyncapi.json
 
-# fail CI when asyncapi.yaml is out of date
+# an explicit -o path wins whatever its extension: --format picks the encoding
+asyncgo generate . -o ./docs/spec.yaml --format json
+
+# fail CI when asyncapi.yaml is out of date (check verifies asyncapi.yaml only)
 asyncgo check .
 
 # print the asyncgo version (matches the git tag / release)
