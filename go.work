@@ -8,5 +8,6 @@ use (
 	./test/data/anyof
 	./test/data/provider
 	./test/data/invalid
+	./test/integration
 	./tools
 )

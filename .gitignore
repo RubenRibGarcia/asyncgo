@@ -8,8 +8,9 @@
 # Go workspace (go.work is committed; go.work.sum is regenerated)
 go.work.sum
 
-# Generated harness temp dirs (normally auto-removed)
-asyncgo-harness-*/
+# Generated harness temp dirs (normally auto-removed; the leading underscore
+# keeps them out of the go tool's `./...` package patterns)
+_asyncgo-harness-*/
 
 # Vendor (managed via `go mod vendor`)
 vendor/
