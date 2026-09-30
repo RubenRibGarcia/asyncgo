@@ -8,7 +8,8 @@ specification document from Go code — the *code → spec* direction that most 
 AsyncAPI tooling (which goes *spec → code*) leaves unserved.
 
 `asyncgo` is a **documentation generator**, not a messaging framework. It does
-not route messaging; it derives a committed `asyncapi.yaml` from two touchpoints:
+not route messaging; it derives a committed AsyncAPI document — `asyncapi.yaml`,
+or `asyncapi.json` with `generate --format json` — from two touchpoints:
 
 1. **Structs** (data contracts) — message payload schemas are derived via
    reflection.
@@ -173,17 +174,24 @@ The version is the git tag — never stored in source.
   CLI uses Cobra (see docs/adr/0003). No code generation — the DSL and model are
   hand-written.
 - **Testing**: `make test` must pass. The `test/integration` test is end-to-end
-  and asserts two independent things for each `test/data/` fixture (`simple`,
+  and asserts three independent things for each `test/data/` fixture (`simple`,
   `allof`, `oneof`, `anyof`, `provider`):
 
   1. **Golden** — the generator output reproduces the committed `asyncapi.yaml`
      exactly.
-  2. **Spec validity** — the freshly generated document is accepted by the real
-     `asyncapi validate` from the AsyncAPI CLI, run in a container.
+  2. **Codec equivalence** — the JSON encoding denotes the same document as the
+     committed YAML. The comparison canonicalizes both sides through
+     `encoding/json`, because comparing the decoded documents directly is a
+     false negative: decoding YAML yields `uint64(3)` where decoding JSON yields
+     `float64(3)` for the same any-valued binding number.
+  3. **Spec validity** — the freshly generated document is accepted by the real
+     `asyncapi validate` from the AsyncAPI CLI, run in a container — for the YAML
+     *and* the JSON encoding, since the CLI picks its parser from the extension.
 
-  Both matter: the golden check cannot see a document that is regenerated
+  All three matter: the golden check cannot see a document that is regenerated
   *wrongly*, since it would match a wrongly committed artifact, whereas the CLI
-  check validates the document against the specification itself. This makes
+  check validates the document against the specification itself; and the codec
+  check is the only one that would catch YAML and JSON drifting apart. This makes
   Docker a hard requirement of `make test` — the test fails rather than skips
   without a daemon. The image is pinned (`asyncapi/cli:6.1.0`) so a new CLI
   release cannot break the build without a deliberate version bump.

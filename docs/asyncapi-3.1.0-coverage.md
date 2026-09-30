@@ -11,6 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` |
+| **Revised** | 2026-09-30 — `§5 Tooling and pipeline` and `§8 B15` (JSON output flag) |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, and the root DSL package against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -206,8 +207,8 @@ library's differentiating feature and the area with the deepest coverage.
 | YAML round-trip to preserve integer binding values | ✅ | `internal/discovery/materialize.go` |
 | Multi-catalog merge | ✅ | `internal/discovery/merge.go` |
 | YAML output, default `asyncapi.yaml` | ✅ | `spec/encode.go` (`goccy/go-yaml`) |
-| JSON output | 🟡 | `spec.AsyncAPI.JSON()` exists; no CLI flag |
-| `asyncgo generate [dir] [-o file\|dir/]` | ✅ | `internal/cli/generate.go` |
+| JSON output, `--format json` (default `asyncapi.json`) | ✅ | `spec/encode.go` (`JSONIndent`), `internal/cli/generate.go` |
+| `asyncgo generate [dir] [-o file\|dir/] [--format yaml\|json]` | ✅ | `internal/cli/generate.go` |
 | `asyncgo check [dir]` byte-equality drift gate | ✅ | `internal/cli/check.go` |
 | `asyncgo version`, `--version`, shell completion | ✅ | `internal/cli/root.go`, Cobra |
 | Validate output against the official AsyncAPI 3.1.0 JSON Schema | ❌ | — |
@@ -466,10 +467,12 @@ implementation effort.
 
 #### B15 — JSON output flag
 
-- **Gap** — `spec.AsyncAPI.JSON()` exists; the CLI cannot reach it.
-- **Area** — `internal/cli (generate/check)`
-- **Acceptance** — `--format yaml|json` on `generate` and `check`, defaulting to
-  YAML so existing artifacts are unaffected.
+- **Gap** — `generate --format json` emits `asyncapi.json`, but `check` still
+  verifies only `asyncapi.yaml`, so an emitted JSON artifact goes unverified.
+- **Area** — `internal/cli (check)`
+- **Acceptance** — `check` resolves which format to verify (a `--format` flag
+  mirroring `generate`, or auto-discovery of whichever artifact exists),
+  defaulting to YAML so existing artifacts are unaffected.
 
 <a id="b16"></a>
 
