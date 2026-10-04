@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -430,9 +430,11 @@ implementation effort.
   the untyped escape hatch.
 - **Spec** — Server/Channel/Operation/Message Bindings Objects.
 - **Area** — `spec (object model, codecs, bindings)`, `docs`
-- **Acceptance** — at minimum `http`, `ws`, `mqtt5`, `amqp1` typed (the four a Go
-  service most plausibly uses, and the two that shadow already-typed protocols);
-  the escape hatch documented for the rest.
+- **Acceptance** — all 20 protocols typed (`kafka`, `amqp`, `nats`, `mqtt`,
+  `http`, `ws`, `amqp1`, `mqtt5`, `anypointmq`, `jms`, `sns`, `solace`, `sqs`,
+  `stomp`, `redis`, `mercure`, `ibmmq`, `googlepubsub`, `pulsar`, `ros2`),
+  covering every binding object each protocol defines; the escape hatch retained
+  for protocols added to the specification later.
 
 <a id="b13"></a>
 
