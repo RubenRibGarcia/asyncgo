@@ -1,0 +1,67 @@
+asyncapi: 3.1.0
+info:
+  title: Secured Orders Service
+  version: 1.0.0
+  description: Order events published over an authenticated broker
+servers:
+  prod:
+    host: broker.example.com:9092
+    protocol: kafka
+    description: Production Kafka cluster
+    security:
+    - $ref: "#/components/securitySchemes/oauth"
+channels:
+  order-placed:
+    address: order-placed
+    messages:
+      OrderPlaced:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1security.OrderPlaced"
+        name: OrderPlaced
+    description: Emitted when an order is placed
+    servers:
+    - $ref: "#/servers/prod"
+operations:
+  order-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-placed"
+    security:
+    - $ref: "#/components/securitySchemes/basicAuth"
+    messages:
+    - $ref: "#/channels/order-placed/messages/OrderPlaced"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/security.OrderPlaced:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+        order_id:
+          type: string
+      required:
+      - order_id
+      - amount
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: user
+    basicAuth:
+      type: http
+      scheme: basic
+    oauth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.com/oauth/token
+          availableScopes:
+            read:orders: Read orders
+    openIDConnect:
+      type: openIdConnect
+      openIdConnectUrl: https://auth.example.com/.well-known/openid-configuration
+      scopes:
+      - read:orders
+    userPasswordAuth:
+      type: userPassword
+      description: Username and password over the broker connection
