@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -42,13 +42,13 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Contact Object | ✅ 3/3 | ✅ | — |
 | License Object | ✅ +`identifier` | ✅ | `identifier` is not a 3.1.0 field ([§7](#7-spec-deviations)) |
 | Servers Object | ✅ | ✅ | — |
-| Server Object | 🟡 8/12 | 🟡 | no `pathname`, `title`, `summary`, `externalDocs`; `security`/`tags` are 🟠 |
+| Server Object | 🟡 8/12 | 🟡 | no `pathname`, `title`, `summary`, `externalDocs`; `tags` is 🟠 |
 | Server Variable Object | ✅ 4/4 | ✅ | — |
 | Channels Object | ✅ | ✅ | — |
 | Channel Object | 🟡 8/10 | 🟡 | no `summary`, `externalDocs`; `parameters`/`tags` are 🟠; `address` cannot be `null` |
 | Messages Object | ✅ | ✅ | key is the message `name`; collisions overwrite silently |
 | Operations Object | ✅ | 🟡 | key is auto-derived `${address}.${action}`; a second `Send`/`Receive` on one channel overwrites |
-| Operation Object | 🟡 11/12 | 🟡 | **no `reply`**; `security`/`tags`/`externalDocs`/`traits` are 🟠 |
+| Operation Object | 🟡 11/12 | 🟡 | **no `reply`**; `tags`/`externalDocs`/`traits` are 🟠 |
 | Operation Trait Object | ❌ | ❌ | only a `[]*Reference` slot exists on Operation |
 | **Operation Reply Object** | ❌ | ❌ | request/reply pattern unsupported |
 | **Operation Reply Address Object** | ❌ | ❌ | " |
@@ -57,13 +57,13 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Message Example Object | ✅ 4/4 | 🟡 | `Example()` sets `name` + `payload` only |
 | Tag Object | ✅ 3/3 | 🟡 | settable only via `Info().Tags(...)` |
 | External Documentation Object | ✅ | ❌ | no direct builder; reachable only nested inside a `Tag` via `Info().Tags(...)` |
-| Components Object | 🟡 **7/19** | 🟡 | only `schemas` is ever written; no builder at all ([§2](#2-components-object)) |
+| Components Object | 🟡 **8/19** | 🟡 | `schemas` and `securitySchemes` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; internal use only |
 | **Multi Format Schema Object** | ❌ | ❌ | Avro / Protobuf / `schemaFormat` unsupported |
 | Schema Object | 🟡 Draft-07 subset | ✅ | see [§4](#4-schema-derivation) |
-| Security Scheme Object | ❌ | ❌ | no way to document auth |
-| OAuth Flows Object | ❌ | ❌ | " |
-| OAuth Flow Object | ❌ | ❌ | " |
+| Security Scheme Object | ✅ 9/9 | ✅ | — |
+| OAuth Flows Object | ✅ 4/4 | ✅ | — |
+| OAuth Flow Object | ✅ 4/4 | ✅ | — |
 | Server Bindings Object | ✅ map | 🟡 | 4 of 20 protocols ([§3](#3-bindings-protocols)) |
 | Parameters Object | ✅ | ❌ | 🟠 — modeled, no builder |
 | Parameter Object | 🟡 **wrong shape** | ❌ | models `schema`, which 3.1.0 removed; missing `enum`, `default`, `examples` |
@@ -75,18 +75,18 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 
 ## 2. Components Object
 
-3.1.0 defines 19 fields. The library models 7 and populates 1.
+3.1.0 defines 19 fields. The library models 8 and populates 2.
 
 | Field | Modeled | Populated |
 | --- | :--: | :--: |
-| `schemas` | ✅ | ✅ (the only one) |
+| `schemas` | ✅ | ✅ |
 | `servers` | ✅ | ❌ |
 | `channels` | ✅ | ❌ |
 | `operations` | ✅ | ❌ |
 | `messages` | ✅ | ❌ |
 | `parameters` | ✅ | ❌ |
 | `correlationIds` | ✅ | ❌ |
-| `securitySchemes` | ❌ | ❌ |
+| `securitySchemes` | ✅ | ✅ |
 | `serverVariables` | ❌ | ❌ |
 | `replies` | ❌ | ❌ |
 | `replyAddresses` | ❌ | ❌ |
@@ -102,7 +102,9 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 The six modeled-but-unpopulated maps exist only so `Merge()` can union them
 across catalogs (`internal/discovery/merge.go`); nothing in the DSL or the
 generator ever writes them. `components.schemas` is filled by
-`builder.components()` (`doc.go`) and `schema.Finalize` (`schema/registry.go`).
+`builder.components()` (`doc.go`) and `schema.Finalize` (`schema/registry.go`),
+and `components.securitySchemes` by the `SecuritySchemes(...)` item's `apply`
+(`doc.go`).
 
 ## 3. Bindings protocols
 
@@ -248,6 +250,13 @@ populated.
 | `License.Identifier` | Not a 3.1.0 field; 3.1.0 `License` is `name` + `url` (this is an OpenAPI 3.1 field). |
 | `Parameter.Schema` | 3.1.0 `Parameter` is `enum`, `default`, `description`, `examples`, `location` (this is a 2.x shape). |
 
+The 3.1.0 `security` field is `[[Security Scheme Object | Reference Object]]` —
+an array of schemes or `$ref`s, and 3.1.0 defines no Security Requirement
+Object. The original assessment carried `Server.Security`/`Operation.Security`
+as `[]SecurityRequirement` (a `map[string][]string`, the 2.x shape) without
+listing it here; that type was replaced by `[]*Reference` in
+[B1](#b1--security-schemes).
+
 ## 8. Backlog
 
 Each item is issue-shaped: gap, spec reference, affected area (using the labels
@@ -262,6 +271,13 @@ implementation effort.
 
 #### B1 — Security schemes
 
+- **Implemented** — [#12](https://github.com/RubenRibGarcia/asyncgo/issues/12):
+  `spec.SecurityScheme` + `OAuthFlows`/`OAuthFlow`, `Components.SecuritySchemes`,
+  `SecurityScheme(...)`/`SecuritySchemes(...)`,
+  `Server.Security(...)`/`Operation.Security(...)`, a `validateSecurityRefs`
+  post-pass, and one `test/data/security` golden fixture covering all five
+  scheme types. The 2.x `SecurityRequirement` type is gone
+  ([§7](#7-spec-deviations)).
 - **Gap** — No `SecurityScheme`, `OAuthFlows`, or `OAuthFlow` object.
   `Server.Security` and `Operation.Security` are `[]SecurityRequirement` (a
   scheme-name → scopes map), so security can be *referenced* but never

@@ -71,6 +71,44 @@ var Catalog = asyncgo.Spec(
 #     - $ref: '#/servers/prod'
 ```
 
+### Security schemes
+
+Declare a scheme once with `SecurityScheme(...)`, register it with
+`SecuritySchemes(...)`, and reference it from a server or an operation. The
+reference is emitted as a `$ref` into `components.securitySchemes`:
+
+```go
+oauth := asyncgo.SecurityScheme("oauth", spec.SecurityScheme{
+ Type: "oauth2",
+ Flows: &spec.OAuthFlows{
+  ClientCredentials: &spec.OAuthFlow{
+   TokenURL: "https://auth.example.com/oauth/token",
+   AvailableScopes: map[string]string{"read:orders": "Read orders"},
+  },
+ },
+})
+
+var Catalog = asyncgo.Spec(
+ asyncgo.SecuritySchemes(oauth),
+ asyncgo.Servers(
+  asyncgo.Server("prod", "kafka", "broker:9092").Security(oauth),
+ ),
+)
+```
+
+```yaml
+# servers/prod:
+#   security:
+#     - $ref: '#/components/securitySchemes/oauth'
+```
+
+`spec.SecurityScheme` models every 3.1.0 field — `type`, `description`, `name`,
+`in`, `scheme`, `bearerFormat`, `flows`, `openIdConnectUrl`, `scopes` — so the
+other scheme types (`userPassword`, `apiKey`, `http`, `openIdConnect`, …) are
+declared the same way. `Server.Security(...)` and `Operation.Security(...)`
+accept the same scheme builders, and a reference to a scheme that was never
+registered is a catalog validation error.
+
 ### Generate & check
 
 ```bash

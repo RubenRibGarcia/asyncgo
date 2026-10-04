@@ -82,8 +82,8 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 
 | Area | Symbols |
 | ---- | ------- |
-| DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `Channels`, `Channel`, `Operation`, `MessageOf`, `Kafka`/`AMQP`/`NATS`/`MQTT`/`Binding` helpers |
-| Spec model | `spec.AsyncAPI`, `Info`, `Server`, `Channel`, `Operation`, `Message`, `Schema`, `Components`, `*Bindings`, protocol binding structs |
+| DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Channels`, `Channel`, `Operation`, `MessageOf`, `Kafka`/`AMQP`/`NATS`/`MQTT`/`Binding` helpers |
+| Spec model | `spec.AsyncAPI`, `Info`, `Server`, `SecurityScheme`, `OAuthFlows`, `OAuthFlow`, `Channel`, `Operation`, `Message`, `Schema`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
 | CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]` |
 
@@ -106,7 +106,7 @@ asyncgo/
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
