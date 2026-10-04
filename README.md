@@ -109,6 +109,54 @@ declared the same way. `Server.Security(...)` and `Operation.Security(...)`
 accept the same scheme builders, and a reference to a scheme that was never
 registered is a catalog validation error.
 
+### Request/reply
+
+Declare a reply address and a reply once, register them with
+`ReplyAddresses(...)` and `Replies(...)`, and attach one to an operation with
+`Operation.Reply(...)`. The reply is declared in one place and referenced from
+the operation, so both sides stay a `$ref`:
+
+```go
+replyTo := asyncgo.ReplyAddress("ReplyTo").
+ Location("$message.header#/replyTo")
+
+orderReply := asyncgo.Reply("OrderReply").Address(replyTo)
+
+var Catalog = asyncgo.Spec(
+ asyncgo.ReplyAddresses(replyTo),
+ asyncgo.Replies(orderReply),
+ asyncgo.Channels(
+  asyncgo.Channel("order-placed").
+   Send(asyncgo.Operation().
+    Reply(orderReply).
+    Message(asyncgo.MessageOf(OrderPlaced{}))),
+ ),
+)
+```
+
+```yaml
+# components:
+#   replies:
+#     OrderReply:
+#       address:
+#         $ref: '#/components/replyAddresses/ReplyTo'
+#   replyAddresses:
+#     ReplyTo:
+#       location: '$message.header#/replyTo'
+# operations:
+#   order-placed.send:
+#     reply:
+#       $ref: '#/components/replies/OrderReply'
+```
+
+A reply can instead name the channel it is performed in with
+`Reply.Channel(...)`, and the messages it carries with
+`Reply.Message(channel, ...)`. The channel argument is what the message `$ref`s
+are built from, so the two calls do not depend on each other's order. The
+specification forbids combining them though: when a reply declares an address,
+the channel it names must have no address — so `Address(...)` and `Channel(...)`
+on the same reply is a catalog validation error rather than a valid document.
+
 ### Generate & check
 
 ```bash

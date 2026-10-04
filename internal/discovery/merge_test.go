@@ -31,6 +31,58 @@ func TestMergeNilComponents(t *testing.T) {
 	assert.Nil(t, out.Components)
 }
 
+func TestMergeReplies(t *testing.T) {
+	first := spec.New()
+	first.Info = spec.Info{Title: "T", Version: "1.0.0"}
+	first.Components = &spec.Components{
+		Replies: map[string]*spec.OperationReply{
+			"OrderReply": {
+				Address: &spec.Reference{Ref: "#/components/replyAddresses/ReplyTo"},
+			},
+		},
+		ReplyAddresses: map[string]*spec.OperationReplyAddress{
+			"ReplyTo": {Location: "$message.header#/replyTo"},
+		},
+	}
+
+	second := spec.New()
+	second.Info = spec.Info{Title: "U", Version: "1.0.0"}
+	second.Components = &spec.Components{
+		Replies: map[string]*spec.OperationReply{
+			"OrderReply": {
+				Address: &spec.Reference{Ref: "#/components/replyAddresses/Other"},
+			},
+			"OtherReply": {Channel: &spec.Reference{Ref: "#/channels/order-replies"}},
+		},
+		ReplyAddresses: map[string]*spec.OperationReplyAddress{
+			"ReplyTo": {Location: "$message.header#/other"},
+			"Other":   {Location: "$message.header#/other"},
+		},
+	}
+
+	out := Merge(first, second)
+	require.NotNil(t, out.Components)
+	assert.Len(t, out.Components.Replies, 2)
+	assert.Len(t, out.Components.ReplyAddresses, 2)
+	assert.Equal(
+		t,
+		"#/components/replyAddresses/ReplyTo",
+		out.Components.Replies["OrderReply"].Address.Ref,
+		"first occurrence wins",
+	)
+	assert.Equal(
+		t,
+		"$message.header#/replyTo",
+		out.Components.ReplyAddresses["ReplyTo"].Location,
+		"first occurrence wins",
+	)
+	assert.Equal(
+		t,
+		"#/channels/order-replies",
+		out.Components.Replies["OtherReply"].Channel.Ref,
+	)
+}
+
 func TestMergeSecuritySchemes(t *testing.T) {
 	first := spec.New()
 	first.Info = spec.Info{Title: "T", Version: "1.0.0"}

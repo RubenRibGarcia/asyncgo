@@ -1,0 +1,66 @@
+asyncapi: 3.1.0
+info:
+  title: Request/Reply Orders Service
+  version: 1.0.0
+  description: Order requests answered on a reply address
+channels:
+  order-placed:
+    address: order-placed
+    messages:
+      OrderPlaced:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderPlaced"
+        name: OrderPlaced
+    description: Order requests
+  order-replies:
+    address: order-replies
+    messages:
+      OrderAccepted:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderAccepted"
+        name: OrderAccepted
+    description: Order replies
+operations:
+  order-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-placed"
+    messages:
+    - $ref: "#/channels/order-placed/messages/OrderPlaced"
+    reply:
+      $ref: "#/components/replies/OrderReply"
+  order-replies.receive:
+    action: receive
+    channel:
+      $ref: "#/channels/order-replies"
+    messages:
+    - $ref: "#/channels/order-replies/messages/OrderAccepted"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/reply.OrderAccepted:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required:
+      - order_id
+    github.com/RubenRibGarcia/asyncgo/test/data/reply.OrderPlaced:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required:
+      - order_id
+  replies:
+    OrderAcceptedReply:
+      channel:
+        $ref: "#/channels/order-replies"
+      messages:
+      - $ref: "#/channels/order-replies/messages/OrderAccepted"
+    OrderReply:
+      address:
+        $ref: "#/components/replyAddresses/ReplyTo"
+  replyAddresses:
+    ReplyTo:
+      description: Consumer inbox
+      location: "$message.header#/replyTo"
