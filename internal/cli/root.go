@@ -52,15 +52,17 @@ func resolveDir(args []string) (string, error) {
 }
 
 // resolveOutput computes the destination path for the generated document. An
-// empty output defaults to <dir>/asyncapi.yaml; a trailing path separator
-// writes asyncapi.yaml inside the given directory; any other value is treated
-// as the exact output file path (made absolute).
-func resolveOutput(dir, output string) (string, error) {
+// empty output defaults to <dir>/<defaultName>; a trailing path separator writes
+// defaultName inside the given directory; any other value is treated as the
+// exact output file path (made absolute). The default filename carries the
+// selected output format (asyncapi.yaml or asyncapi.json); an explicit path is
+// honored verbatim, whatever its extension.
+func resolveOutput(dir, output, defaultName string) (string, error) {
 	if output == "" {
-		return filepath.Join(dir, "asyncapi.yaml"), nil
+		return filepath.Join(dir, defaultName), nil
 	}
 	if strings.HasSuffix(output, string(os.PathSeparator)) || strings.HasSuffix(output, "/") {
-		return filepath.Join(output, "asyncapi.yaml"), nil
+		return filepath.Join(output, defaultName), nil
 	}
 	abs, err := filepath.Abs(output)
 	if err != nil {
