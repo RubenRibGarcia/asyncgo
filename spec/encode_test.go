@@ -195,6 +195,143 @@ func TestEncodeYAMLEqualsJSON(t *testing.T) {
 	})
 }
 
+// TestEncodeSecuritySchemes covers one case per security scheme type: the five
+// types the golden fixture declares, plus a bare userPassword scheme.
+func TestEncodeSecuritySchemes(t *testing.T) {
+	tests := []struct {
+		name     string
+		scheme   SecurityScheme
+		contains []string
+	}{
+		{
+			name:     "should_encode_user_password",
+			scheme:   SecurityScheme{Type: "userPassword"},
+			contains: []string{"type: userPassword"},
+		},
+		{
+			name:     "should_encode_api_key",
+			scheme:   SecurityScheme{Type: "apiKey", In: "user"},
+			contains: []string{"type: apiKey", "in: user"},
+		},
+		{
+			name:     "should_encode_http",
+			scheme:   SecurityScheme{Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+			contains: []string{"type: http", "scheme: bearer", "bearerFormat: JWT"},
+		},
+		{
+			name: "should_encode_oauth2",
+			scheme: SecurityScheme{
+				Type: "oauth2",
+				Flows: &OAuthFlows{
+					ClientCredentials: &OAuthFlow{
+						TokenURL:        "https://example.com/oauth/token",
+						AvailableScopes: map[string]string{"read:orders": "read orders"},
+					},
+				},
+			},
+			contains: []string{
+				"type: oauth2",
+				"flows:",
+				"clientCredentials:",
+				"tokenUrl: https://example.com/oauth/token",
+				"availableScopes:",
+				"read:orders: read orders",
+			},
+		},
+		{
+			name: "should_encode_open_id_connect",
+			scheme: SecurityScheme{
+				Type:             "openIdConnect",
+				OpenIDConnectURL: "https://example.com/.well-known/openid-configuration",
+				Scopes:           []string{"read:orders"},
+			},
+			contains: []string{
+				"type: openIdConnect",
+				"openIdConnectUrl: https://example.com/.well-known/openid-configuration",
+				"scopes:",
+				"- read:orders",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := New()
+			doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+			doc.Components = &Components{
+				SecuritySchemes: map[string]*SecurityScheme{"auth": &tc.scheme},
+			}
+
+			out, err := doc.YAML()
+			require.NoError(t, err)
+			assert.Contains(t, string(out), "securitySchemes:")
+			for _, want := range tc.contains {
+				assert.Contains(t, string(out), want)
+			}
+		})
+	}
+}
+
+func TestEncodeServerAndOperationSecurity(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Servers = map[string]*Server{
+		"prod": {
+			Host:     "broker:9092",
+			Protocol: ProtocolKafka,
+			Security: []*Reference{{Ref: "#/components/securitySchemes/oauth"}},
+		},
+	}
+	doc.Operations = map[string]*Operation{
+		"order-placed.send": {
+			Action:   ActionSend,
+			Channel:  &Reference{Ref: "#/channels/order-placed"},
+			Security: []*Reference{{Ref: "#/components/securitySchemes/basic"}},
+		},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "security:")
+	assert.Contains(t, string(out), "#/components/securitySchemes/oauth")
+	assert.Contains(t, string(out), "#/components/securitySchemes/basic")
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	assert.Contains(
+		t,
+		string(jsonOut),
+		`"security":[{"$ref":"#/components/securitySchemes/oauth"}]`,
+	)
+	assert.Contains(
+		t,
+		string(jsonOut),
+		`"security":[{"$ref":"#/components/securitySchemes/basic"}]`,
+	)
+}
+
+func TestEncodeSecuritySchemeOmitsZeroFields(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Servers = map[string]*Server{"prod": {Host: "broker:9092", Protocol: ProtocolKafka}}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "securitySchemes:")
+	assert.NotContains(t, string(out), "security:")
+
+	doc.Components = &Components{
+		SecuritySchemes: map[string]*SecurityScheme{"basic": {Type: "http", Scheme: "basic"}},
+	}
+
+	out, err = doc.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "securitySchemes:")
+	assert.Contains(t, string(out), "type: http")
+	assert.NotContains(t, string(out), "flows:")
+	assert.NotContains(t, string(out), "openIdConnectUrl:")
+}
+
 // canonicalJSON renders v as JSON so two documents can be compared without
 // depending on which decoder produced their any-valued fields. Map keys are
 // sorted, so this comparison ignores key order inside an any-valued map: a
