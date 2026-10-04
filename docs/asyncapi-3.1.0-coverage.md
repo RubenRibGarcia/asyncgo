@@ -10,9 +10,9 @@ library produce it?**
 | | |
 | --- | --- |
 | **Assessed** | 2026-09-12 |
-| **Revision** | `master` @ `d9f9dbd` |
-| **Revised** | 2026-09-30 — `§5 Tooling and pipeline` and `§8 B15` (JSON output flag) |
-| **Method** | Field-by-field diff of `spec/`, `schema/`, and the root DSL package against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
+| **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` |
+| **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
 This document is an assessment, not a commitment. The backlog in
@@ -42,10 +42,10 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Contact Object | ✅ 3/3 | ✅ | — |
 | License Object | ✅ +`identifier` | ✅ | `identifier` is not a 3.1.0 field ([§7](#7-spec-deviations)) |
 | Servers Object | ✅ | ✅ | — |
-| Server Object | 🟡 8/12 | 🟡 | no `pathname`, `title`, `summary`, `externalDocs` |
+| Server Object | 🟡 8/12 | 🟡 | no `pathname`, `title`, `summary`, `externalDocs`; `security`/`tags` are 🟠 |
 | Server Variable Object | ✅ 4/4 | ✅ | — |
 | Channels Object | ✅ | ✅ | — |
-| Channel Object | 🟡 8/10 | 🟡 | no `summary`, `externalDocs`; `parameters` is 🟠; `address` cannot be `null` |
+| Channel Object | 🟡 8/10 | 🟡 | no `summary`, `externalDocs`; `parameters`/`tags` are 🟠; `address` cannot be `null` |
 | Messages Object | ✅ | ✅ | key is the message `name`; collisions overwrite silently |
 | Operations Object | ✅ | 🟡 | key is auto-derived `${address}.${action}`; a second `Send`/`Receive` on one channel overwrites |
 | Operation Object | 🟡 11/12 | 🟡 | **no `reply`**; `security`/`tags`/`externalDocs`/`traits` are 🟠 |
@@ -56,7 +56,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Message Trait Object | ❌ | ❌ | only a `[]*Reference` slot exists on Message |
 | Message Example Object | ✅ 4/4 | 🟡 | `Example()` sets `name` + `payload` only |
 | Tag Object | ✅ 3/3 | 🟡 | settable only via `Info().Tags(...)` |
-| External Documentation Object | ✅ | ❌ | no builder anywhere |
+| External Documentation Object | ✅ | ❌ | no direct builder; reachable only nested inside a `Tag` via `Info().Tags(...)` |
 | Components Object | 🟡 **7/19** | 🟡 | only `schemas` is ever written; no builder at all ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; internal use only |
 | **Multi Format Schema Object** | ❌ | ❌ | Avro / Protobuf / `schemaFormat` unsupported |
@@ -194,7 +194,7 @@ library's differentiating feature and the area with the deepest coverage.
 | validation-tag bridging (`validate:"required,min=1"`, `jsonschema:"…"`) | ❌ |
 | `discriminator`, `externalDocs`, `deprecated` (3.1.0 Schema keywords) | ❌ not in `spec.Schema` |
 | `$id`, `$schema`, `$comment`, `const`, `if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `readOnly`, `writeOnly` | ❌ not in `spec.Schema` |
-| `$ref` with sibling keywords on one node | ❌ `Schema.Ref` is a plain string field, so a reference cannot carry siblings |
+| `$ref` with sibling keywords on one node | ❌ `Schema` carries `Ref` alongside sibling fields, so the pair does serialize — but siblings are a no-op under JSON Reference, and `spec.Ref()` sets none |
 | non-JSON-Schema formats (Avro, Protobuf, OpenAPI) | ❌ no Multi Format Schema Object |
 
 ## 5. Tooling and pipeline
@@ -209,9 +209,9 @@ library's differentiating feature and the area with the deepest coverage.
 | YAML output, default `asyncapi.yaml` | ✅ | `spec/encode.go` (`goccy/go-yaml`) |
 | JSON output, `--format json` (default `asyncapi.json`) | ✅ | `spec/encode.go` (`JSONIndent`), `internal/cli/generate.go` |
 | `asyncgo generate [dir] [-o file\|dir/] [--format yaml\|json]` | ✅ | `internal/cli/generate.go` |
-| `asyncgo check [dir]` byte-equality drift gate | ✅ | `internal/cli/check.go` |
+| `asyncgo check [dir]` byte-equality drift gate (YAML only) | ✅ | `internal/cli/check.go` |
 | `asyncgo version`, `--version`, shell completion | ✅ | `internal/cli/root.go`, Cobra |
-| Validate output against the official AsyncAPI 3.1.0 JSON Schema | ❌ | — |
+| Validate output against the official AsyncAPI 3.1.0 JSON Schema | 🟡 | `test/integration/asyncgo_generate_test.go` — test-time only: the pinned `asyncapi/cli` accepts both the YAML and JSON encodings of every fixture; there is no `asyncgo validate` command |
 | Bundle external / multi-file `$ref` | ❌ | — |
 | Serve / preview (e.g. AsyncAPI Studio) | ❌ | — |
 
@@ -438,9 +438,10 @@ implementation effort.
 
 #### B13 — Builders for modeled-but-unreachable objects
 
-- **Gap** — `ExternalDocs` has no builder anywhere; `Tag` is settable only on
-  `Info`; `Message.CorrelationID` is a `*Reference` with no way to author or
-  hoist a `CorrelationID`.
+- **Gap** — `ExternalDocs` has no direct builder — it is reachable only nested
+  inside a `Tag` passed to `Info`; `Tag` is settable only on `Info`;
+  `Message.CorrelationID` is a `*Reference` with no way to author or hoist a
+  `CorrelationID`.
 - **Spec** — External Documentation Object, Tag Object, Correlation ID Object,
   `components/correlationIds`.
 - **Area** — `dsl (root package: doc.go, message.go, bindings.go)`
@@ -452,10 +453,11 @@ implementation effort.
 
 #### B14 — Conformance validation against the official schema
 
-- **Gap** — Nothing verifies the generated document is a valid AsyncAPI
-  document. `asyncgo check` only compares bytes against the committed artifact,
-  so a structurally invalid document is detected as "out of date", not as
-  "invalid".
+- **Gap** — No user-facing way to validate a document. The repository's own
+  end-to-end test runs the real `asyncapi validate` over every fixture (see
+  [§5](#5-tooling-and-pipeline)), but `asyncgo check` only compares bytes
+  against the committed artifact, so a structurally invalid document is
+  detected as "out of date", not as "invalid".
 - **Spec** — the published 3.1.0 JSON Schema.
 - **Area** — `internal/cli (generate/check)`, `internal/discovery (catalog discovery + materialization)`
 - **Acceptance** — `asyncgo validate [dir]` (or `generate --validate`) validating
@@ -511,14 +513,23 @@ tables. To re-check a claim, fetch the raw spec and grep the field anchors:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/asyncapi/spec/v3.1.0/spec/asyncapi.md \
-  | grep -o '<a name="A2S[A-Za-z0-9]*"></a>' | sort -u
+  | grep -o '<a name="[A-Za-z0-9]*"></a>' | sort -u
 ```
 
 Every fixed field in the spec is preceded by an `<a name="…">` anchor, so the
-anchor set for an object is its authoritative field list. For example, the root
-object yields exactly eight (`A2SAsyncAPI`, `A2SId`, `A2SInfo`, `A2SServers`,
-`A2SDefaultContentType`, `A2SChannels`, `A2SOperations`, `A2SComponents`) — which
-is what makes [B9](#b9--remove-spec-deviations) a finding rather than a guess.
+anchor set for an object is its authoritative field list. The anchor naming is
+not uniform, so the grep output has to be read by hand:
+
+- The **root object's fields** are `A2S`-prefixed: `A2SAsyncAPI`, `A2SId`,
+  `A2SInfo`, `A2SServers`, `A2SDefaultContentType`, `A2SChannels`,
+  `A2SOperations`, `A2SComponents` — eight fields, which is what makes
+  [B9](#b9--remove-spec-deviations) a finding rather than a guess. The same grep
+  also matches section-level anchors (`A2SObject`, `A2SIdString`, …), so its
+  output is a superset of those eight.
+- **Every other object's fields** are anchored by section and name, e.g.
+  `infoObjectExternalDocs`, `serverObjectPathname`, `parameterObjectEnum`,
+  `componentsReplies`, `operationReplyObjectAddress`. Filter on the
+  `<object>Object` prefix rather than on `A2S`.
 
 To re-derive the library side, diff the same object families against:
 
