@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
@@ -52,6 +53,7 @@ func Spec(items ...Item) *SpecResult {
 	}
 	errs = append(errs, b.validateServerRefs()...)
 	errs = append(errs, b.validateSecurityRefs()...)
+	errs = append(errs, b.validateReplyRefs()...)
 	if len(b.defs) > 0 {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
@@ -75,8 +77,10 @@ func (b *builder) components() *spec.Components {
 // before the server it references).
 func (b *builder) validateServerRefs() []error {
 	var errs []error
-	for addr, ch := range b.doc.Channels {
-		for _, ref := range ch.Servers {
+	// Channels are walked in sorted order so the joined error message is stable:
+	// SpecResult.Err is compared by exact string in tests.
+	for _, addr := range slices.Sorted(maps.Keys(b.doc.Channels)) {
+		for _, ref := range b.doc.Channels[addr].Servers {
 			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, "#/servers/"))
 			if _, ok := b.doc.Servers[name]; !ok {
 				errs = append(
@@ -102,8 +106,10 @@ func (b *builder) validateSecurityRefs() []error {
 	}
 
 	var errs []error
-	for name, srv := range b.doc.Servers {
-		for _, ref := range srv.Security {
+	// Servers and operations are walked in sorted order so the joined error
+	// message is stable: SpecResult.Err is compared by exact string in tests.
+	for _, name := range slices.Sorted(maps.Keys(b.doc.Servers)) {
+		for _, ref := range b.doc.Servers[name].Security {
 			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
@@ -113,8 +119,8 @@ func (b *builder) validateSecurityRefs() []error {
 			}
 		}
 	}
-	for key, op := range b.doc.Operations {
-		for _, ref := range op.Security {
+	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
+		for _, ref := range b.doc.Operations[key].Security {
 			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
@@ -124,6 +130,92 @@ func (b *builder) validateSecurityRefs() []error {
 			}
 		}
 	}
+	return errs
+}
+
+// validateReplyRefs checks that every operation reply reference points at a
+// reply declared via Replies(...), that every declared reply's address and
+// channel resolve, and that a reply never combines an address with a channel.
+// It is a post-pass for the same reason as validateServerRefs: declaration order
+// is arbitrary, so a reply may be referenced before it is declared.
+//
+// The address/channel rule is a specification MUST that no downstream validator
+// can catch — `asyncapi validate` accepts a document that breaks it, because the
+// constraint relates two objects and a JSON Schema cannot express that — so this
+// is the only place it is enforced.
+func (b *builder) validateReplyRefs() []error {
+	const (
+		repliesPrefix        = "#/components/replies/"
+		replyAddressesPrefix = "#/components/replyAddresses/"
+		channelsPrefix       = "#/channels/"
+	)
+
+	var declaredReplies map[string]*spec.OperationReply
+	var declaredAddresses map[string]*spec.OperationReplyAddress
+	if b.doc.Components != nil {
+		declaredReplies = b.doc.Components.Replies
+		declaredAddresses = b.doc.Components.ReplyAddresses
+	}
+
+	var errs []error
+
+	// Keys are walked in sorted order so the joined error message is stable:
+	// SpecResult.Err is compared by exact string in tests.
+	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
+		ref := b.doc.Operations[key].Reply
+		if ref == nil {
+			continue
+		}
+		name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, repliesPrefix))
+		if _, ok := declaredReplies[name]; !ok {
+			errs = append(errs, fmt.Errorf("operation.%s: references unknown reply %q", key, name))
+		}
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(declaredReplies)) {
+		r := declaredReplies[name]
+		if r.Address != nil {
+			addr := jsonpointer.Unescape(strings.TrimPrefix(r.Address.Ref, replyAddressesPrefix))
+			if _, ok := declaredAddresses[addr]; !ok {
+				errs = append(
+					errs,
+					fmt.Errorf("reply.%s: references unknown reply address %q", name, addr),
+				)
+			}
+		}
+		if r.Address != nil && r.Channel != nil {
+			errs = append(errs, fmt.Errorf(
+				"reply.%s: address and channel are mutually exclusive (the referenced channel must have no address)",
+				name,
+			))
+		}
+		if len(r.Messages) > 0 && r.Channel == nil {
+			errs = append(errs, fmt.Errorf("reply.%s: messages require a channel", name))
+		}
+		if r.Channel == nil {
+			continue
+		}
+		channel := jsonpointer.Unescape(strings.TrimPrefix(r.Channel.Ref, channelsPrefix))
+		if _, ok := b.doc.Channels[channel]; !ok {
+			errs = append(
+				errs,
+				fmt.Errorf("reply.%s: references unknown channel %q", name, channel),
+			)
+			continue
+		}
+		prefix := channelsPrefix + jsonpointer.Escape(channel) + "/messages/"
+		for _, msg := range r.Messages {
+			if !strings.HasPrefix(msg.Ref, prefix) {
+				errs = append(errs, fmt.Errorf(
+					"reply.%s: message %q is not in channel %q",
+					name,
+					msg.Ref,
+					channel,
+				))
+			}
+		}
+	}
+
 	return errs
 }
 
@@ -297,6 +389,150 @@ func securitySchemeRef(s *securityScheme) *spec.Reference {
 	}
 }
 
+// replyRef is the JSON Reference to a reply declared via Replies(...).
+func replyRef(r *reply) *spec.Reference {
+	return &spec.Reference{Ref: "#/components/replies/" + jsonpointer.Escape(r.name)}
+}
+
+// replyAddressRef is the JSON Reference to a reply address declared via
+// ReplyAddresses(...).
+func replyAddressRef(a *replyAddress) *spec.Reference {
+	return &spec.Reference{Ref: "#/components/replyAddresses/" + jsonpointer.Escape(a.name)}
+}
+
+// channelRef is the JSON Reference to a channel declared via Channels(...).
+func channelRef(ch *channel) *spec.Reference {
+	return &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(ch.address)}
+}
+
+// channelMessageRef is the JSON Reference to a message carried by ch. It
+// mirrors the refs channel.apply builds for an operation's own messages, so the
+// two agree on how an unnamed message is named.
+func channelMessageRef(ch *channel, m *message) *spec.Reference {
+	return &spec.Reference{
+		Ref: "#/channels/" + jsonpointer.Escape(ch.address) + "/messages/" + jsonpointer.Escape(
+			messageName(m),
+		),
+	}
+}
+
+// --- replies -----------------------------------------------------------------
+
+type replyAddressesItem []*replyAddress
+
+// ReplyAddresses adds one or more reusable reply addresses to the document's
+// components.replyAddresses. Reference one from a reply via Reply.Address.
+func ReplyAddresses(a ...*replyAddress) Item { return replyAddressesItem(a) }
+
+func (a replyAddressesItem) apply(b *builder) error {
+	var errs []error
+	for _, ra := range a {
+		if err := ra.apply(b); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+type replyAddress struct {
+	name string
+	a    spec.OperationReplyAddress
+}
+
+// ReplyAddress declares a reusable reply address under the given name: the
+// runtime expression that locates where an operation's reply is sent.
+func ReplyAddress(name string) *replyAddress { return &replyAddress{name: name} }
+
+func (a *replyAddress) Description(d string) *replyAddress { a.a.Description = d; return a }
+func (a *replyAddress) Location(l string) *replyAddress    { a.a.Location = l; return a }
+
+func (a *replyAddress) apply(b *builder) error {
+	var errs []error
+	if a.name == "" {
+		errs = append(errs, fmt.Errorf("replyAddress.name: is required"))
+	}
+	if a.a.Location == "" {
+		errs = append(errs, fmt.Errorf("replyAddress.%s.location: is required", a.name))
+	}
+	c := b.components()
+	if c.ReplyAddresses == nil {
+		c.ReplyAddresses = map[string]*spec.OperationReplyAddress{}
+	}
+	if _, dup := c.ReplyAddresses[a.name]; dup && a.name != "" {
+		errs = append(errs, fmt.Errorf("replyAddress.%s: duplicate name", a.name))
+	} else {
+		c.ReplyAddresses[a.name] = &a.a
+	}
+	return errors.Join(errs...)
+}
+
+type repliesItem []*reply
+
+// Replies adds one or more reusable replies to the document's
+// components.replies. Reference one from an operation via Operation.Reply.
+func Replies(r ...*reply) Item { return repliesItem(r) }
+
+func (r repliesItem) apply(b *builder) error {
+	var errs []error
+	for _, rp := range r {
+		if err := rp.apply(b); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+type reply struct {
+	name string
+	r    spec.OperationReply
+}
+
+// Reply declares a reusable reply under the given name. Reference it from an
+// operation via Operation.Reply.
+func Reply(name string) *reply { return &reply{name: name} }
+
+// Address sets the reply address the reply is sent to. The address must be
+// declared via ReplyAddresses(...).
+func (r *reply) Address(a *replyAddress) *reply {
+	r.r.Address = replyAddressRef(a)
+	return r
+}
+
+// Channel sets the channel the reply is performed in. The channel must be
+// declared via Channels(...).
+func (r *reply) Channel(ch *channel) *reply {
+	r.r.Channel = channelRef(ch)
+	return r
+}
+
+// Message attaches the messages the reply can carry on ch. The channel is a
+// parameter because every reply message ref has to point into that channel's
+// messages, which keeps Message independent of the order Channel is called in.
+// The reply still has to name its channel via Channel(...) to be valid.
+func (r *reply) Message(ch *channel, m ...*message) *reply {
+	for _, msg := range m {
+		r.r.Messages = append(r.r.Messages, channelMessageRef(ch, msg))
+	}
+	return r
+}
+
+func (r *reply) apply(b *builder) error {
+	var errs []error
+	if r.name == "" {
+		errs = append(errs, fmt.Errorf("reply.name: is required"))
+	}
+	c := b.components()
+	if c.Replies == nil {
+		c.Replies = map[string]*spec.OperationReply{}
+	}
+	if _, dup := c.Replies[r.name]; dup && r.name != "" {
+		errs = append(errs, fmt.Errorf("reply.%s: duplicate name", r.name))
+	} else {
+		c.Replies[r.name] = &r.r
+	}
+	return errors.Join(errs...)
+}
+
 // --- channels ----------------------------------------------------------------
 
 type channelsItem []*channel
@@ -385,6 +621,7 @@ func (c *channel) apply(b *builder) error {
 			Description: op.description,
 			Security:    op.security,
 			Bindings:    op.bindings,
+			Reply:       op.replyReference(),
 		}
 		for _, m := range op.messages {
 			sm, err := m.build(b)
@@ -419,6 +656,7 @@ type operation struct {
 	messages    []*message
 	security    []*spec.Reference
 	bindings    spec.OperationBindings
+	reply       *reply
 }
 
 // Operation declares an operation on a channel.
@@ -441,4 +679,20 @@ func (o *operation) Security(schemes ...*securityScheme) *operation {
 		o.security = append(o.security, securitySchemeRef(sc))
 	}
 	return o
+}
+
+// Reply declares the reply this operation produces, which is what makes it a
+// request/reply operation. The reply must be declared via Replies(...).
+func (o *operation) Reply(r *reply) *operation {
+	o.reply = r
+	return o
+}
+
+// replyReference is the JSON Reference to the declared reply, or nil when the
+// operation has none — which keeps the `reply` key out of the emitted document.
+func (o *operation) replyReference() *spec.Reference {
+	if o.reply == nil {
+		return nil
+	}
+	return replyRef(o.reply)
 }

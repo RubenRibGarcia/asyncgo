@@ -9,6 +9,7 @@ use (
 	./test/data/provider
 	./test/data/security
 	./test/data/invalid
+	./test/data/reply
 	./test/integration
 	./tools
 )

@@ -48,16 +48,16 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Channel Object | 🟡 8/10 | 🟡 | no `summary`, `externalDocs`; `parameters`/`tags` are 🟠; `address` cannot be `null` |
 | Messages Object | ✅ | ✅ | key is the message `name`; collisions overwrite silently |
 | Operations Object | ✅ | 🟡 | key is auto-derived `${address}.${action}`; a second `Send`/`Receive` on one channel overwrites |
-| Operation Object | 🟡 11/12 | 🟡 | **no `reply`**; `tags`/`externalDocs`/`traits` are 🟠 |
+| Operation Object | ✅ 12/12 | 🟡 | `tags`/`externalDocs`/`traits` are 🟠 |
 | Operation Trait Object | ❌ | ❌ | only a `[]*Reference` slot exists on Operation |
-| **Operation Reply Object** | ❌ | ❌ | request/reply pattern unsupported |
-| **Operation Reply Address Object** | ❌ | ❌ | " |
+| **Operation Reply Object** | ✅ 3/3 | ✅ | every field is a `$ref`; an inline reply is not expressible |
+| **Operation Reply Address Object** | ✅ 2/2 | ✅ | `address` is a `$ref`; an inline address is not expressible |
 | Message Object | ✅ 13/13 | 🟡 | `tags`, `externalDocs`, `traits` are 🟠; `correlationId` is 🟠 |
 | Message Trait Object | ❌ | ❌ | only a `[]*Reference` slot exists on Message |
 | Message Example Object | ✅ 4/4 | 🟡 | `Example()` sets `name` + `payload` only |
 | Tag Object | ✅ 3/3 | 🟡 | settable only via `Info().Tags(...)` |
 | External Documentation Object | ✅ | ❌ | no direct builder; reachable only nested inside a `Tag` via `Info().Tags(...)` |
-| Components Object | 🟡 **8/19** | 🟡 | `schemas` and `securitySchemes` are written; no builder for the rest ([§2](#2-components-object)) |
+| Components Object | 🟡 **10/19** | 🟡 | `schemas`, `securitySchemes`, `replies` and `replyAddresses` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; internal use only |
 | **Multi Format Schema Object** | ❌ | ❌ | Avro / Protobuf / `schemaFormat` unsupported |
 | Schema Object | 🟡 Draft-07 subset | ✅ | see [§4](#4-schema-derivation) |
@@ -71,11 +71,11 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Operation Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
 | Message Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
 | Correlation ID Object | ✅ 2/2 | ❌ | `Message.CorrelationID` is `*Reference` only — no builder, no inline form |
-| Replies / Reply Addresses (components) | ❌ | ❌ | — |
+| Replies / Reply Addresses (components) | ✅ | ✅ | — |
 
 ## 2. Components Object
 
-3.1.0 defines 19 fields. The library models 8 and populates 2.
+3.1.0 defines 19 fields. The library models 10 and populates 4.
 
 | Field | Modeled | Populated |
 | --- | :--: | :--: |
@@ -88,8 +88,8 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | `correlationIds` | ✅ | ❌ |
 | `securitySchemes` | ✅ | ✅ |
 | `serverVariables` | ❌ | ❌ |
-| `replies` | ❌ | ❌ |
-| `replyAddresses` | ❌ | ❌ |
+| `replies` | ✅ | ✅ |
+| `replyAddresses` | ✅ | ✅ |
 | `externalDocs` | ❌ | ❌ |
 | `tags` | ❌ | ❌ |
 | `operationTraits` | ❌ | ❌ |
@@ -103,8 +103,9 @@ The six modeled-but-unpopulated maps exist only so `Merge()` can union them
 across catalogs (`internal/discovery/merge.go`); nothing in the DSL or the
 generator ever writes them. `components.schemas` is filled by
 `builder.components()` (`doc.go`) and `schema.Finalize` (`schema/registry.go`),
-and `components.securitySchemes` by the `SecuritySchemes(...)` item's `apply`
-(`doc.go`).
+`components.securitySchemes` by the `SecuritySchemes(...)` item's `apply`
+(`doc.go`), and `components.replies` / `components.replyAddresses` by
+`Replies(...)` / `ReplyAddresses(...)` (`doc.go`).
 
 ## 3. Bindings protocols
 
@@ -295,6 +296,16 @@ implementation effort.
 
 #### B2 — Request/reply (Operation Reply)
 
+- **Implemented** — [#13](https://github.com/RubenRibGarcia/asyncgo/issues/13):
+  `spec.OperationReply` + `OperationReplyAddress`, `Components.Replies` /
+  `ReplyAddresses`, `Reply(...)`/`Replies(...)` and
+  `ReplyAddress(...)`/`ReplyAddresses(...)`, `Operation.Reply(...)` plus
+  `reply.Address(...)`/`Channel(...)`/`Message(...)`, a `validateReplyRefs`
+  post-pass, and one `test/data/reply` golden fixture covering a
+  `$message.header#/replyTo` address and a channel + messages reply. Every field
+  is emitted as a `$ref`: the specification types `reply` and `reply.address` as
+  `X | Reference Object`, and the model carries only the reference side, so an
+  inline reply or reply address is not expressible.
 - **Gap** — `Operation.reply` is not modeled. `OperationReply` and
   `OperationReplyAddress` do not exist, nor do `components.replies` /
   `components.replyAddresses`. Request/reply channels cannot be documented.

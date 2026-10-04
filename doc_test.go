@@ -238,6 +238,22 @@ func TestValidationErrors(t *testing.T) {
 				"channel.order-placed: references unknown server \"staging\"",
 		},
 		{
+			name: "should_join_unknown_server_references_across_channels_in_sorted_order",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-shipped").
+							Servers(Server("staging", "kafka", "broker-staging:9092")),
+						Channel("order-placed").
+							Servers(Server("prod", "kafka", "broker:9092")),
+					),
+				)
+			},
+			want: "channel.order-placed: references unknown server \"prod\"\n" +
+				"channel.order-shipped: references unknown server \"staging\"",
+		},
+		{
 			name: "should_allow_channel_to_reference_server_declared_after_it",
 			spec: func() *SpecResult {
 				prod := Server("prod", "kafka", "broker:9092")
@@ -311,6 +327,26 @@ func TestValidationErrors(t *testing.T) {
 			want: `operation.order-placed.send: references unknown security scheme "oauth"`,
 		},
 		{
+			name: "should_join_unknown_security_refs_across_operations_in_sorted_order",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-shipped").
+							Send(Operation().Security(
+								SecurityScheme("shipping", spec.SecurityScheme{Type: "oauth2"}),
+							)),
+						Channel("order-placed").
+							Send(Operation().Security(
+								SecurityScheme("orders", spec.SecurityScheme{Type: "oauth2"}),
+							)),
+					),
+				)
+			},
+			want: `operation.order-placed.send: references unknown security scheme "orders"` + "\n" +
+				`operation.order-shipped.send: references unknown security scheme "shipping"`,
+		},
+		{
 			name: "should_allow_security_scheme_declared_after_it_is_referenced",
 			spec: func() *SpecResult {
 				oauth := SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"})
@@ -318,6 +354,151 @@ func TestValidationErrors(t *testing.T) {
 					Info("Orders", "1.0.0"),
 					Servers(Server("prod", "kafka", "broker:9092").Security(oauth)),
 					SecuritySchemes(oauth),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_return_error_when_reply_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(Info("Orders", "1.0.0"), Replies(Reply("")))
+			},
+			want: "reply.name: is required",
+		},
+		{
+			name: "should_return_error_when_reply_name_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Replies(Reply("OrderReply"), Reply("OrderReply")),
+				)
+			},
+			want: "reply.OrderReply: duplicate name",
+		},
+		{
+			name: "should_return_error_when_reply_address_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					ReplyAddresses(ReplyAddress("").Location("$message.header#/replyTo")),
+				)
+			},
+			want: "replyAddress.name: is required",
+		},
+		{
+			name: "should_return_error_when_reply_address_location_is_empty",
+			spec: func() *SpecResult {
+				return Spec(Info("Orders", "1.0.0"), ReplyAddresses(ReplyAddress("ReplyTo")))
+			},
+			want: "replyAddress.ReplyTo.location: is required",
+		},
+		{
+			name: "should_return_error_when_reply_address_name_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					ReplyAddresses(
+						ReplyAddress("ReplyTo").Location("$message.header#/replyTo"),
+						ReplyAddress("ReplyTo").Location("$message.header#/inbox"),
+					),
+				)
+			},
+			want: "replyAddress.ReplyTo: duplicate name",
+		},
+		{
+			name: "should_return_error_when_operation_references_unknown_reply",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Reply(Reply("OrderReply")).
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
+					),
+				)
+			},
+			want: `operation.order-placed.send: references unknown reply "OrderReply"`,
+		},
+		{
+			name: "should_return_error_when_reply_references_unknown_reply_address",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Replies(Reply("OrderReply").Address(ReplyAddress("ReplyTo"))),
+				)
+			},
+			want: `reply.OrderReply: references unknown reply address "ReplyTo"`,
+		},
+		{
+			name: "should_return_error_when_reply_references_unknown_channel",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Replies(Reply("OrderReply").Channel(Channel("order-replies"))),
+				)
+			},
+			want: `reply.OrderReply: references unknown channel "order-replies"`,
+		},
+		{
+			name: "should_return_error_when_reply_sets_address_and_channel",
+			spec: func() *SpecResult {
+				replyTo := ReplyAddress("ReplyTo").Location("$message.header#/replyTo")
+				orderReplies := Channel("order-replies")
+				return Spec(
+					Info("Orders", "1.0.0"),
+					ReplyAddresses(replyTo),
+					Channels(orderReplies),
+					Replies(Reply("OrderReply").Address(replyTo).Channel(orderReplies)),
+				)
+			},
+			want: "reply.OrderReply: address and channel are mutually exclusive (the referenced channel must have no address)",
+		},
+		{
+			name: "should_return_error_when_reply_messages_have_no_channel",
+			spec: func() *SpecResult {
+				orderReplies := Channel("order-replies")
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(orderReplies),
+					Replies(Reply("OrderReply").Message(
+						orderReplies,
+						MessageOf(OrderPlaced{}).Name("OrderAccepted"),
+					)),
+				)
+			},
+			want: "reply.OrderReply: messages require a channel",
+		},
+		{
+			name: "should_return_error_when_reply_message_is_not_in_referenced_channel",
+			spec: func() *SpecResult {
+				orderPlaced := Channel("order-placed")
+				orderReplies := Channel("order-replies")
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(orderPlaced, orderReplies),
+					Replies(Reply("OrderReply").
+						Channel(orderReplies).
+						Message(orderPlaced, MessageOf(OrderPlaced{}).Name("OrderAccepted"))),
+				)
+			},
+			want: `reply.OrderReply: message "#/channels/order-placed/messages/OrderAccepted" is not in channel "order-replies"`,
+		},
+		{
+			name: "should_allow_reply_declared_after_it_is_referenced",
+			spec: func() *SpecResult {
+				replyTo := ReplyAddress("ReplyTo").Location("$message.header#/replyTo")
+				orderReply := Reply("OrderReply").Address(replyTo)
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Reply(orderReply).
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
+					),
+					Replies(orderReply),
+					ReplyAddresses(replyTo),
 				)
 			},
 			want: "",
@@ -486,4 +667,146 @@ func TestOperationSecurity(t *testing.T) {
 		"#/components/securitySchemes/basic",
 		b.doc.Operations["order-placed.send"].Security[0].Ref,
 	)
+}
+
+func TestReplyAddressFields(t *testing.T) {
+	ra := ReplyAddress("ReplyTo").
+		Description("Consumer inbox").
+		Location("$message.header#/replyTo")
+
+	assert.Equal(t, "ReplyTo", ra.name)
+	assert.Equal(t, "Consumer inbox", ra.a.Description)
+	assert.Equal(t, "$message.header#/replyTo", ra.a.Location)
+}
+
+func TestReplyFields(t *testing.T) {
+	replyTo := ReplyAddress("ReplyTo").Location("$message.header#/replyTo")
+
+	r := Reply("OrderReply").Address(replyTo)
+
+	assert.Equal(t, "OrderReply", r.name)
+	require.NotNil(t, r.r.Address)
+	assert.Equal(t, "#/components/replyAddresses/ReplyTo", r.r.Address.Ref)
+	assert.Nil(t, r.r.Channel)
+	assert.Empty(t, r.r.Messages)
+}
+
+func TestReplyChannelAndMessages(t *testing.T) {
+	orderReplies := Channel("order-replies")
+	accepted := MessageOf(OrderPlaced{}).Name("OrderAccepted")
+	rejected := MessageOf(OrderPlaced{}).Name("OrderRejected")
+
+	r := Reply("OrderReply").
+		Channel(orderReplies).
+		Message(orderReplies, accepted).
+		Message(orderReplies, rejected)
+
+	require.NotNil(t, r.r.Channel)
+	assert.Equal(t, "#/channels/order-replies", r.r.Channel.Ref)
+	require.Len(t, r.r.Messages, 2)
+	assert.Equal(t, "#/channels/order-replies/messages/OrderAccepted", r.r.Messages[0].Ref)
+	assert.Equal(t, "#/channels/order-replies/messages/OrderRejected", r.r.Messages[1].Ref)
+	assert.Nil(t, r.r.Address)
+}
+
+// Message names its channel, so the refs it builds do not depend on Channel
+// having been called first.
+func TestReplyMessageRefsAreOrderIndependent(t *testing.T) {
+	orderReplies := Channel("order-replies")
+	accepted := MessageOf(OrderPlaced{}).Name("OrderAccepted")
+
+	messageFirst := Reply("A").Message(orderReplies, accepted).Channel(orderReplies)
+	channelFirst := Reply("B").Channel(orderReplies).Message(orderReplies, accepted)
+
+	assert.Equal(t, messageFirst.r.Messages, channelFirst.r.Messages)
+	assert.Equal(t, messageFirst.r.Channel, channelFirst.r.Channel)
+}
+
+func TestReplyAddressesRegistersComponents(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		ReplyAddresses(
+			ReplyAddress("ReplyTo").Location("$message.header#/replyTo"),
+			ReplyAddress("Inbox").Location("$message.header#/inbox"),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	assert.Len(t, res.Doc.Components.ReplyAddresses, 2)
+	assert.Equal(
+		t,
+		"$message.header#/replyTo",
+		res.Doc.Components.ReplyAddresses["ReplyTo"].Location,
+	)
+}
+
+func TestRepliesRegistersComponents(t *testing.T) {
+	replyTo := ReplyAddress("ReplyTo").Location("$message.header#/replyTo")
+
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		ReplyAddresses(replyTo),
+		Replies(Reply("OrderReply").Address(replyTo)),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	assert.Len(t, res.Doc.Components.Replies, 1)
+	assert.Equal(
+		t,
+		"#/components/replyAddresses/ReplyTo",
+		res.Doc.Components.Replies["OrderReply"].Address.Ref,
+	)
+}
+
+func TestReplyRefEscapesPointer(t *testing.T) {
+	r := Reply("tenant/reply~prod")
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, Replies(r).apply(b))
+
+	assert.Equal(t, "#/components/replies/tenant~1reply~0prod", replyRef(r).Ref)
+	assert.Contains(t, b.doc.Components.Replies, "tenant/reply~prod")
+}
+
+func TestReplyAddressRefEscapesPointer(t *testing.T) {
+	a := ReplyAddress("tenant/addr~prod").Location("$message.header#/replyTo")
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, ReplyAddresses(a).apply(b))
+
+	assert.Equal(t, "#/components/replyAddresses/tenant~1addr~0prod", replyAddressRef(a).Ref)
+	assert.Contains(t, b.doc.Components.ReplyAddresses, "tenant/addr~prod")
+}
+
+func TestOperationReply(t *testing.T) {
+	replyTo := ReplyAddress("ReplyTo").Location("$message.header#/replyTo")
+	orderReply := Reply("OrderReply").Address(replyTo)
+
+	c := Channel("order-placed").
+		Send(Operation().
+			Reply(orderReply).
+			Message(MessageOf(OrderPlaced{}).Name("OrderPlaced")))
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, c.apply(b))
+
+	require.Contains(t, b.doc.Operations, "order-placed.send")
+	require.NotNil(t, b.doc.Operations["order-placed.send"].Reply)
+	assert.Equal(
+		t,
+		"#/components/replies/OrderReply",
+		b.doc.Operations["order-placed.send"].Reply.Ref,
+	)
+}
+
+func TestOperationWithoutReplyOmitsReply(t *testing.T) {
+	c := Channel("order-placed").
+		Send(Operation().Message(MessageOf(OrderPlaced{}).Name("OrderPlaced")))
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, c.apply(b))
+
+	assert.Nil(t, b.doc.Operations["order-placed.send"].Reply)
 }

@@ -332,6 +332,116 @@ func TestEncodeSecuritySchemeOmitsZeroFields(t *testing.T) {
 	assert.NotContains(t, string(out), "openIdConnectUrl:")
 }
 
+// TestEncodeReply covers the reply refs the model can emit: an operation's
+// reply, a reply's address, and a reply's channel and messages. The reply
+// channel deliberately carries no address, which is the shape the specification
+// requires when a reply names an address.
+func TestEncodeReply(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Channels = map[string]*Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Messages: map[string]*Message{
+				"OrderPlaced": {Name: "OrderPlaced", Payload: &Schema{Type: "object"}},
+			},
+		},
+		"order-replies": {
+			Messages: map[string]*Message{
+				"OrderAccepted": {Name: "OrderAccepted", Payload: &Schema{Type: "object"}},
+			},
+		},
+	}
+	doc.Operations = map[string]*Operation{
+		"order-placed.send": {
+			Action:  ActionSend,
+			Channel: &Reference{Ref: "#/channels/order-placed"},
+			Reply:   &Reference{Ref: "#/components/replies/OrderReply"},
+		},
+	}
+	doc.Components = &Components{
+		Replies: map[string]*OperationReply{
+			"OrderReply": {Address: &Reference{Ref: "#/components/replyAddresses/ReplyTo"}},
+			"OrderAcceptedReply": {
+				Channel:  &Reference{Ref: "#/channels/order-replies"},
+				Messages: []*Reference{{Ref: "#/channels/order-replies/messages/OrderAccepted"}},
+			},
+		},
+		ReplyAddresses: map[string]*OperationReplyAddress{
+			"ReplyTo": {Description: "Consumer inbox", Location: "$message.header#/replyTo"},
+		},
+	}
+
+	yamlOut, err := doc.YAML()
+	require.NoError(t, err)
+
+	for _, want := range []string{
+		"replies:",
+		"replyAddresses:",
+		"#/components/replies/OrderReply",
+		"#/components/replyAddresses/ReplyTo",
+		"#/channels/order-replies/messages/OrderAccepted",
+		"description: Consumer inbox",
+		`location: "$message.header#/replyTo"`,
+	} {
+		assert.Contains(t, string(yamlOut), want)
+	}
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	for _, want := range []string{
+		`"reply":{"$ref":"#/components/replies/OrderReply"}`,
+		`"location":"$message.header#/replyTo"`,
+		`"description":"Consumer inbox"`,
+	} {
+		assert.Contains(t, string(jsonOut), want)
+	}
+
+	t.Run("should_decode_yaml_and_json_to_the_same_document", func(t *testing.T) {
+		var fromYAML, fromJSON AsyncAPI
+		require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
+		require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
+
+		assert.Equal(t, canonicalJSON(t, &fromYAML), canonicalJSON(t, &fromJSON))
+	})
+}
+
+// TestEncodeReplyAddressAlwaysEmitsLocation pins the one required field of an
+// Operation Reply Address: it has to be emitted even when empty, because a
+// dropped key would pass silently where an empty location is a validation error.
+func TestEncodeReplyAddressAlwaysEmitsLocation(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Components = &Components{
+		ReplyAddresses: map[string]*OperationReplyAddress{"ReplyTo": {}},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "location:")
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	assert.Contains(t, string(jsonOut), `"location":""`)
+}
+
+func TestEncodeReplyOmitsZeroFields(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Operations = map[string]*Operation{
+		"order-placed.send": {
+			Action:  ActionSend,
+			Channel: &Reference{Ref: "#/channels/order-placed"},
+		},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "replies:")
+	assert.NotContains(t, string(out), "replyAddresses:")
+	assert.NotContains(t, string(out), "reply:")
+}
+
 // canonicalJSON renders v as JSON so two documents can be compared without
 // depending on which decoder produced their any-valued fields. Map keys are
 // sorted, so this comparison ignores key order inside an any-valued map: a

@@ -144,11 +144,31 @@ type Operation struct {
 	Bindings     OperationBindings `json:"bindings,omitempty"     yaml:"bindings,omitempty"`
 	Traits       []*Reference      `json:"traits,omitempty"       yaml:"traits,omitempty"`
 	Messages     []*Reference      `json:"messages,omitempty"     yaml:"messages,omitempty"`
+	Reply        *Reference        `json:"reply,omitempty"        yaml:"reply,omitempty"`
 }
 
 // Reference is a JSON Reference to a reusable component.
 type Reference struct {
 	Ref string `json:"$ref" yaml:"$ref"`
+}
+
+// OperationReply is an AsyncAPI 3.1.0 Operation Reply Object: the reply half of
+// a request/reply operation. All three fields are references, so the address,
+// the reply channel, and the reply messages are declared as reusable components
+// and pointed at from here.
+type OperationReply struct {
+	Address  *Reference   `json:"address,omitempty"  yaml:"address,omitempty"`
+	Channel  *Reference   `json:"channel,omitempty"  yaml:"channel,omitempty"`
+	Messages []*Reference `json:"messages,omitempty" yaml:"messages,omitempty"`
+}
+
+// OperationReplyAddress is an AsyncAPI 3.1.0 Operation Reply Address Object: a
+// runtime expression locating where a reply is sent. Location is REQUIRED by the
+// specification, so it carries no omitempty: an empty location has to fail
+// validation rather than silently drop the key.
+type OperationReplyAddress struct {
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Location    string `json:"location"              yaml:"location"`
 }
 
 // Message describes a message exchanged on a channel.
@@ -191,12 +211,14 @@ type CorrelationID struct {
 
 // Components holds reusable objects for the API.
 type Components struct {
-	Schemas         map[string]*Schema         `json:"schemas,omitempty"         yaml:"schemas,omitempty"`
-	Servers         map[string]*Server         `json:"servers,omitempty"         yaml:"servers,omitempty"`
-	Channels        map[string]*Channel        `json:"channels,omitempty"        yaml:"channels,omitempty"`
-	Operations      map[string]*Operation      `json:"operations,omitempty"      yaml:"operations,omitempty"`
-	Messages        map[string]*Message        `json:"messages,omitempty"        yaml:"messages,omitempty"`
-	SecuritySchemes map[string]*SecurityScheme `json:"securitySchemes,omitempty" yaml:"securitySchemes,omitempty"`
-	Parameters      map[string]*Parameter      `json:"parameters,omitempty"      yaml:"parameters,omitempty"`
-	CorrelationIDs  map[string]*CorrelationID  `json:"correlationIds,omitempty"  yaml:"correlationIds,omitempty"`
+	Schemas         map[string]*Schema                `json:"schemas,omitempty"         yaml:"schemas,omitempty"`
+	Servers         map[string]*Server                `json:"servers,omitempty"         yaml:"servers,omitempty"`
+	Channels        map[string]*Channel               `json:"channels,omitempty"        yaml:"channels,omitempty"`
+	Operations      map[string]*Operation             `json:"operations,omitempty"      yaml:"operations,omitempty"`
+	Messages        map[string]*Message               `json:"messages,omitempty"        yaml:"messages,omitempty"`
+	SecuritySchemes map[string]*SecurityScheme        `json:"securitySchemes,omitempty" yaml:"securitySchemes,omitempty"`
+	Parameters      map[string]*Parameter             `json:"parameters,omitempty"      yaml:"parameters,omitempty"`
+	CorrelationIDs  map[string]*CorrelationID         `json:"correlationIds,omitempty"  yaml:"correlationIds,omitempty"`
+	Replies         map[string]*OperationReply        `json:"replies,omitempty"         yaml:"replies,omitempty"`
+	ReplyAddresses  map[string]*OperationReplyAddress `json:"replyAddresses,omitempty"  yaml:"replyAddresses,omitempty"`
 }
