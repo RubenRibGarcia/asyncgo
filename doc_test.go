@@ -249,6 +249,79 @@ func TestValidationErrors(t *testing.T) {
 			},
 			want: "",
 		},
+		{
+			name: "should_return_error_when_security_scheme_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					SecuritySchemes(SecurityScheme("", spec.SecurityScheme{Type: "userPassword"})),
+				)
+			},
+			want: "securityScheme.name: is required",
+		},
+		{
+			name: "should_return_error_when_security_scheme_type_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					SecuritySchemes(SecurityScheme("oauth", spec.SecurityScheme{})),
+				)
+			},
+			want: "securityScheme.oauth.type: is required",
+		},
+		{
+			name: "should_return_error_when_security_scheme_name_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					SecuritySchemes(
+						SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"}),
+						SecurityScheme("oauth", spec.SecurityScheme{Type: "http"}),
+					),
+				)
+			},
+			want: "securityScheme.oauth: duplicate name",
+		},
+		{
+			name: "should_return_error_when_server_references_unknown_security_scheme",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Servers(
+						Server("prod", "kafka", "broker:9092").
+							Security(SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"})),
+					),
+				)
+			},
+			want: `server.prod: references unknown security scheme "oauth"`,
+		},
+		{
+			name: "should_return_error_when_operation_references_unknown_security_scheme",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Security(SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"})),
+							),
+					),
+				)
+			},
+			want: `operation.order-placed.send: references unknown security scheme "oauth"`,
+		},
+		{
+			name: "should_allow_security_scheme_declared_after_it_is_referenced",
+			spec: func() *SpecResult {
+				oauth := SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"})
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Servers(Server("prod", "kafka", "broker:9092").Security(oauth)),
+					SecuritySchemes(oauth),
+				)
+			},
+			want: "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -292,4 +365,125 @@ func TestDuplicateKeepsFirstEntry(t *testing.T) {
 		require.Contains(t, res.Doc.Channels, "order-placed")
 		assert.Equal(t, "First", res.Doc.Channels["order-placed"].Title)
 	})
+
+	t.Run("should_keep_first_security_scheme_on_duplicate_name", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			SecuritySchemes(
+				SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"}),
+				SecurityScheme("oauth", spec.SecurityScheme{Type: "http"}),
+			),
+		)
+		require.Error(t, res.Err)
+		require.NotNil(t, res.Doc.Components)
+		require.Contains(t, res.Doc.Components.SecuritySchemes, "oauth")
+		assert.Equal(t, "oauth2", res.Doc.Components.SecuritySchemes["oauth"].Type)
+	})
+}
+
+func TestSecuritySchemeFields(t *testing.T) {
+	sc := SecurityScheme("oauth", spec.SecurityScheme{
+		Type:             "oauth2",
+		Description:      "OAuth 2.0",
+		Name:             "Authorization",
+		In:               "header",
+		Scheme:           "bearer",
+		BearerFormat:     "JWT",
+		OpenIDConnectURL: "https://example.com/.well-known/openid-configuration",
+		Scopes:           []string{"read:orders"},
+		Flows: &spec.OAuthFlows{
+			ClientCredentials: &spec.OAuthFlow{
+				TokenURL:        "https://example.com/oauth/token",
+				AvailableScopes: map[string]string{"read:orders": "read orders"},
+			},
+		},
+	})
+
+	assert.Equal(t, "oauth", sc.name)
+	assert.Equal(t, "oauth2", sc.s.Type)
+	assert.Equal(t, "header", sc.s.In)
+	assert.Equal(t, "bearer", sc.s.Scheme)
+	assert.Equal(t, "JWT", sc.s.BearerFormat)
+	assert.Equal(t, []string{"read:orders"}, sc.s.Scopes)
+	require.NotNil(t, sc.s.Flows)
+	require.NotNil(t, sc.s.Flows.ClientCredentials)
+	assert.Equal(t, "https://example.com/oauth/token", sc.s.Flows.ClientCredentials.TokenURL)
+	assert.Equal(t, "read orders", sc.s.Flows.ClientCredentials.AvailableScopes["read:orders"])
+}
+
+func TestSecuritySchemesRegistersComponents(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		SecuritySchemes(
+			SecurityScheme("userPasswordAuth", spec.SecurityScheme{Type: "userPassword"}),
+			SecurityScheme("apiKeyAuth", spec.SecurityScheme{Type: "apiKey", In: "user"}),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	assert.Len(t, res.Doc.Components.SecuritySchemes, 2)
+	assert.Equal(t, "userPassword", res.Doc.Components.SecuritySchemes["userPasswordAuth"].Type)
+	assert.Equal(t, "user", res.Doc.Components.SecuritySchemes["apiKeyAuth"].In)
+}
+
+func TestServerSecurity(t *testing.T) {
+	oauth := SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"})
+
+	s := Server("prod", "kafka", "broker:9092").Security(oauth)
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, Servers(s).apply(b))
+
+	require.Len(t, b.doc.Servers["prod"].Security, 1)
+	assert.Equal(t, "#/components/securitySchemes/oauth", b.doc.Servers["prod"].Security[0].Ref)
+}
+
+func TestServerSecurityAppendsAcrossCalls(t *testing.T) {
+	oauth := SecurityScheme("oauth", spec.SecurityScheme{Type: "oauth2"})
+	basic := SecurityScheme("basic", spec.SecurityScheme{Type: "http", Scheme: "basic"})
+
+	s := Server("prod", "kafka", "broker:9092").Security(oauth).Security(basic)
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, Servers(s).apply(b))
+
+	require.Len(t, b.doc.Servers["prod"].Security, 2)
+	assert.Equal(t, "#/components/securitySchemes/oauth", b.doc.Servers["prod"].Security[0].Ref)
+	assert.Equal(t, "#/components/securitySchemes/basic", b.doc.Servers["prod"].Security[1].Ref)
+}
+
+func TestSecuritySchemeRefEscapesPointer(t *testing.T) {
+	sc := SecurityScheme("tenant/oauth~prod", spec.SecurityScheme{Type: "oauth2"})
+
+	s := Server("prod", "kafka", "broker:9092").Security(sc)
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, Servers(s).apply(b))
+
+	assert.Equal(
+		t,
+		"#/components/securitySchemes/tenant~1oauth~0prod",
+		b.doc.Servers["prod"].Security[0].Ref,
+	)
+}
+
+func TestOperationSecurity(t *testing.T) {
+	basic := SecurityScheme("basic", spec.SecurityScheme{Type: "http", Scheme: "basic"})
+
+	c := Channel("order-placed").
+		Send(Operation().
+			Security(basic).
+			Message(MessageOf(OrderPlaced{}).Name("OrderPlaced")))
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, c.apply(b))
+
+	require.Contains(t, b.doc.Operations, "order-placed.send")
+	require.Len(t, b.doc.Operations["order-placed.send"].Security, 1)
+	assert.Equal(
+		t,
+		"#/components/securitySchemes/basic",
+		b.doc.Operations["order-placed.send"].Security[0].Ref,
+	)
 }

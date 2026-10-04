@@ -74,7 +74,7 @@ type Server struct {
 	ProtocolVersion string                     `json:"protocolVersion,omitempty" yaml:"protocolVersion,omitempty"`
 	Description     string                     `json:"description,omitempty"     yaml:"description,omitempty"`
 	Variables       map[string]*ServerVariable `json:"variables,omitempty"       yaml:"variables,omitempty"`
-	Security        []SecurityRequirement      `json:"security,omitempty"        yaml:"security,omitempty"`
+	Security        []*Reference               `json:"security,omitempty"        yaml:"security,omitempty"`
 	Tags            []Tag                      `json:"tags,omitempty"            yaml:"tags,omitempty"`
 	Bindings        ServerBindings             `json:"bindings,omitempty"        yaml:"bindings,omitempty"`
 }
@@ -87,8 +87,37 @@ type ServerVariable struct {
 	Examples    []string `json:"examples,omitempty"    yaml:"examples,omitempty"`
 }
 
-// SecurityRequirement maps a security scheme to the scopes it requires.
-type SecurityRequirement map[string][]string
+// SecurityScheme is an AsyncAPI 3.1.0 Security Scheme Object: it declares how
+// a client authenticates against a server or an operation.
+type SecurityScheme struct {
+	Type             string      `json:"type"                       yaml:"type"`
+	Description      string      `json:"description,omitempty"      yaml:"description,omitempty"`
+	Name             string      `json:"name,omitempty"             yaml:"name,omitempty"`
+	In               string      `json:"in,omitempty"               yaml:"in,omitempty"`
+	Scheme           string      `json:"scheme,omitempty"           yaml:"scheme,omitempty"`
+	BearerFormat     string      `json:"bearerFormat,omitempty"     yaml:"bearerFormat,omitempty"`
+	Flows            *OAuthFlows `json:"flows,omitempty"            yaml:"flows,omitempty"`
+	OpenIDConnectURL string      `json:"openIdConnectUrl,omitempty" yaml:"openIdConnectUrl,omitempty"`
+	Scopes           []string    `json:"scopes,omitempty"           yaml:"scopes,omitempty"`
+}
+
+// OAuthFlows configures the OAuth flows a SecurityScheme supports.
+type OAuthFlows struct {
+	Implicit          *OAuthFlow `json:"implicit,omitempty"          yaml:"implicit,omitempty"`
+	Password          *OAuthFlow `json:"password,omitempty"          yaml:"password,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty" yaml:"clientCredentials,omitempty"`
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty" yaml:"authorizationCode,omitempty"`
+}
+
+// OAuthFlow is the configuration for a single OAuth flow. The specification
+// marks AvailableScopes required for oauth2, but it stays omitempty here: a nil
+// map without omitempty marshals to null, which is worse than omitting the key.
+type OAuthFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl,omitempty" yaml:"authorizationUrl,omitempty"`
+	TokenURL         string            `json:"tokenUrl,omitempty"         yaml:"tokenUrl,omitempty"`
+	RefreshURL       string            `json:"refreshUrl,omitempty"       yaml:"refreshUrl,omitempty"`
+	AvailableScopes  map[string]string `json:"availableScopes,omitempty"  yaml:"availableScopes,omitempty"`
+}
 
 // Channel describes a channel/topic/queue on which messages flow.
 type Channel struct {
@@ -104,17 +133,17 @@ type Channel struct {
 
 // Operation describes an application-defined operation on a channel.
 type Operation struct {
-	Action       string                `json:"action"                 yaml:"action"` // "send" | "receive"
-	Channel      *Reference            `json:"channel"                yaml:"channel"`
-	Title        string                `json:"title,omitempty"        yaml:"title,omitempty"`
-	Summary      string                `json:"summary,omitempty"      yaml:"summary,omitempty"`
-	Description  string                `json:"description,omitempty"  yaml:"description,omitempty"`
-	Security     []SecurityRequirement `json:"security,omitempty"     yaml:"security,omitempty"`
-	Tags         []Tag                 `json:"tags,omitempty"         yaml:"tags,omitempty"`
-	ExternalDocs *ExternalDocs         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Bindings     OperationBindings     `json:"bindings,omitempty"     yaml:"bindings,omitempty"`
-	Traits       []*Reference          `json:"traits,omitempty"       yaml:"traits,omitempty"`
-	Messages     []*Reference          `json:"messages,omitempty"     yaml:"messages,omitempty"`
+	Action       string            `json:"action"                 yaml:"action"` // "send" | "receive"
+	Channel      *Reference        `json:"channel"                yaml:"channel"`
+	Title        string            `json:"title,omitempty"        yaml:"title,omitempty"`
+	Summary      string            `json:"summary,omitempty"      yaml:"summary,omitempty"`
+	Description  string            `json:"description,omitempty"  yaml:"description,omitempty"`
+	Security     []*Reference      `json:"security,omitempty"     yaml:"security,omitempty"`
+	Tags         []Tag             `json:"tags,omitempty"         yaml:"tags,omitempty"`
+	ExternalDocs *ExternalDocs     `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings     OperationBindings `json:"bindings,omitempty"     yaml:"bindings,omitempty"`
+	Traits       []*Reference      `json:"traits,omitempty"       yaml:"traits,omitempty"`
+	Messages     []*Reference      `json:"messages,omitempty"     yaml:"messages,omitempty"`
 }
 
 // Reference is a JSON Reference to a reusable component.
@@ -162,11 +191,12 @@ type CorrelationID struct {
 
 // Components holds reusable objects for the API.
 type Components struct {
-	Schemas        map[string]*Schema        `json:"schemas,omitempty"        yaml:"schemas,omitempty"`
-	Servers        map[string]*Server        `json:"servers,omitempty"        yaml:"servers,omitempty"`
-	Channels       map[string]*Channel       `json:"channels,omitempty"       yaml:"channels,omitempty"`
-	Operations     map[string]*Operation     `json:"operations,omitempty"     yaml:"operations,omitempty"`
-	Messages       map[string]*Message       `json:"messages,omitempty"       yaml:"messages,omitempty"`
-	Parameters     map[string]*Parameter     `json:"parameters,omitempty"     yaml:"parameters,omitempty"`
-	CorrelationIDs map[string]*CorrelationID `json:"correlationIds,omitempty" yaml:"correlationIds,omitempty"`
+	Schemas         map[string]*Schema         `json:"schemas,omitempty"         yaml:"schemas,omitempty"`
+	Servers         map[string]*Server         `json:"servers,omitempty"         yaml:"servers,omitempty"`
+	Channels        map[string]*Channel        `json:"channels,omitempty"        yaml:"channels,omitempty"`
+	Operations      map[string]*Operation      `json:"operations,omitempty"      yaml:"operations,omitempty"`
+	Messages        map[string]*Message        `json:"messages,omitempty"        yaml:"messages,omitempty"`
+	SecuritySchemes map[string]*SecurityScheme `json:"securitySchemes,omitempty" yaml:"securitySchemes,omitempty"`
+	Parameters      map[string]*Parameter      `json:"parameters,omitempty"      yaml:"parameters,omitempty"`
+	CorrelationIDs  map[string]*CorrelationID  `json:"correlationIds,omitempty"  yaml:"correlationIds,omitempty"`
 }

@@ -38,6 +38,7 @@ func mergeComponents(out, d *spec.AsyncAPI) {
 	c.Channels = mergeMap(c.Channels, d.Components.Channels)
 	c.Operations = mergeMap(c.Operations, d.Components.Operations)
 	c.Messages = mergeMap(c.Messages, d.Components.Messages)
+	c.SecuritySchemes = mergeMap(c.SecuritySchemes, d.Components.SecuritySchemes)
 	c.Parameters = mergeMap(c.Parameters, d.Components.Parameters)
 	c.CorrelationIDs = mergeMap(c.CorrelationIDs, d.Components.CorrelationIDs)
 }

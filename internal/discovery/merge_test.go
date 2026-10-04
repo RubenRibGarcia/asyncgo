@@ -30,3 +30,28 @@ func TestMergeNilComponents(t *testing.T) {
 	assert.Equal(t, "T", out.Info.Title)
 	assert.Nil(t, out.Components)
 }
+
+func TestMergeSecuritySchemes(t *testing.T) {
+	first := spec.New()
+	first.Info = spec.Info{Title: "T", Version: "1.0.0"}
+	first.Components = &spec.Components{
+		SecuritySchemes: map[string]*spec.SecurityScheme{
+			"oauth": {Type: "oauth2"},
+		},
+	}
+
+	second := spec.New()
+	second.Info = spec.Info{Title: "U", Version: "1.0.0"}
+	second.Components = &spec.Components{
+		SecuritySchemes: map[string]*spec.SecurityScheme{
+			"basic": {Type: "http", Scheme: "basic"},
+			"oauth": {Type: "http", Scheme: "basic"},
+		},
+	}
+
+	out := Merge(first, second)
+	require.NotNil(t, out.Components)
+	assert.Len(t, out.Components.SecuritySchemes, 2)
+	assert.Equal(t, "oauth2", out.Components.SecuritySchemes["oauth"].Type, "first occurrence wins")
+	assert.Equal(t, "basic", out.Components.SecuritySchemes["basic"].Scheme)
+}
