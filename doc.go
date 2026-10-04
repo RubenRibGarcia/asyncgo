@@ -51,6 +51,7 @@ func Spec(items ...Item) *SpecResult {
 		}
 	}
 	errs = append(errs, b.validateServerRefs()...)
+	errs = append(errs, b.validateSecurityRefs()...)
 	if len(b.defs) > 0 {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
@@ -81,6 +82,44 @@ func (b *builder) validateServerRefs() []error {
 				errs = append(
 					errs,
 					fmt.Errorf("channel.%s: references unknown server %q", addr, name),
+				)
+			}
+		}
+	}
+	return errs
+}
+
+// validateSecurityRefs checks that every security reference on a server or an
+// operation points at a scheme declared via SecuritySchemes(...). It is a
+// post-pass for the same reason as validateServerRefs: declaration order is
+// arbitrary.
+func (b *builder) validateSecurityRefs() []error {
+	const prefix = "#/components/securitySchemes/"
+
+	var declared map[string]*spec.SecurityScheme
+	if b.doc.Components != nil {
+		declared = b.doc.Components.SecuritySchemes
+	}
+
+	var errs []error
+	for name, srv := range b.doc.Servers {
+		for _, ref := range srv.Security {
+			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
+			if _, ok := declared[scheme]; !ok {
+				errs = append(
+					errs,
+					fmt.Errorf("server.%s: references unknown security scheme %q", name, scheme),
+				)
+			}
+		}
+	}
+	for key, op := range b.doc.Operations {
+		for _, ref := range op.Security {
+			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
+			if _, ok := declared[scheme]; !ok {
+				errs = append(
+					errs,
+					fmt.Errorf("operation.%s: references unknown security scheme %q", key, scheme),
 				)
 			}
 		}
@@ -173,6 +212,15 @@ func (s *server) Variable(name string, v spec.ServerVariable) *server {
 	return s
 }
 
+// Security declares the security schemes a client can use with this server.
+// Every scheme must be declared via SecuritySchemes(...).
+func (s *server) Security(schemes ...*securityScheme) *server {
+	for _, sc := range schemes {
+		s.s.Security = append(s.s.Security, securitySchemeRef(sc))
+	}
+	return s
+}
+
 func (s *server) apply(b *builder) error {
 	var errs []error
 	if s.name == "" {
@@ -190,6 +238,63 @@ func (s *server) apply(b *builder) error {
 		b.doc.Servers[s.name] = &s.s
 	}
 	return errors.Join(errs...)
+}
+
+// --- security schemes --------------------------------------------------------
+
+type securitySchemesItem []*securityScheme
+
+// SecuritySchemes adds one or more security schemes to the document's
+// components.securitySchemes.
+func SecuritySchemes(s ...*securityScheme) Item { return securitySchemesItem(s) }
+
+func (s securitySchemesItem) apply(b *builder) error {
+	var errs []error
+	for _, sc := range s {
+		if err := sc.apply(b); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+type securityScheme struct {
+	name string
+	s    spec.SecurityScheme
+}
+
+// SecurityScheme declares a reusable security scheme under the given name.
+// Reference it from a server or an operation via their Security methods.
+func SecurityScheme(name string, s spec.SecurityScheme) *securityScheme {
+	return &securityScheme{name: name, s: s}
+}
+
+func (s *securityScheme) apply(b *builder) error {
+	var errs []error
+	if s.name == "" {
+		errs = append(errs, fmt.Errorf("securityScheme.name: is required"))
+	}
+	if s.s.Type == "" {
+		errs = append(errs, fmt.Errorf("securityScheme.%s.type: is required", s.name))
+	}
+	c := b.components()
+	if c.SecuritySchemes == nil {
+		c.SecuritySchemes = map[string]*spec.SecurityScheme{}
+	}
+	if _, dup := c.SecuritySchemes[s.name]; dup && s.name != "" {
+		errs = append(errs, fmt.Errorf("securityScheme.%s: duplicate name", s.name))
+	} else {
+		c.SecuritySchemes[s.name] = &s.s
+	}
+	return errors.Join(errs...)
+}
+
+// securitySchemeRef is the JSON Reference to a scheme declared via
+// SecurityScheme(...).
+func securitySchemeRef(s *securityScheme) *spec.Reference {
+	return &spec.Reference{
+		Ref: "#/components/securitySchemes/" + jsonpointer.Escape(s.name),
+	}
 }
 
 // --- channels ----------------------------------------------------------------
@@ -278,6 +383,7 @@ func (c *channel) apply(b *builder) error {
 			Title:       op.title,
 			Summary:     op.summary,
 			Description: op.description,
+			Security:    op.security,
 			Bindings:    op.bindings,
 		}
 		for _, m := range op.messages {
@@ -311,6 +417,7 @@ type operation struct {
 	summary     string
 	description string
 	messages    []*message
+	security    []*spec.Reference
 	bindings    spec.OperationBindings
 }
 
@@ -324,5 +431,14 @@ func (o *operation) Description(d string) *operation { o.description = d; return
 // Message attaches one or more messages to the operation.
 func (o *operation) Message(m ...*message) *operation {
 	o.messages = append(o.messages, m...)
+	return o
+}
+
+// Security declares the security schemes a client must satisfy to use this
+// operation. Every scheme must be declared via SecuritySchemes(...).
+func (o *operation) Security(schemes ...*securityScheme) *operation {
+	for _, sc := range schemes {
+		o.security = append(o.security, securitySchemeRef(sc))
+	}
 	return o
 }
