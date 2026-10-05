@@ -35,7 +35,16 @@ const (
 
 // fixtures are the discovery fixtures under test/data, each carrying a
 // committed asyncapi.yaml.
-var fixtures = []string{"simple", "allof", "oneof", "anyof", "provider", "security", "reply"}
+var fixtures = []string{
+	"simple",
+	"allof",
+	"oneof",
+	"anyof",
+	"provider",
+	"security",
+	"reply",
+	"traits",
+}
 
 // TestAsyncGoGenerate regenerates each test fixture's document, asserts it
 // matches the committed asyncapi.yaml, asserts the JSON encoding denotes the

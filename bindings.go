@@ -127,3 +127,67 @@ func (m *message) MQTT(b spec.MQTTMessageBinding) *message {
 
 // Binding attaches a protocol-specific message binding under the given protocol key.
 func (m *message) Binding(proto string, v any) *message { return m.setBinding(proto, v) }
+
+// --- operation trait bindings --------------------------------------------------
+
+func (t *operationTrait) setBinding(proto string, v any) *operationTrait {
+	if t.t.Bindings == nil {
+		t.t.Bindings = spec.OperationBindings{}
+	}
+	t.t.Bindings[proto] = v
+	return t
+}
+
+func (t *operationTrait) Kafka(b spec.KafkaOperationBinding) *operationTrait {
+	return t.setBinding(spec.ProtocolKafka, &b)
+}
+
+func (t *operationTrait) AMQP(b spec.AMQPOperationBinding) *operationTrait {
+	return t.setBinding(spec.ProtocolAMQP, &b)
+}
+
+func (t *operationTrait) NATS(b spec.NATSOperationBinding) *operationTrait {
+	return t.setBinding(spec.ProtocolNATS, &b)
+}
+
+func (t *operationTrait) MQTT(b spec.MQTTOperationBinding) *operationTrait {
+	return t.setBinding(spec.ProtocolMQTT, &b)
+}
+
+// Binding attaches a protocol-specific operation trait binding under the given
+// protocol key.
+func (t *operationTrait) Binding(proto string, v any) *operationTrait {
+	return t.setBinding(proto, v)
+}
+
+// --- message trait bindings ----------------------------------------------------
+
+func (t *messageTrait) setBinding(proto string, v any) *messageTrait {
+	if t.t.Bindings == nil {
+		t.t.Bindings = spec.MessageBindings{}
+	}
+	t.t.Bindings[proto] = v
+	return t
+}
+
+func (t *messageTrait) Kafka(b spec.KafkaMessageBinding) *messageTrait {
+	return t.setBinding(spec.ProtocolKafka, &b)
+}
+
+func (t *messageTrait) AMQP(b spec.AMQPMessageBinding) *messageTrait {
+	return t.setBinding(spec.ProtocolAMQP, &b)
+}
+
+func (t *messageTrait) NATS(b spec.NATSMessageBinding) *messageTrait {
+	return t.setBinding(spec.ProtocolNATS, &b)
+}
+
+func (t *messageTrait) MQTT(b spec.MQTTMessageBinding) *messageTrait {
+	return t.setBinding(spec.ProtocolMQTT, &b)
+}
+
+// Binding attaches a protocol-specific message trait binding under the given
+// protocol key.
+func (t *messageTrait) Binding(proto string, v any) *messageTrait {
+	return t.setBinding(proto, v)
+}

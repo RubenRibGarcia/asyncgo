@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -42,22 +42,22 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Contact Object | ✅ 3/3 | ✅ | — |
 | License Object | ✅ +`identifier` | ✅ | `identifier` is not a 3.1.0 field ([§7](#7-spec-deviations)) |
 | Servers Object | ✅ | ✅ | — |
-| Server Object | 🟡 8/12 | 🟡 | no `pathname`, `title`, `summary`, `externalDocs`; `tags` is 🟠 |
+| Server Object | 🟡 9/12 | 🟡 | no `pathname`, `title`, `summary` |
 | Server Variable Object | ✅ 4/4 | ✅ | — |
 | Channels Object | ✅ | ✅ | — |
-| Channel Object | 🟡 8/10 | 🟡 | no `summary`, `externalDocs`; `parameters`/`tags` are 🟠; `address` cannot be `null` |
+| Channel Object | 🟡 9/10 | 🟡 | no `summary`; `parameters` is 🟠; `address` cannot be `null` |
 | Messages Object | ✅ | ✅ | key is the message `name`; collisions overwrite silently |
 | Operations Object | ✅ | 🟡 | key is auto-derived `${address}.${action}`; a second `Send`/`Receive` on one channel overwrites |
-| Operation Object | ✅ 12/12 | 🟡 | `tags`/`externalDocs`/`traits` are 🟠 |
-| Operation Trait Object | ❌ | ❌ | only a `[]*Reference` slot exists on Operation |
+| Operation Object | ✅ 12/12 | ✅ | — |
+| Operation Trait Object | ✅ 7/7 | ✅ | — |
 | **Operation Reply Object** | ✅ 3/3 | ✅ | every field is a `$ref`; an inline reply is not expressible |
 | **Operation Reply Address Object** | ✅ 2/2 | ✅ | `address` is a `$ref`; an inline address is not expressible |
-| Message Object | ✅ 13/13 | 🟡 | `tags`, `externalDocs`, `traits` are 🟠; `correlationId` is 🟠 |
-| Message Trait Object | ❌ | ❌ | only a `[]*Reference` slot exists on Message |
+| Message Object | ✅ 13/13 | 🟡 | `correlationId` is 🟠 |
+| Message Trait Object | ✅ 11/11 | ✅ | `correlationId` is a `$ref`; an inline trait is not expressible |
 | Message Example Object | ✅ 4/4 | 🟡 | `Example()` sets `name` + `payload` only |
-| Tag Object | ✅ 3/3 | 🟡 | settable only via `Info().Tags(...)` |
-| External Documentation Object | ✅ | ❌ | no direct builder; reachable only nested inside a `Tag` via `Info().Tags(...)` |
-| Components Object | 🟡 **10/19** | 🟡 | `schemas`, `securitySchemes`, `replies` and `replyAddresses` are written; no builder for the rest ([§2](#2-components-object)) |
+| Tag Object | ✅ 3/3 | ✅ | — |
+| External Documentation Object | ✅ | ✅ | — |
+| Components Object | 🟡 **12/19** | 🟡 | `schemas`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; internal use only |
 | **Multi Format Schema Object** | ❌ | ❌ | Avro / Protobuf / `schemaFormat` unsupported |
 | Schema Object | 🟡 Draft-07 subset | ✅ | see [§4](#4-schema-derivation) |
@@ -70,12 +70,12 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Channel Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
 | Operation Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
 | Message Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
-| Correlation ID Object | ✅ 2/2 | ❌ | `Message.CorrelationID` is `*Reference` only — no builder, no inline form |
+| Correlation ID Object | ✅ 2/2 | 🟡 | declaration + `$ref` via message traits; `Message.CorrelationID` has no builder and no inline form |
 | Replies / Reply Addresses (components) | ✅ | ✅ | — |
 
 ## 2. Components Object
 
-3.1.0 defines 19 fields. The library models 10 and populates 4.
+3.1.0 defines 19 fields. The library models 12 and populates 7.
 
 | Field | Modeled | Populated |
 | --- | :--: | :--: |
@@ -85,27 +85,30 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | `operations` | ✅ | ❌ |
 | `messages` | ✅ | ❌ |
 | `parameters` | ✅ | ❌ |
-| `correlationIds` | ✅ | ❌ |
+| `correlationIds` | ✅ | ✅ |
 | `securitySchemes` | ✅ | ✅ |
 | `serverVariables` | ❌ | ❌ |
 | `replies` | ✅ | ✅ |
 | `replyAddresses` | ✅ | ✅ |
 | `externalDocs` | ❌ | ❌ |
 | `tags` | ❌ | ❌ |
-| `operationTraits` | ❌ | ❌ |
-| `messageTraits` | ❌ | ❌ |
+| `operationTraits` | ✅ | ✅ |
+| `messageTraits` | ✅ | ✅ |
 | `serverBindings` | ❌ | ❌ |
 | `channelBindings` | ❌ | ❌ |
 | `operationBindings` | ❌ | ❌ |
 | `messageBindings` | ❌ | ❌ |
 
-The six modeled-but-unpopulated maps exist only so `Merge()` can union them
+The five modeled-but-unpopulated maps exist only so `Merge()` can union them
 across catalogs (`internal/discovery/merge.go`); nothing in the DSL or the
 generator ever writes them. `components.schemas` is filled by
 `builder.components()` (`doc.go`) and `schema.Finalize` (`schema/registry.go`),
 `components.securitySchemes` by the `SecuritySchemes(...)` item's `apply`
-(`doc.go`), and `components.replies` / `components.replyAddresses` by
-`Replies(...)` / `ReplyAddresses(...)` (`doc.go`).
+(`doc.go`), `components.replies` / `components.replyAddresses` by
+`Replies(...)` / `ReplyAddresses(...)` (`doc.go`), and
+`components.correlationIds` / `components.operationTraits` /
+`components.messageTraits` by `CorrelationIDs(...)` / `OperationTraits(...)` /
+`MessageTraits(...)` (`doc.go`).
 
 ## 3. Bindings protocols
 
@@ -113,7 +116,7 @@ generator ever writes them. `components.schemas` is filled by
 
 | Protocol | Server | Channel | Operation | Message | Notes |
 | --- | :--: | :--: | :--: | :--: | --- |
-| `kafka` | ✅ | ✅ | ✅ | 🟡 | message binding missing `schemaIdPayloadEncoding`, `schemaLookupStrategy` |
+| `kafka` | ✅ | ✅ | ✅ | 🟡 | message binding missing `schemaIdPayloadEncoding`, `schemaLookupStrategy`; `groupId`/`clientId`/`key` are Union types |
 | `amqp` (0-9-1) | ✅ | ✅ | ✅ | ✅ | — |
 | `nats` | ✅ | ✅ | ✅ | ✅ | — |
 | `mqtt` | ✅ | ✅ | ✅ | ✅ | — |
@@ -144,6 +147,13 @@ documented.
 > zero values are silently dropped: `MQTTOperationBinding{QoS: 0}` (a valid QoS),
 > `AMQPOperationBinding{Mandatory: false}`, `KafkaChannelBinding{Partitions: 0}`,
 > and every `bool` flag set to `false`. See [B8](#b8--binding-zero-values-are-dropped).
+>
+> **Kafka Union fields.** `KafkaOperationBinding.GroupID`/`ClientID` are
+> Schema Object | Reference Object | boolean, and `KafkaMessageBinding.Key` is
+> Schema Object | Reference Object. They are modeled as `any` (the same
+> reference-side convention as `Message.CorrelationID`), so a boolean or a
+> schema value is expressible. The earlier `string` shape was AsyncAPI 2.x and
+> emitted documents the 3.1.0 schema rejects; #14 fixed it.
 
 ## 4. Schema derivation
 
@@ -332,6 +342,14 @@ implementation effort.
 - **Acceptance** — trait objects modeled with their fixed-field sets; builders to
   declare and reference them; `$ref`s resolve into the components maps; a golden
   fixture demonstrating a shared trait applied to two operations.
+- **Implemented** — #14: `spec.OperationTrait` / `spec.MessageTrait`,
+  `components.operationTraits` / `components.messageTraits`, the
+  `OperationTraits(...)` / `MessageTraits(...)` declaration items with fluent
+  setters, `Operation.Traits(...)` / `Message.Traits(...)` refs, and the
+  `validateTraitRefs` post-pass (plus an operation-trait security arm in
+  `validateSecurityRefs`). The traits merge mechanism's JSON Merge Patch is left
+  to consumers: `$ref`s are emitted, not merged. The `test/data/traits` golden
+  applies one operation trait to two operations.
 
 <a id="b4"></a>
 
@@ -467,16 +485,19 @@ implementation effort.
 
 #### B13 — Builders for modeled-but-unreachable objects
 
-- **Gap** — `ExternalDocs` has no direct builder — it is reachable only nested
-  inside a `Tag` passed to `Info`; `Tag` is settable only on `Info`;
-  `Message.CorrelationID` is a `*Reference` with no way to author or hoist a
-  `CorrelationID`.
+- **Gap** — `Message.CorrelationID` is a `*Reference` with no way to author or
+  hoist a `CorrelationID` from a plain message. The rest of this item landed with
+  #14 (see **Partially implemented**).
 - **Spec** — External Documentation Object, Tag Object, Correlation ID Object,
   `components/correlationIds`.
 - **Area** — `dsl (root package: doc.go, message.go, bindings.go)`
-- **Acceptance** — `.ExternalDocs(...)` and `.Tags(...)` on server, channel,
-  operation, and message; `Message.CorrelationID(...)` accepting an inline
+- **Acceptance** — `Message.CorrelationID(...)` accepting an inline
   `spec.CorrelationID` or a `$ref`.
+- **Partially implemented** — #14: `.Tags(...)` / `.ExternalDocs(...)` on server,
+  channel, operation, message, and both trait builders; `CorrelationID(...)` /
+  `CorrelationIDs(...)` declare hoisted components, and
+  `MessageTrait.CorrelationID(...)` references them. Still open:
+  `Message.CorrelationID(...)`.
 
 <a id="b14"></a>
 

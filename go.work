@@ -10,6 +10,7 @@ use (
 	./test/data/security
 	./test/data/invalid
 	./test/data/reply
+	./test/data/traits
 	./test/integration
 	./tools
 )

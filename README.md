@@ -157,6 +157,72 @@ specification forbids combining them though: when a reply declares an address,
 the channel it names must have no address — so `Address(...)` and `Channel(...)`
 on the same reply is a catalog validation error rather than a valid document.
 
+### Traits
+
+Declare a trait once with `OperationTrait(...)` or `MessageTrait(...)`, register
+it with `OperationTraits(...)` / `MessageTraits(...)`, and reference it from any
+number of operations or messages. The reference is emitted as a `$ref`, so one
+declaration is shared:
+
+```go
+kafkaOrders := asyncgo.OperationTrait("KafkaOrders").
+ Summary("Shared Kafka settings").
+ Kafka(spec.KafkaOperationBinding{GroupID: &spec.Schema{Type: "string"}})
+
+var Catalog = asyncgo.Spec(
+ asyncgo.OperationTraits(kafkaOrders),
+ asyncgo.Channels(
+  asyncgo.Channel("order-placed").Send(asyncgo.Operation().
+   Traits(kafkaOrders).
+   Message(asyncgo.MessageOf(OrderPlaced{}))),
+  asyncgo.Channel("order-shipped").Send(asyncgo.Operation().
+   Traits(kafkaOrders).
+   Message(asyncgo.MessageOf(OrderShipped{}))),
+ ),
+)
+```
+
+```yaml
+# components:
+#   operationTraits:
+#     KafkaOrders:
+#       summary: Shared Kafka settings
+# operations:
+#   order-placed.send:
+#     traits:
+#       - $ref: '#/components/operationTraits/KafkaOrders'
+#   order-shipped.send:
+#     traits:
+#       - $ref: '#/components/operationTraits/KafkaOrders'
+```
+
+`spec.OperationTrait` models the shareable subset of an operation — `title`,
+`summary`, `description`, `security`, `tags`, `externalDocs`, `bindings` — and
+`spec.MessageTrait` the shareable subset of a message — `headers`,
+`correlationId`, `contentType`, `name`, `title`, `summary`, `description`,
+`tags`, `externalDocs`, `bindings`, `examples`. `action`, `channel`, `messages`,
+`payload`, and a nested `traits` list are deliberately not settable: the
+specification excludes them, and modeling each trait as its own type makes them
+unrepresentable.
+
+A message trait can point at a Correlation ID declared with `CorrelationID(...)`
+and registered with `CorrelationIDs(...)`:
+
+```go
+correlationID := asyncgo.CorrelationID("OrderCorrelationID", spec.CorrelationID{
+ Location: "$message.header#/correlationId",
+})
+
+traced := asyncgo.MessageTrait("TracedMessage").
+ ContentType("application/json").
+ CorrelationID(correlationID)
+```
+
+The specification's Traits Merge Mechanism — a JSON Merge Patch applied in
+declaration order, where a trait must not override the target's own property —
+is the *consumer's* job, not asyncgo's: the generator emits the `traits` `$ref`
+list and leaves merging to the tool reading the document.
+
 ### Generate & check
 
 ```bash

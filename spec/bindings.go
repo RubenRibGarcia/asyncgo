@@ -41,16 +41,22 @@ type KafkaChannelBinding struct {
 	BindingVersion     string         `json:"bindingVersion,omitempty"     yaml:"bindingVersion,omitempty"`
 }
 
-// KafkaOperationBinding describes Kafka-specific operation information.
+// KafkaOperationBinding describes Kafka-specific operation information. GroupID
+// and ClientID are Schema Object | Reference Object | boolean in 3.1.0: a schema
+// describing how the value is derived, or a boolean. They are `any` because the
+// union's reference side has to be expressible; the previous string shape was
+// AsyncAPI 2.x and produced documents the 3.1.0 schema rejects.
 type KafkaOperationBinding struct {
-	GroupID        string `json:"groupId,omitempty"        yaml:"groupId,omitempty"`
-	ClientID       string `json:"clientId,omitempty"       yaml:"clientId,omitempty"`
+	GroupID        any    `json:"groupId,omitempty"        yaml:"groupId,omitempty"`
+	ClientID       any    `json:"clientId,omitempty"       yaml:"clientId,omitempty"`
 	BindingVersion string `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
 }
 
-// KafkaMessageBinding describes Kafka-specific message information.
+// KafkaMessageBinding describes Kafka-specific message information. Key is
+// Schema Object | Reference Object in 3.1.0 (no boolean), and is `any` for the
+// same reason as KafkaOperationBinding's fields.
 type KafkaMessageBinding struct {
-	Key              string `json:"key,omitempty"              yaml:"key,omitempty"`
+	Key              any    `json:"key,omitempty"              yaml:"key,omitempty"`
 	SchemaIDLocation string `json:"schemaIdLocation,omitempty" yaml:"schemaIdLocation,omitempty"`
 	BindingVersion   string `json:"bindingVersion,omitempty"   yaml:"bindingVersion,omitempty"`
 }
