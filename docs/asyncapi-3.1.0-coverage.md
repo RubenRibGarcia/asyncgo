@@ -373,14 +373,15 @@ implementation effort.
   `validateSchemaNodes` rejects a node that mixes the two field sets or sets only
   one. The DSL adds `MessageFrom(name, schema)` as the type-free counterpart to
   `MessageOf`, plus `Schema(name, schema)` / `Schemas(...)` for reusable
-  components. The `test/data/avro` golden declares one Avro record `$ref`'d from
-  two messages, an inline Avro payload, and multi-format headers, and
-  `test/data/multiformat` carries OpenAPI 3.0.0, RAML 1.0, and Protobuf payloads.
-  The pinned `asyncapi/cli` validates Avro, OpenAPI, and RAML bodies that are
-  mappings, resolves a string-valued `schema` as a reference, and has no Protobuf
-  parser at all: `multiformat` is therefore excluded from the CLI check by an
-  explicit, logged entry in the integration test that also asserts the CLI still
-  rejects the document, so the exclusion cannot outlive the limitation.
+  components. The `test/data/multiformat` golden carries every format the spec's
+  table recommends — an Avro record `$ref`'d from two messages plus an inline
+  Avro record and Avro headers, an OpenAPI 3.0.0 Schema Object, a RAML 1.0 data
+  type, and a Protobuf message. The pinned `asyncapi/cli` validates Avro, OpenAPI,
+  and RAML bodies that are mappings, resolves a string-valued `schema` as a
+  reference, and has no Protobuf parser at all: `multiformat` is therefore
+  excluded from the CLI check by an explicit, logged entry in the integration
+  test that also asserts the CLI still rejects the document, so the exclusion
+  cannot outlive the limitation.
 
 ### P1 — correctness and spec conformance
 

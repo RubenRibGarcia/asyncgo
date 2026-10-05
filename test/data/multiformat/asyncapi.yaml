@@ -2,12 +2,50 @@ asyncapi: 3.1.0
 info:
   title: Multi Format Orders Service
   version: 1.0.0
-  description: Order events carried in OpenAPI, RAML, and Protobuf schema formats
+  description: Order events carried in Avro, OpenAPI, RAML, and Protobuf schema formats
 channels:
+  order-avro-placed:
+    address: order-avro-placed
+    messages:
+      OrderPlaced:
+        headers:
+          schemaFormat: application/vnd.apache.avro;version=1.9.0
+          schema:
+            fields:
+            - name: correlationId
+              type: string
+            name: OrderHeaders
+            type: record
+        payload:
+          $ref: "#/components/schemas/UserAvro"
+        name: OrderPlaced
+    description: Order placements carrying the shared Avro record and Avro headers
+  order-avro-refunded:
+    address: order-avro-refunded
+    messages:
+      OrderRefunded:
+        payload:
+          schemaFormat: application/vnd.apache.avro;version=1.9.0
+          schema:
+            fields:
+            - name: orderId
+              type: string
+            name: OrderRefunded
+            type: record
+        name: OrderRefunded
+    description: Order refunds carrying an inline Avro record
+  order-avro-shipped:
+    address: order-avro-shipped
+    messages:
+      OrderShipped:
+        payload:
+          $ref: "#/components/schemas/UserAvro"
+        name: OrderShipped
+    description: Order shipments carrying the shared Avro record
   order-openapi:
     address: order-openapi
     messages:
-      OrderPlaced:
+      OrderPlacedOpenAPI:
         payload:
           schemaFormat: application/vnd.oai.openapi;version=3.0.0
           schema:
@@ -21,21 +59,21 @@ channels:
             required:
             - orderId
             type: object
-        name: OrderPlaced
+        name: OrderPlacedOpenAPI
     description: Order placements described by an OpenAPI 3.0.0 schema
   order-protobuf:
     address: order-protobuf
     messages:
-      OrderCancelled:
+      OrderCancelledProtobuf:
         payload:
           schemaFormat: application/vnd.google.protobuf;version=3
           schema: message OrderCancelled { string order_id = 1; }
-        name: OrderCancelled
+        name: OrderCancelledProtobuf
     description: Order cancellations described by a Protobuf message
   order-raml:
     address: order-raml
     messages:
-      OrderShipped:
+      OrderShippedRAML:
         payload:
           schemaFormat: application/raml+yaml;version=1.0
           schema:
@@ -47,24 +85,54 @@ channels:
             required:
             - orderId
             type: object
-        name: OrderShipped
+        name: OrderShippedRAML
     description: Order shipments described by a RAML 1.0 data type
 operations:
+  order-avro-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-avro-placed"
+    messages:
+    - $ref: "#/channels/order-avro-placed/messages/OrderPlaced"
+  order-avro-refunded.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-avro-refunded"
+    messages:
+    - $ref: "#/channels/order-avro-refunded/messages/OrderRefunded"
+  order-avro-shipped.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-avro-shipped"
+    messages:
+    - $ref: "#/channels/order-avro-shipped/messages/OrderShipped"
   order-openapi.send:
     action: send
     channel:
       $ref: "#/channels/order-openapi"
     messages:
-    - $ref: "#/channels/order-openapi/messages/OrderPlaced"
+    - $ref: "#/channels/order-openapi/messages/OrderPlacedOpenAPI"
   order-protobuf.send:
     action: send
     channel:
       $ref: "#/channels/order-protobuf"
     messages:
-    - $ref: "#/channels/order-protobuf/messages/OrderCancelled"
+    - $ref: "#/channels/order-protobuf/messages/OrderCancelledProtobuf"
   order-raml.send:
     action: send
     channel:
       $ref: "#/channels/order-raml"
     messages:
-    - $ref: "#/channels/order-raml/messages/OrderShipped"
+    - $ref: "#/channels/order-raml/messages/OrderShippedRAML"
+components:
+  schemas:
+    UserAvro:
+      schemaFormat: application/vnd.apache.avro;version=1.9.0
+      schema:
+        fields:
+        - name: displayName
+          type: string
+        - name: age
+          type: int
+        name: User
+        type: record

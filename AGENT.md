@@ -106,7 +106,7 @@ asyncgo/
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, avro, multiformat — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
