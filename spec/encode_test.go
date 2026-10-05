@@ -2,6 +2,7 @@ package spec
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -631,4 +632,146 @@ func TestEncodeTagsAndExternalDocs(t *testing.T) {
 	} {
 		assert.Contains(t, string(out), want)
 	}
+}
+
+// multiFormatDoc returns a document whose only component is a Multi Format
+// Schema Object carrying an opaque Avro body.
+func multiFormatDoc() *AsyncAPI {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Components = &Components{
+		Schemas: map[string]*Schema{
+			"UserAvro": MultiFormat(
+				"application/vnd.apache.avro;version=1.9.0",
+				map[string]any{
+					"type": "record",
+					"name": "User",
+					"fields": []any{
+						map[string]any{"name": "displayName", "type": "string"},
+					},
+				},
+			),
+		},
+	}
+	return doc
+}
+
+// TestEncodeMultiFormatSchema covers the Multi Format Schema Object codec: the
+// two fields are emitted verbatim in declaration order, the opaque body survives
+// the harness round-trip (marshal -> unmarshal -> marshal), and a plain Schema
+// Object is unaffected.
+func TestEncodeMultiFormatSchema(t *testing.T) {
+	t.Run("should_emit_schema_format_verbatim", func(t *testing.T) {
+		out, err := multiFormatDoc().YAML()
+		require.NoError(t, err)
+
+		assert.Contains(t, string(out),
+			"schemaFormat: application/vnd.apache.avro;version=1.9.0")
+		assert.Contains(t, string(out), "name: User")
+		assert.Contains(t, string(out), "type: record")
+	})
+
+	t.Run("should_emit_schema_format_before_schema", func(t *testing.T) {
+		out, err := multiFormatDoc().YAML()
+		require.NoError(t, err)
+
+		formatAt := strings.Index(string(out), "schemaFormat:")
+		bodyAt := strings.Index(string(out), "schema:")
+		require.NotEqual(t, -1, formatAt)
+		require.NotEqual(t, -1, bodyAt)
+		assert.Less(t, formatAt, bodyAt)
+	})
+
+	t.Run("should_round_trip_opaque_body_through_yaml", func(t *testing.T) {
+		first, err := multiFormatDoc().YAML()
+		require.NoError(t, err)
+
+		var decoded AsyncAPI
+		require.NoError(t, yaml.Unmarshal(first, &decoded))
+
+		second, err := decoded.YAML()
+		require.NoError(t, err)
+		assert.Equal(t, string(first), string(second),
+			"the harness round-trip must be byte-stable")
+
+		body, ok := decoded.Components.Schemas["UserAvro"].Schema.(map[string]any)
+		require.True(t, ok, "the opaque body must decode to a map")
+		assert.Equal(t, "record", body["type"])
+		assert.Equal(t, "User", body["name"])
+	})
+
+	t.Run("should_round_trip_multi_format_through_json", func(t *testing.T) {
+		out, err := multiFormatDoc().JSON()
+		require.NoError(t, err)
+
+		var decoded AsyncAPI
+		require.NoError(t, json.Unmarshal(out, &decoded))
+
+		schema := decoded.Components.Schemas["UserAvro"]
+		require.NotNil(t, schema)
+		assert.Equal(t, "application/vnd.apache.avro;version=1.9.0", schema.SchemaFormat)
+		assert.Equal(t, canonicalJSON(t, multiFormatDoc()), canonicalJSON(t, &decoded))
+	})
+
+	t.Run("should_leave_plain_schema_encoding_unchanged", func(t *testing.T) {
+		doc := New()
+		doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+		doc.Components = &Components{
+			Schemas: map[string]*Schema{
+				"Order": {
+					Type:       "object",
+					Properties: map[string]*Schema{"id": {Type: "string"}},
+					Required:   []string{"id"},
+				},
+			},
+		}
+
+		out, err := doc.YAML()
+		require.NoError(t, err)
+
+		assert.NotContains(t, string(out), "schemaFormat")
+		assert.Equal(t, `asyncapi: 3.1.0
+info:
+  title: Orders
+  version: 1.0.0
+components:
+  schemas:
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+      - id
+`, string(out))
+	})
+
+	t.Run("should_emit_a_string_body_verbatim", func(t *testing.T) {
+		// A Protobuf payload is a .proto string rather than a map. Protobuf is
+		// emitted verbatim like any other format; the pinned AsyncAPI CLI cannot
+		// validate it (no parser is registered for it), so this unit test is the
+		// coverage for the string-shaped opaque body.
+		doc := New()
+		doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+		doc.Components = &Components{
+			Schemas: map[string]*Schema{
+				"OrderProto": MultiFormat(
+					"application/vnd.google.protobuf;version=3",
+					"message Order { string order_id = 1; }",
+				),
+			},
+		}
+
+		out, err := doc.YAML()
+		require.NoError(t, err)
+
+		var decoded AsyncAPI
+		require.NoError(t, yaml.Unmarshal(out, &decoded))
+		assert.Equal(t,
+			"application/vnd.google.protobuf;version=3",
+			decoded.Components.Schemas["OrderProto"].SchemaFormat)
+		assert.Equal(t,
+			"message Order { string order_id = 1; }",
+			decoded.Components.Schemas["OrderProto"].Schema)
+	})
 }

@@ -8,9 +8,11 @@ import (
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
-// message declares a message whose payload schema is derived from a Go type.
+// message declares a message whose payload schema is either derived from a Go
+// type (MessageOf) or supplied verbatim (MessageFrom).
 type message struct {
 	typ          reflect.Type
+	payload      *spec.Schema // set by MessageFrom; mutually exclusive with typ
 	name         string
 	title        string
 	summary      string
@@ -28,6 +30,16 @@ type message struct {
 // Go value's type via reflection. The type is referenced, not duplicated: the
 // catalog cannot drift from the data contract.
 func MessageOf(v any) *message { return &message{typ: reflect.TypeOf(v)} }
+
+// MessageFrom declares a message whose payload is the given schema, emitted
+// verbatim. Use it for a payload that cannot be derived from a Go type — pass
+// spec.MultiFormat(...) for Avro or Protobuf, or spec.Ref(...) to point at a
+// schema declared with Schema(...)/Schemas(...).
+//
+// The name is required: it is the key under the channel's messages map.
+func MessageFrom(name string, payload *spec.Schema) *message {
+	return &message{name: name, payload: payload}
+}
 
 func (m *message) Name(n string) *message          { m.name = n; return m }
 func (m *message) Title(t string) *message         { m.title = t; return m }
@@ -64,8 +76,19 @@ func (m *message) Traits(traits ...*messageTrait) *message {
 }
 
 func (m *message) build(b *builder) (*spec.Message, error) {
-	if m.typ == nil {
-		return nil, fmt.Errorf("message: nil payload type")
+	payload := m.payload
+	switch {
+	case payload != nil && m.typ != nil:
+		return nil, fmt.Errorf(
+			"message: payload schema and payload type are mutually exclusive",
+		)
+	case payload == nil && m.typ == nil:
+		return nil, fmt.Errorf("message: nil payload type or schema")
+	case payload == nil:
+		payload = schema.FromType(m.typ, b.defs)
+	}
+	if m.name == "" && m.typ == nil {
+		return nil, fmt.Errorf("message: name is required for a hand-authored payload")
 	}
 	return &spec.Message{
 		Name:         messageName(m),
@@ -79,7 +102,7 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 		Examples:     m.examples,
 		Bindings:     m.bindings,
 		Traits:       m.traits,
-		Payload:      schema.FromType(m.typ, b.defs),
+		Payload:      payload,
 	}, nil
 }
 

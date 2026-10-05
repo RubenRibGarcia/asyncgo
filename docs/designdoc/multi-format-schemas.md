@@ -5,6 +5,10 @@
 - **Status updated**: 2026-10-05
 - **Scope**: `spec/`, `dsl (root: message.go, doc.go)`, `test/data/avro/`, `test/integration/`, `docs/`
 
+> **Amended 2026-10-05** — the fixture shipped as one `test/data/multiformat`
+> module rather than the standalone `test/data/avro` named in Scope, §5, and
+> Stage 3. See [Amendment](#amendment).
+
 ## Summary
 
 Let a payload or header name a schema in a non-JSON-Schema format — Avro and
@@ -520,3 +524,32 @@ components:
 - **Coverage doc drift** — `docs/asyncapi-3.1.0-coverage.md` §1 currently marks
   the Multi Format Schema Object ❌/❌, §4.3 lists non-JSON-Schema formats as
   absent, and §8 B4 has no `Implemented` note; all three change in Stage 4.
+
+## Amendment
+
+### 2026-10-05 — the fixture shipped as one `test/data/multiformat` module
+
+§5 and Stage 3 planned a standalone `test/data/avro` fixture. It shipped instead
+as a single `test/data/multiformat` module covering every format the spec's
+supported-formats table recommends, so the multi-format coverage lives in one
+golden rather than several. The Avro content is unchanged from §5 — one record
+declared with `Schema(...)`/`Schemas(...)` and `$ref`'d from two messages, an
+inline record, and a multi-format `headers` schema — now beside an OpenAPI 3.0.0
+Schema Object, a RAML 1.0 data type, and a Protobuf message.
+
+Two findings the original design did not anticipate, from the pinned
+`asyncapi/cli:6.1.0` and unchanged on `:latest`:
+
+- The CLI resolves a **string-valued** `schema` as a reference, so a string body
+  fails for *every* format; an object body is the only shape it checks. The
+  OpenAPI and RAML fixtures therefore carry objects, not their idiomatic text.
+- The CLI has **no Protobuf parser**: every body shape is rejected with an empty
+  error list. Because the combined fixture carries a Protobuf payload, the
+  integration test excludes it from `asyncapi validate` through an explicit,
+  logged entry that also asserts the CLI still rejects it — so the exclusion
+  fails the test if a future CLI gains Protobuf support.
+
+Consequence: no fixture is CLI-validated for multi-format any more, including the
+Avro, OpenAPI, and RAML nodes the CLI can parse. Validating a copy of the fixture
+with the Protobuf channel stripped, or splitting a separate CLI-validated
+fixture, would restore it.
