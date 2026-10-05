@@ -44,6 +44,7 @@ var fixtures = []string{
 	"security",
 	"reply",
 	"traits",
+	"avro",
 }
 
 // TestAsyncGoGenerate regenerates each test fixture's document, asserts it

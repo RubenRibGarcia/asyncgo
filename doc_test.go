@@ -1,8 +1,10 @@
 package asyncgo
 
 import (
+	"reflect"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -205,7 +207,7 @@ func TestValidationErrors(t *testing.T) {
 					),
 				)
 			},
-			want: "message: nil payload type",
+			want: "message: nil payload type or schema",
 		},
 		{
 			name: "should_return_error_when_channel_references_unknown_server",
@@ -682,6 +684,118 @@ func TestValidationErrors(t *testing.T) {
 			},
 			want: "",
 		},
+		{
+			name: "should_register_a_declared_schema_component",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("UserAvro", spec.MultiFormat(
+						"application/vnd.apache.avro;version=1.9.0",
+						map[string]any{"type": "record", "name": "User"},
+					))),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_resolve_ref_to_declared_schema_from_two_messages",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("UserAvro", spec.MultiFormat(
+						"application/vnd.apache.avro;version=1.9.0",
+						map[string]any{"type": "record", "name": "User"},
+					))),
+					Channels(
+						Channel("order-placed").Send(Operation().Message(
+							MessageFrom("OrderPlaced", spec.Ref("#/components/schemas/UserAvro")),
+						)),
+						Channel("order-shipped").Send(Operation().Message(
+							MessageFrom("OrderShipped", spec.Ref("#/components/schemas/UserAvro")),
+						)),
+					),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_return_error_when_schema_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("", &spec.Schema{Type: "object"})),
+				)
+			},
+			want: "schema.name: is required",
+		},
+		{
+			name: "should_return_error_on_duplicate_schema_name",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(
+						Schema("User", &spec.Schema{Type: "object"}),
+						Schema("User", &spec.Schema{Type: "string"}),
+					),
+				)
+			},
+			want: "schema.User: duplicate name",
+		},
+		{
+			name: "should_reject_schema_format_without_schema",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						SchemaFormat: "application/vnd.apache.avro;version=1.9.0",
+					})),
+				)
+			},
+			want: "schema.Avro.schema: is required alongside schemaFormat",
+		},
+		{
+			name: "should_reject_schema_without_schema_format",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						Schema: map[string]any{"type": "record"},
+					})),
+				)
+			},
+			want: "schema.Avro.schemaFormat: is required alongside schema",
+		},
+		{
+			name: "should_reject_schema_format_beside_json_schema_keywords",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						SchemaFormat: "application/vnd.apache.avro;version=1.9.0",
+						Schema:       map[string]any{"type": "record"},
+						Type:         "object",
+					})),
+				)
+			},
+			want: "schema.Avro: multi format schema must not carry JSON Schema keyword(s): type",
+		},
+		{
+			name: "should_reject_declared_name_colliding_with_hoisted_schema",
+			spec: func() *SpecResult {
+				fqn := schema.Name(reflect.TypeOf(OrderPlaced{}))
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema(fqn, &spec.Schema{Type: "object"})),
+					Channels(
+						Channel("order-placed").Send(Operation().Message(
+							MessageOf(OrderPlaced{}).Name("OrderPlaced"),
+						)),
+					),
+				)
+			},
+			want: "schema." + schema.Name(reflect.TypeOf(OrderPlaced{})) +
+				": collides with an auto-hoisted schema of the same name",
+		},
 	}
 
 	for _, tc := range tests {
@@ -937,6 +1051,38 @@ func TestRepliesRegistersComponents(t *testing.T) {
 		"#/components/replyAddresses/ReplyTo",
 		res.Doc.Components.Replies["OrderReply"].Address.Ref,
 	)
+}
+
+func TestSchemasRegistersComponents(t *testing.T) {
+	avro := spec.MultiFormat(
+		"application/vnd.apache.avro;version=1.9.0",
+		map[string]any{"type": "record", "name": "User"},
+	)
+
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		Schemas(Schema("UserAvro", avro)),
+		Channels(
+			Channel("order-placed").Send(Operation().Message(
+				MessageFrom("OrderPlaced", spec.Ref("#/components/schemas/UserAvro")),
+			)),
+			Channel("order-shipped").Send(Operation().Message(
+				MessageFrom("OrderShipped", spec.Ref("#/components/schemas/UserAvro")),
+			)),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	require.Contains(t, res.Doc.Components.Schemas, "UserAvro")
+	assert.Same(t, avro, res.Doc.Components.Schemas["UserAvro"])
+
+	placed := res.Doc.Channels["order-placed"].Messages["OrderPlaced"]
+	shipped := res.Doc.Channels["order-shipped"].Messages["OrderShipped"]
+	require.NotNil(t, placed.Payload)
+	require.NotNil(t, shipped.Payload)
+	assert.Equal(t, "#/components/schemas/UserAvro", placed.Payload.Ref)
+	assert.Equal(t, "#/components/schemas/UserAvro", shipped.Payload.Ref)
 }
 
 func TestReplyRefEscapesPointer(t *testing.T) {

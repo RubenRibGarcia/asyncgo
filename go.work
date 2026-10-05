@@ -11,6 +11,7 @@ use (
 	./test/data/invalid
 	./test/data/reply
 	./test/data/traits
+	./test/data/avro
 	./test/integration
 	./tools
 )

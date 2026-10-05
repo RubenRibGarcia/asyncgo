@@ -4,7 +4,20 @@ package spec
 // 07). Only the keywords the generator emits — plus the ones a hand-authored
 // catalog is likely to need — are modeled; the type is straightforward to
 // extend.
+//
+// The same struct models the AsyncAPI 3.1.0 Multi Format Schema Object through
+// SchemaFormat and Schema. It is deliberately one struct rather than a union:
+// the discovery harness round-trips every document through YAML, and a node that
+// is not a concrete struct decodes into a map and is re-encoded with sorted
+// keys, which would rewrite committed golden files.
 type Schema struct {
+	// Multi Format Schema Object fields. SchemaFormat is the format identifier
+	// (emitted verbatim, e.g. "application/vnd.apache.avro;version=1.9.0");
+	// Schema is its opaque body. Both are REQUIRED together, and a node that
+	// sets either must not also carry the JSON Schema keywords below.
+	SchemaFormat string `json:"schemaFormat,omitempty" yaml:"schemaFormat,omitempty"`
+	Schema       any    `json:"schema,omitempty"       yaml:"schema,omitempty"`
+
 	Ref         string `json:"$ref,omitempty"        yaml:"$ref,omitempty"`
 	Type        string `json:"type,omitempty"        yaml:"type,omitempty"`
 	Title       string `json:"title,omitempty"       yaml:"title,omitempty"`
@@ -41,3 +54,13 @@ type Schema struct {
 
 // Ref returns a schema that is a JSON Reference to the given pointer.
 func Ref(pointer string) *Schema { return &Schema{Ref: pointer} }
+
+// MultiFormat returns a Multi Format Schema Object: a schema in a non-JSON-Schema
+// format. format is emitted verbatim as schemaFormat and body is carried opaquely
+// as schema — neither is parsed, validated, or rewritten.
+//
+// Use it wherever a *Schema is accepted (a message payload or headers, a message
+// trait's headers, or a component declared with asyncgo.Schema).
+func MultiFormat(format string, body any) *Schema {
+	return &Schema{SchemaFormat: format, Schema: body}
+}

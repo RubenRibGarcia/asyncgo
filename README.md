@@ -223,6 +223,80 @@ declaration order, where a trait must not override the target's own property —
 is the *consumer's* job, not asyncgo's: the generator emits the `traits` `$ref`
 list and leaves merging to the tool reading the document.
 
+### Multi format schemas (Avro, Protobuf)
+
+`MessageOf` derives a payload schema from a Go type. When the payload is not
+JSON Schema — Avro and Protobuf are the norm for Kafka — there is no Go type to
+derive from, so declare the schema and attach it with `MessageFrom`:
+
+```go
+var userAvro = spec.MultiFormat("application/vnd.apache.avro;version=1.9.0",
+ map[string]any{
+  "type": "record",
+  "name": "User",
+  "fields": []any{
+   map[string]any{"name": "displayName", "type": "string"},
+   map[string]any{"name": "age", "type": "int"},
+  },
+ })
+
+var Catalog = asyncgo.Spec(
+ asyncgo.Info("Avro Orders Service", "1.0.0"),
+
+ // Declare it once, reference it from as many messages as you like.
+ asyncgo.Schemas(asyncgo.Schema("UserAvro", userAvro)),
+
+ asyncgo.Channels(
+  asyncgo.Channel("order-placed").Send(asyncgo.Operation().
+   Message(asyncgo.MessageFrom("OrderPlaced",
+    spec.Ref("#/components/schemas/UserAvro")))),
+  asyncgo.Channel("order-shipped").Send(asyncgo.Operation().
+   Message(asyncgo.MessageFrom("OrderShipped",
+    spec.MultiFormat("application/vnd.google.protobuf;version=3",
+     "message OrderShipped { string order_id = 1; }")))),
+ ),
+)
+```
+
+```yaml
+# components:
+#   schemas:
+#     UserAvro:
+#       schemaFormat: application/vnd.apache.avro;version=1.9.0
+#       schema:
+#         type: record
+#         name: User
+# channels:
+#   order-shipped:
+#     messages:
+#       OrderShipped:
+#         payload:
+#           schemaFormat: application/vnd.google.protobuf;version=3
+#           schema: message OrderShipped { string order_id = 1; }
+```
+
+`schemaFormat` is emitted verbatim and `schema` is opaque: asyncgo never parses,
+validates, or rewrites the body, so any format the specification lists — or a
+custom one — round-trips untouched. A multi-format schema is accepted anywhere a
+schema is accepted: a message payload or headers, a message trait's headers, and
+`components.schemas` (via `Schema(...)` / `Schemas(...)`).
+
+Two things to know:
+
+- **Inside the body, map keys are emitted sorted.** The discovery harness
+  round-trips every document through YAML, so a record declared
+  `type, name, fields` is emitted `fields, name, type`. Avro JSON readers are
+  order-insensitive — this is cosmetic, not data loss.
+- **Declare it once.** An inline multi-format payload is emitted in full on every
+  message that uses it; `Schemas(...)` plus `spec.Ref(...)` shares one
+  declaration. A declared name must not collide with a hoisted Go type's
+  fully-qualified name — that is a catalog validation error.
+
+The pinned `asyncapi validate` used by the integration test checks Avro
+multi-format schemas. It has no parser registered for the other formats, so a
+Protobuf or RAML payload fails its validation with no reported error: asyncgo
+emits it correctly, but the reference validator cannot check it.
+
 ### Generate & check
 
 ```bash

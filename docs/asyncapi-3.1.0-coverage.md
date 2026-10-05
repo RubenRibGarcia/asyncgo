@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -59,7 +59,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | External Documentation Object | ✅ | ✅ | — |
 | Components Object | 🟡 **12/19** | 🟡 | `schemas`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; internal use only |
-| **Multi Format Schema Object** | ❌ | ❌ | Avro / Protobuf / `schemaFormat` unsupported |
+| **Multi Format Schema Object** | ✅ | ✅ | — |
 | Schema Object | 🟡 Draft-07 subset | ✅ | see [§4](#4-schema-derivation) |
 | Security Scheme Object | ✅ 9/9 | ✅ | — |
 | OAuth Flows Object | ✅ 4/4 | ✅ | — |
@@ -208,7 +208,7 @@ library's differentiating feature and the area with the deepest coverage.
 | `discriminator`, `externalDocs`, `deprecated` (3.1.0 Schema keywords) | ❌ not in `spec.Schema` |
 | `$id`, `$schema`, `$comment`, `const`, `if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `readOnly`, `writeOnly` | ❌ not in `spec.Schema` |
 | `$ref` with sibling keywords on one node | ❌ `Schema` carries `Ref` alongside sibling fields, so the pair does serialize — but siblings are a no-op under JSON Reference, and `spec.Ref()` sets none |
-| non-JSON-Schema formats (Avro, Protobuf, OpenAPI) | ❌ no Multi Format Schema Object |
+| non-JSON-Schema formats from Go (Avro, Protobuf, OpenAPI) | ❌ not derivable; declare the body by hand with `spec.MultiFormat` ([§8 B4](#b4)) |
 
 ## 5. Tooling and pipeline
 
@@ -365,6 +365,19 @@ implementation effort.
   accepted today; `schemaFormat` emitted verbatim with an opaque `schema` body;
   either a `MessageFrom...` counterpart to `MessageOf` or a documented
   hand-authored path; golden fixture with an Avro payload.
+- **Implemented** — #15: `spec.Schema` gained `SchemaFormat` and `Schema`, so the
+  same struct models both a Schema Object and a Multi Format Schema Object and is
+  accepted at every schema location — `Message.payload`/`headers`,
+  `MessageTrait.headers`, and `components.schemas`. `spec.MultiFormat(format,
+  body)` emits `schemaFormat` verbatim with the body opaque, and
+  `validateSchemaNodes` rejects a node that mixes the two field sets or sets only
+  one. The DSL adds `MessageFrom(name, schema)` as the type-free counterpart to
+  `MessageOf`, plus `Schema(name, schema)` / `Schemas(...)` for reusable
+  components. The `test/data/avro` golden declares one Avro record `$ref`'d from
+  two messages, an inline Avro payload, and multi-format headers. The pinned
+  `asyncapi/cli` validates Avro multi-format schemas but registers no parser for
+  the other formats, so Protobuf emission is covered by `spec/encode_test.go`
+  rather than the golden.
 
 ### P1 — correctness and spec conformance
 
