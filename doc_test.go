@@ -636,6 +636,140 @@ func TestValidationErrors(t *testing.T) {
 			want: "correlationId.CorrelationID: duplicate name",
 		},
 		{
+			name: "should_return_error_when_message_correlation_id_references_unknown_component",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).
+									Name("OrderPlaced").
+									CorrelationID(CorrelationID("Missing", spec.CorrelationID{
+										Location: "$message.header#/correlationId",
+									})))),
+					),
+				)
+			},
+			want: `channel.order-placed.messages.OrderPlaced: references unknown correlation id "Missing"`,
+		},
+		{
+			name: "should_return_error_when_message_sets_both_correlation_forms",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).
+									Name("OrderPlaced").
+									CorrelationID(CorrelationID("CorrelationID", spec.CorrelationID{
+										Location: "$message.header#/declared",
+									})).
+									CorrelationIDFrom(spec.CorrelationID{
+										Location: "$message.header#/inline",
+									}))),
+					),
+				)
+			},
+			want: "message: correlation id reference and inline correlation id are mutually exclusive",
+		},
+		{
+			name: "should_return_error_when_message_trait_sets_both_correlation_forms",
+			spec: func() *SpecResult {
+				corr := CorrelationID("CorrelationID", spec.CorrelationID{
+					Location: "$message.header#/declared",
+				})
+				return Spec(
+					Info("Orders", "1.0.0"),
+					MessageTraits(
+						MessageTrait("Traced").
+							CorrelationID(corr).
+							CorrelationIDFrom(spec.CorrelationID{
+								Location: "$message.header#/inline",
+							}),
+					),
+					CorrelationIDs(corr),
+				)
+			},
+			want: "messageTrait.Traced: correlation id reference and inline correlation id are mutually exclusive",
+		},
+		{
+			name: "should_return_error_when_inline_correlation_id_duplicates_a_declared_component",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					CorrelationIDs(CorrelationID("OrderPlacedCorrelationID", spec.CorrelationID{
+						Location: "$message.header#/declared",
+					})),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).
+									Name("OrderPlaced").
+									CorrelationIDFrom(spec.CorrelationID{
+										Location: "$message.header#/inline",
+									}))),
+					),
+				)
+			},
+			want: "correlationId.OrderPlacedCorrelationID: duplicate name",
+		},
+		{
+			name: "should_return_error_when_inline_correlation_id_location_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).
+									Name("OrderPlaced").
+									CorrelationIDFrom(spec.CorrelationID{}))),
+					),
+				)
+			},
+			want: "correlationId.OrderPlacedCorrelationID.location: is required",
+		},
+		{
+			name: "should_allow_message_correlation_id_from_inline",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).
+									Name("OrderPlaced").
+									CorrelationIDFrom(spec.CorrelationID{
+										Location: "$message.header#/correlationId",
+									}))),
+					),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_reuse_an_identical_inline_correlation_id_across_messages",
+			spec: func() *SpecResult {
+				corr := spec.CorrelationID{Location: "$message.header#/correlationId"}
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced").CorrelationIDFrom(corr)),
+							),
+						Channel("order-shipped").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced").CorrelationIDFrom(corr)),
+							),
+					),
+				)
+			},
+			want: "",
+		},
+		{
 			name: "should_allow_operation_trait_declared_after_it_is_referenced",
 			spec: func() *SpecResult {
 				trait := OperationTrait("Kafka")
@@ -1334,6 +1468,116 @@ func TestCorrelationIDRefEscapesPointer(t *testing.T) {
 
 	assert.Equal(t, "#/components/correlationIds/tenant~1id~0prod", correlationIDRef(c).Ref)
 	assert.Contains(t, b.doc.Components.CorrelationIDs, "tenant/id~prod")
+}
+
+func TestMessageCorrelationID(t *testing.T) {
+	corr := CorrelationID("CorrelationID", spec.CorrelationID{
+		Location: "$message.header#/correlationId",
+	})
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, CorrelationIDs(corr).apply(b))
+
+	msg, err := MessageOf(OrderPlaced{}).
+		Name("OrderPlaced").
+		CorrelationID(corr).
+		build(b)
+	require.NoError(t, err)
+
+	require.NotNil(t, msg.CorrelationID)
+	assert.Equal(t, "#/components/correlationIds/CorrelationID", msg.CorrelationID.Ref)
+}
+
+func TestMessageCorrelationIDFrom(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  *message
+		key  string
+	}{
+		{
+			name: "should_derive_the_key_from_the_explicit_name",
+			msg: MessageOf(OrderPlaced{}).
+				Name("Placed").
+				CorrelationIDFrom(spec.CorrelationID{Location: "$message.header#/correlationId"}),
+			key: "PlacedCorrelationID",
+		},
+		{
+			name: "should_derive_the_key_from_the_payload_type_name",
+			msg: MessageOf(OrderPlaced{}).
+				CorrelationIDFrom(spec.CorrelationID{Location: "$message.header#/correlationId"}),
+			key: "OrderPlacedCorrelationID",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+
+			msg, err := tc.msg.build(b)
+			require.NoError(t, err)
+
+			require.NotNil(t, msg.CorrelationID)
+			assert.Equal(t, "#/components/correlationIds/"+tc.key, msg.CorrelationID.Ref)
+			require.Contains(t, b.doc.Components.CorrelationIDs, tc.key)
+			assert.Equal(
+				t,
+				"$message.header#/correlationId",
+				b.doc.Components.CorrelationIDs[tc.key].Location,
+			)
+		})
+	}
+}
+
+func TestMessageTraitCorrelationIDFrom(t *testing.T) {
+	tr := MessageTrait("Traced").CorrelationIDFrom(spec.CorrelationID{
+		Description: "Correlation ID",
+		Location:    "$message.header#/correlationId",
+	})
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, MessageTraits(tr).apply(b))
+
+	require.Contains(t, b.doc.Components.CorrelationIDs, "TracedCorrelationID")
+	assert.Equal(
+		t,
+		"$message.header#/correlationId",
+		b.doc.Components.CorrelationIDs["TracedCorrelationID"].Location,
+	)
+
+	require.NotNil(t, b.doc.Components.MessageTraits["Traced"].CorrelationID)
+	assert.Equal(
+		t,
+		"#/components/correlationIds/TracedCorrelationID",
+		b.doc.Components.MessageTraits["Traced"].CorrelationID.Ref,
+	)
+}
+
+// TestCorrelationIDFromReusesAnIdenticalComponent pins the dedupe rule: an
+// inline value whose derived key already holds the same value is reused, not
+// registered twice.
+func TestCorrelationIDFromReusesAnIdenticalComponent(t *testing.T) {
+	corr := spec.CorrelationID{Location: "$message.header#/correlationId"}
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+
+	first, err := correlationIDFromRef(b, "OrderPlaced", corr)
+	require.NoError(t, err)
+
+	second, err := correlationIDFromRef(b, "OrderPlaced", corr)
+	require.NoError(t, err)
+
+	assert.Equal(t, first.Ref, second.Ref)
+	assert.Len(t, b.doc.Components.CorrelationIDs, 1)
+}
+
+func TestCorrelationIDFromRefEscapesPointer(t *testing.T) {
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+
+	ref, err := correlationIDFromRef(b, "tenant/id~prod", spec.CorrelationID{
+		Location: "$message.header#/id",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "#/components/correlationIds/tenant~1id~0prodCorrelationID", ref.Ref)
+	assert.Contains(t, b.doc.Components.CorrelationIDs, "tenant/id~prodCorrelationID")
 }
 
 func TestOperationTraits(t *testing.T) {

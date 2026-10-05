@@ -1,8 +1,9 @@
 // Package traits is a discovery fixture for the AsyncAPI 3.1.0 traits: one
 // Operation Trait shared by two operations, a Message Trait carrying a
-// Correlation ID, and Tags/ExternalDocs on the server, channel, operation, and
-// message. It exercises components.operationTraits, components.messageTraits,
-// and components.correlationIds end to end.
+// Correlation ID, a message that authors a correlation id inline, and
+// Tags/ExternalDocs on the server, channel, operation, and message. It exercises
+// components.operationTraits, components.messageTraits, and
+// components.correlationIds end to end.
 package traits
 
 import (
@@ -69,6 +70,23 @@ var shippedChannel = asyncgo.Channel("order-shipped").
 			Name("OrderShipped").
 			Traits(tracedMessage)))
 
+// cancelledChannel carries order cancellations. Its message authors a
+// correlation id inline with CorrelationIDFrom instead of referencing the
+// declared component, so the golden shows the id hoisted into
+// components.correlationIds under the message-derived key. The message
+// deliberately does not apply tracedMessage: the Traits Merge Mechanism forbids
+// a trait from overriding the message's own correlationId.
+var cancelledChannel = asyncgo.Channel("order-cancelled").
+	Description("Order cancellations").
+	Servers(prod).
+	Send(asyncgo.Operation().
+		Message(asyncgo.MessageOf(OrderPlaced{}).
+			Name("OrderCancelled").
+			CorrelationIDFrom(spec.CorrelationID{
+				Description: "Correlation ID carried in the cancellation headers",
+				Location:    "$message.header#/correlationId",
+			})))
+
 // Catalog is the AsyncAPI description of an orders service whose operations
 // share a Kafka operation trait. The asyncgo CLI discovers it and generates
 // asyncapi.yaml from it.
@@ -82,5 +100,5 @@ var Catalog = asyncgo.Spec(
 
 	asyncgo.Servers(prod),
 
-	asyncgo.Channels(placedChannel, shippedChannel),
+	asyncgo.Channels(placedChannel, shippedChannel, cancelledChannel),
 )

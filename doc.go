@@ -290,6 +290,17 @@ func (b *builder) validateTraitRefs() []error {
 					))
 				}
 			}
+			if ref := messages[name].CorrelationID; ref != nil {
+				id := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, correlationIDsPrefix))
+				if _, ok := declaredCorrelationIDs[id]; !ok {
+					errs = append(errs, fmt.Errorf(
+						"channel.%s.messages.%s: references unknown correlation id %q",
+						address,
+						name,
+						id,
+					))
+				}
+			}
 		}
 	}
 
@@ -659,6 +670,33 @@ func correlationIDRef(c *correlationID) *spec.Reference {
 	return &spec.Reference{Ref: "#/components/correlationIds/" + jsonpointer.Escape(c.name)}
 }
 
+// correlationIDFromRef hoists an inline correlation id authored with
+// Message.CorrelationIDFrom / MessageTrait.CorrelationIDFrom. The component key
+// is derived from the owning object's name — <owner>CorrelationID — so the id is
+// emitted as a reusable $ref. An existing component with the same value is
+// reused; a different value at the same key is a duplicate-name error.
+func correlationIDFromRef(b *builder, owner string, c spec.CorrelationID) (*spec.Reference, error) {
+	name := owner + "CorrelationID"
+	if c.Location == "" {
+		return nil, fmt.Errorf("correlationId.%s.location: is required", name)
+	}
+	comps := b.components()
+	if comps.CorrelationIDs == nil {
+		comps.CorrelationIDs = map[string]*spec.CorrelationID{}
+	}
+	if existing, ok := comps.CorrelationIDs[name]; ok {
+		if *existing != c {
+			return nil, fmt.Errorf("correlationId.%s: duplicate name", name)
+		}
+	} else {
+		value := c
+		comps.CorrelationIDs[name] = &value
+	}
+	return &spec.Reference{
+		Ref: "#/components/correlationIds/" + jsonpointer.Escape(name),
+	}, nil
+}
+
 // replyRef is the JSON Reference to a reply declared via Replies(...).
 func replyRef(r *reply) *spec.Reference {
 	return &spec.Reference{Ref: "#/components/replies/" + jsonpointer.Escape(r.name)}
@@ -789,6 +827,11 @@ func (t messageTraitsItem) apply(b *builder) error {
 type messageTrait struct {
 	name string
 	t    spec.MessageTrait
+
+	// correlationIDFrom is the inline value set by CorrelationIDFrom. It is
+	// mutually exclusive with t.CorrelationID and is hoisted into
+	// components.correlationIds by apply.
+	correlationIDFrom *spec.CorrelationID
 }
 
 // MessageTrait declares a reusable message trait under the given name.
@@ -808,6 +851,14 @@ func (t *messageTrait) Description(v string) *messageTrait   { t.t.Description =
 // CorrelationIDs(...).
 func (t *messageTrait) CorrelationID(c *correlationID) *messageTrait {
 	t.t.CorrelationID = correlationIDRef(c)
+	return t
+}
+
+// CorrelationIDFrom attaches an inline correlation id. The builder registers it
+// under components.correlationIds as <traitName>CorrelationID and references it
+// from the trait, so the id stays reusable and the trait carries a $ref.
+func (t *messageTrait) CorrelationIDFrom(c spec.CorrelationID) *messageTrait {
+	t.correlationIDFrom = &c
 	return t
 }
 
@@ -838,6 +889,20 @@ func (t *messageTrait) apply(b *builder) error {
 	var errs []error
 	if t.name == "" {
 		errs = append(errs, fmt.Errorf("messageTrait.name: is required"))
+	}
+	switch {
+	case t.t.CorrelationID != nil && t.correlationIDFrom != nil:
+		errs = append(errs, fmt.Errorf(
+			"messageTrait.%s: correlation id reference and inline correlation id are mutually exclusive",
+			t.name,
+		))
+	case t.correlationIDFrom != nil && t.name != "":
+		ref, err := correlationIDFromRef(b, t.name, *t.correlationIDFrom)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			t.t.CorrelationID = ref
+		}
 	}
 	c := b.components()
 	if c.MessageTraits == nil {

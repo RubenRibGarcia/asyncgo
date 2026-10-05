@@ -13,6 +13,18 @@ servers:
     externalDocs:
       url: https://example.com/servers/prod
 channels:
+  order-cancelled:
+    address: order-cancelled
+    messages:
+      OrderCancelled:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
+        correlationId:
+          $ref: "#/components/correlationIds/OrderCancelledCorrelationID"
+        name: OrderCancelled
+    description: Order cancellations
+    servers:
+    - $ref: "#/servers/prod"
   order-placed:
     address: order-placed
     messages:
@@ -46,6 +58,12 @@ channels:
     servers:
     - $ref: "#/servers/prod"
 operations:
+  order-cancelled.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-cancelled"
+    messages:
+    - $ref: "#/channels/order-cancelled/messages/OrderCancelled"
   order-placed.send:
     action: send
     channel:
@@ -83,6 +101,9 @@ components:
       required:
       - order_id
   correlationIds:
+    OrderCancelledCorrelationID:
+      description: Correlation ID carried in the cancellation headers
+      location: "$message.header#/correlationId"
     OrderCorrelationID:
       description: Correlation ID carried in the message headers
       location: "$message.header#/correlationId"
