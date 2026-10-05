@@ -24,6 +24,13 @@ type message struct {
 	tags         []spec.Tag
 	externalDocs *spec.ExternalDocs
 	traits       []*spec.Reference
+
+	// correlationID is the $ref set by CorrelationID. correlationIDFrom is the
+	// inline value set by CorrelationIDFrom, which build hoists into
+	// components.correlationIds and turns into a $ref. The two are mutually
+	// exclusive.
+	correlationID     *spec.Reference
+	correlationIDFrom *spec.CorrelationID
 }
 
 // MessageOf declares a message whose payload schema is derived from the given
@@ -60,6 +67,22 @@ func (m *message) ExternalDocs(d spec.ExternalDocs) *message {
 	return m
 }
 
+// CorrelationID points the message at a correlation id declared via
+// CorrelationIDs(...).
+func (m *message) CorrelationID(c *correlationID) *message {
+	m.correlationID = correlationIDRef(c)
+	return m
+}
+
+// CorrelationIDFrom attaches an inline correlation id. The builder registers it
+// under components.correlationIds as <messageName>CorrelationID — the message's
+// Name, or the payload type's name when unset — and references it from the
+// message, so the id stays reusable and the message carries a $ref.
+func (m *message) CorrelationIDFrom(c spec.CorrelationID) *message {
+	m.correlationIDFrom = &c
+	return m
+}
+
 // Example attaches a named payload example to the message.
 func (m *message) Example(name string, payload any) *message {
 	m.examples = append(m.examples, spec.MessageExample{Name: name, Payload: payload})
@@ -90,19 +113,35 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 	if m.name == "" && m.typ == nil {
 		return nil, fmt.Errorf("message: name is required for a hand-authored payload")
 	}
+
+	correlationID := m.correlationID
+	switch {
+	case correlationID != nil && m.correlationIDFrom != nil:
+		return nil, fmt.Errorf(
+			"message: correlation id reference and inline correlation id are mutually exclusive",
+		)
+	case m.correlationIDFrom != nil:
+		ref, err := correlationIDFromRef(b, messageName(m), *m.correlationIDFrom)
+		if err != nil {
+			return nil, err
+		}
+		correlationID = ref
+	}
+
 	return &spec.Message{
-		Name:         messageName(m),
-		Title:        m.title,
-		Summary:      m.summary,
-		Description:  m.description,
-		ContentType:  m.contentType,
-		Headers:      m.headers,
-		Tags:         m.tags,
-		ExternalDocs: m.externalDocs,
-		Examples:     m.examples,
-		Bindings:     m.bindings,
-		Traits:       m.traits,
-		Payload:      payload,
+		Name:          messageName(m),
+		Title:         m.title,
+		Summary:       m.summary,
+		Description:   m.description,
+		ContentType:   m.contentType,
+		Headers:       m.headers,
+		CorrelationID: correlationID,
+		Tags:          m.tags,
+		ExternalDocs:  m.externalDocs,
+		Examples:      m.examples,
+		Bindings:      m.bindings,
+		Traits:        m.traits,
+		Payload:       payload,
 	}, nil
 }
 

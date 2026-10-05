@@ -218,6 +218,31 @@ traced := asyncgo.MessageTrait("TracedMessage").
  CorrelationID(correlationID)
 ```
 
+A message can carry a correlation id too. `CorrelationID(...)` points at a
+component declared with `CorrelationID(...)` / `CorrelationIDs(...)`, while
+`CorrelationIDFrom(...)` authors the value inline: the builder hoists it into
+`components.correlationIds` under `<name>CorrelationID` — the message's `Name`,
+
+or the payload type's name when unset — and emits a `$ref`, so the id stays
+reusable. `MessageTrait` has the same `CorrelationIDFrom(...)`, keyed
+`<traitName>CorrelationID`. Authoring the same value twice under the same key
+reuses the component; a different value at the same key is a duplicate-name
+error.
+
+```go
+// Points at the component declared above.
+asyncgo.MessageOf(OrderPlaced{}).
+ Name("OrderPlaced").
+ CorrelationID(correlationID)
+
+// Hoists to components.correlationIds.OrderCancelledCorrelationID.
+asyncgo.MessageOf(OrderPlaced{}).
+ Name("OrderCancelled").
+ CorrelationIDFrom(spec.CorrelationID{
+  Location: "$message.header#/correlationId",
+ })
+```
+
 The specification's Traits Merge Mechanism — a JSON Merge Patch applied in
 declaration order, where a trait must not override the target's own property —
 is the *consumer's* job, not asyncgo's: the generator emits the `traits` `$ref`

@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -52,7 +52,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Operation Trait Object | ✅ 7/7 | ✅ | — |
 | **Operation Reply Object** | ✅ 3/3 | ✅ | every field is a `$ref`; an inline reply is not expressible |
 | **Operation Reply Address Object** | ✅ 2/2 | ✅ | `address` is a `$ref`; an inline address is not expressible |
-| Message Object | ✅ 13/13 | 🟡 | `correlationId` is 🟠 |
+| Message Object | ✅ 13/13 | ✅ | — |
 | Message Trait Object | ✅ 11/11 | ✅ | `correlationId` is a `$ref`; an inline trait is not expressible |
 | Message Example Object | ✅ 4/4 | 🟡 | `Example()` sets `name` + `payload` only |
 | Tag Object | ✅ 3/3 | ✅ | — |
@@ -70,7 +70,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Channel Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
 | Operation Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
 | Message Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
-| Correlation ID Object | ✅ 2/2 | 🟡 | declaration + `$ref` via message traits; `Message.CorrelationID` has no builder and no inline form |
+| Correlation ID Object | ✅ 2/2 | ✅ | — |
 | Replies / Reply Addresses (components) | ✅ | ✅ | — |
 
 ## 2. Components Object
@@ -505,19 +505,21 @@ implementation effort.
 
 #### B13 — Builders for modeled-but-unreachable objects
 
-- **Gap** — `Message.CorrelationID` is a `*Reference` with no way to author or
-  hoist a `CorrelationID` from a plain message. The rest of this item landed with
-  #14 (see **Partially implemented**).
+- **Implemented** — [#24](https://github.com/RubenRibGarcia/asyncgo/issues/24):
+  `Message.CorrelationID(...)` (declared `$ref`) and `Message.CorrelationIDFrom(...)`
+  / `MessageTrait.CorrelationIDFrom(...)` (inline, hoisted into
+  `components.correlationIds` as `<ownerName>CorrelationID`). The rest landed
+  with #14: `.Tags(...)` / `.ExternalDocs(...)` on server, channel, operation,
+  message, and both trait builders; `CorrelationID(...)` / `CorrelationIDs(...)`
+  declare hoisted components, and `MessageTrait.CorrelationID(...)` references
+  them.
+- **Gap** — `Message.CorrelationID` was a `*Reference` with no way to author or
+  hoist a `CorrelationID` from a plain message.
 - **Spec** — External Documentation Object, Tag Object, Correlation ID Object,
   `components/correlationIds`.
 - **Area** — `dsl (root package: doc.go, message.go, bindings.go)`
 - **Acceptance** — `Message.CorrelationID(...)` accepting an inline
   `spec.CorrelationID` or a `$ref`.
-- **Partially implemented** — #14: `.Tags(...)` / `.ExternalDocs(...)` on server,
-  channel, operation, message, and both trait builders; `CorrelationID(...)` /
-  `CorrelationIDs(...)` declare hoisted components, and
-  `MessageTrait.CorrelationID(...)` references them. Still open:
-  `Message.CorrelationID(...)`.
 
 <a id="b14"></a>
 
