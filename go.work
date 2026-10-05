@@ -12,6 +12,7 @@ use (
 	./test/data/reply
 	./test/data/traits
 	./test/data/avro
+	./test/data/multiformat
 	./test/integration
 	./tools
 )

@@ -45,6 +45,22 @@ var fixtures = []string{
 	"reply",
 	"traits",
 	"avro",
+	"multiformat",
+}
+
+// cliUnsupported lists the fixtures the pinned AsyncAPI CLI cannot validate, with
+// the reason. Its parser resolves a string-valued `schema` as a reference and has
+// no Protobuf support at all, so it reports "governance issues" with an empty
+// error list for every Protobuf body shape — verified against
+// asyncapi/cli:6.1.0 and asyncapi/cli:latest.
+//
+// The golden and codec-equivalence assertions still run for these fixtures;
+// validateDocumentUnlessUnsupported skips only the containerized
+// `asyncapi validate` step, logs why, and asserts the CLI still rejects the
+// document, so an entry that becomes obsolete fails the test instead of
+// lingering.
+var cliUnsupported = map[string]string{
+	"multiformat": "the fixture carries a Protobuf payload, which asyncapi/cli cannot parse",
 }
 
 // TestAsyncGoGenerate regenerates each test fixture's document, asserts it
@@ -82,7 +98,7 @@ func TestAsyncGoGenerate(t *testing.T) {
 				name,
 			)
 
-			validateDocument(t, got, yamlDocumentName)
+			validateDocumentUnlessUnsupported(t, name, got, yamlDocumentName)
 
 			// The JSON artifact must denote the same document as the committed
 			// YAML: the codecs are independent implementations over a model whose
@@ -107,19 +123,68 @@ func TestAsyncGoGenerate(t *testing.T) {
 				"generated JSON encodes a different document than the committed asyncapi.yaml",
 			)
 
-			validateDocument(t, gotJSON, jsonDocumentName)
+			validateDocumentUnlessUnsupported(t, name, gotJSON, jsonDocumentName)
 		})
 	}
 }
 
 // validateDocument validates a freshly generated document — not the committed
-// artifact — by handing it to `asyncapi validate` in a container. The document
-// name selects the parser, since the CLI reads the format from the extension.
+// artifact — by handing it to `asyncapi validate` in a container and asserting it
+// is accepted. The document name selects the parser, since the CLI reads the
+// format from the extension.
+func validateDocument(t *testing.T, doc []byte, documentName string) {
+	t.Helper()
+
+	exitCode, diagnostics := runValidate(t, doc, documentName)
+	assert.Zero(
+		t,
+		exitCode,
+		"asyncapi validate rejected the generated %s (exit code %d):\n%s",
+		documentName,
+		exitCode,
+		diagnostics,
+	)
+}
+
+// validateDocumentUnlessUnsupported skips the CLI check for a fixture the pinned
+// CLI cannot parse — the golden and codec assertions for that fixture still ran —
+// and asserts the CLI still rejects it, so an exclusion that has become obsolete
+// (because the CLI gained support for the format) fails the test rather than
+// lingering unnoticed.
+func validateDocumentUnlessUnsupported(
+	t *testing.T,
+	name string,
+	doc []byte,
+	documentName string,
+) {
+	t.Helper()
+
+	reason, skip := cliUnsupported[name]
+	if !skip {
+		validateDocument(t, doc, documentName)
+		return
+	}
+
+	t.Logf("skipping asyncapi validate for %s (%s): %s", name, documentName, reason)
+
+	exitCode, diagnostics := runValidate(t, doc, documentName)
+	assert.NotZero(
+		t,
+		exitCode,
+		"asyncapi validate now accepts fixture %q (%s); remove it from cliUnsupported.\nDiagnostics:\n%s",
+		name,
+		documentName,
+		diagnostics,
+	)
+}
+
+// runValidate runs `asyncapi validate` in a container and returns its exit code
+// and diagnostics.
 //
 // wait.ForExit returns as soon as the container stops, whatever its exit status:
-// it never inspects the exit code, so the CLI's status is asserted here
-// explicitly, with the CLI's own diagnostics attached to the failure.
-func validateDocument(t *testing.T, doc []byte, documentName string) {
+// it never inspects the exit code, so the caller asserts it explicitly, with the
+// CLI's own diagnostics attached to the failure.
+func runValidate(t *testing.T, doc []byte, documentName string) (int, string) {
 	t.Helper()
 
 	ctx := t.Context()
@@ -152,12 +217,5 @@ func validateDocument(t *testing.T, doc []byte, documentName string) {
 	diagnostics, err := io.ReadAll(logs)
 	require.NoError(t, err)
 
-	assert.Zero(
-		t,
-		state.ExitCode,
-		"asyncapi validate rejected the generated %s (exit code %d):\n%s",
-		documentName,
-		state.ExitCode,
-		diagnostics,
-	)
+	return state.ExitCode, string(diagnostics)
 }

@@ -5,10 +5,9 @@
 // Message.payload, Message.headers, and the hand-authored MessageFrom path end
 // to end.
 //
-// Every body is Avro because the pinned AsyncAPI CLI validates Avro multi-format
-// schemas but has no parser registered for the other formats — a Protobuf or RAML
-// payload fails validation with no reported error. Protobuf is still emittable
-// through spec.MultiFormat; it just cannot be checked by the reference validator.
+// Every body is Avro, which keeps this fixture focused on the Avro case and the
+// components.schemas sharing pattern; test/data/multiformat covers the other
+// formats.
 package avro
 
 import (
