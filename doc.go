@@ -54,6 +54,7 @@ func Spec(items ...Item) *SpecResult {
 	errs = append(errs, b.validateServerRefs()...)
 	errs = append(errs, b.validateSecurityRefs()...)
 	errs = append(errs, b.validateReplyRefs()...)
+	errs = append(errs, b.validateTraitRefs()...)
 	if len(b.defs) > 0 {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
@@ -93,21 +94,24 @@ func (b *builder) validateServerRefs() []error {
 	return errs
 }
 
-// validateSecurityRefs checks that every security reference on a server or an
-// operation points at a scheme declared via SecuritySchemes(...). It is a
-// post-pass for the same reason as validateServerRefs: declaration order is
-// arbitrary.
+// validateSecurityRefs checks that every security reference on a server, an
+// operation, or an operation trait points at a scheme declared via
+// SecuritySchemes(...). It is a post-pass for the same reason as
+// validateServerRefs: declaration order is arbitrary.
 func (b *builder) validateSecurityRefs() []error {
 	const prefix = "#/components/securitySchemes/"
 
 	var declared map[string]*spec.SecurityScheme
+	var declaredTraits map[string]*spec.OperationTrait
 	if b.doc.Components != nil {
 		declared = b.doc.Components.SecuritySchemes
+		declaredTraits = b.doc.Components.OperationTraits
 	}
 
 	var errs []error
-	// Servers and operations are walked in sorted order so the joined error
-	// message is stable: SpecResult.Err is compared by exact string in tests.
+	// Servers, operations, and operation traits are walked in sorted order so the
+	// joined error message is stable: SpecResult.Err is compared by exact string
+	// in tests.
 	for _, name := range slices.Sorted(maps.Keys(b.doc.Servers)) {
 		for _, ref := range b.doc.Servers[name].Security {
 			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
@@ -127,6 +131,18 @@ func (b *builder) validateSecurityRefs() []error {
 					errs,
 					fmt.Errorf("operation.%s: references unknown security scheme %q", key, scheme),
 				)
+			}
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(declaredTraits)) {
+		for _, ref := range declaredTraits[name].Security {
+			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
+			if _, ok := declared[scheme]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"operationTrait.%s: references unknown security scheme %q",
+					name,
+					scheme,
+				))
 			}
 		}
 	}
@@ -219,7 +235,79 @@ func (b *builder) validateReplyRefs() []error {
 	return errs
 }
 
-// --- info -------------------------------------------------------------------
+// validateTraitRefs checks that every operation and message trait reference
+// points at a trait declared via OperationTraits(...) / MessageTraits(...), and
+// that every message trait's correlation id points at a component declared via
+// CorrelationIDs(...). It is a post-pass for the same reason as
+// validateServerRefs: declaration order is arbitrary, so a trait may be
+// referenced before it is declared.
+func (b *builder) validateTraitRefs() []error {
+	const (
+		operationTraitsPrefix = "#/components/operationTraits/"
+		messageTraitsPrefix   = "#/components/messageTraits/"
+		correlationIDsPrefix  = "#/components/correlationIds/"
+	)
+
+	var declaredOperationTraits map[string]*spec.OperationTrait
+	var declaredMessageTraits map[string]*spec.MessageTrait
+	var declaredCorrelationIDs map[string]*spec.CorrelationID
+	if b.doc.Components != nil {
+		declaredOperationTraits = b.doc.Components.OperationTraits
+		declaredMessageTraits = b.doc.Components.MessageTraits
+		declaredCorrelationIDs = b.doc.Components.CorrelationIDs
+	}
+
+	var errs []error
+
+	// Keys are walked in sorted order so the joined error message is stable:
+	// SpecResult.Err is compared by exact string in tests.
+	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
+		for _, ref := range b.doc.Operations[key].Traits {
+			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, operationTraitsPrefix))
+			if _, ok := declaredOperationTraits[name]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"operation.%s: references unknown operation trait %q",
+					key,
+					name,
+				))
+			}
+		}
+	}
+
+	for _, address := range slices.Sorted(maps.Keys(b.doc.Channels)) {
+		messages := b.doc.Channels[address].Messages
+		for _, name := range slices.Sorted(maps.Keys(messages)) {
+			for _, ref := range messages[name].Traits {
+				trait := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, messageTraitsPrefix))
+				if _, ok := declaredMessageTraits[trait]; !ok {
+					errs = append(errs, fmt.Errorf(
+						"channel.%s.messages.%s: references unknown message trait %q",
+						address,
+						name,
+						trait,
+					))
+				}
+			}
+		}
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(declaredMessageTraits)) {
+		ref := declaredMessageTraits[name].CorrelationID
+		if ref == nil {
+			continue
+		}
+		id := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, correlationIDsPrefix))
+		if _, ok := declaredCorrelationIDs[id]; !ok {
+			errs = append(errs, fmt.Errorf(
+				"messageTrait.%s: references unknown correlation id %q",
+				name,
+				id,
+			))
+		}
+	}
+
+	return errs
+}
 
 type infoBuilder struct {
 	info spec.Info
@@ -294,6 +382,18 @@ func Server(name, protocol, host string) *server {
 
 func (s *server) ProtocolVersion(v string) *server { s.s.ProtocolVersion = v; return s }
 func (s *server) Description(d string) *server     { s.s.Description = d; return s }
+
+// Tags attaches tags for logical grouping and categorization of the server.
+func (s *server) Tags(tags ...spec.Tag) *server {
+	s.s.Tags = append(s.s.Tags, tags...)
+	return s
+}
+
+// ExternalDocs attaches additional external documentation for the server.
+func (s *server) ExternalDocs(d spec.ExternalDocs) *server {
+	s.s.ExternalDocs = &d
+	return s
+}
 
 // Variable declares a server URL variable.
 func (s *server) Variable(name string, v spec.ServerVariable) *server {
@@ -389,6 +489,26 @@ func securitySchemeRef(s *securityScheme) *spec.Reference {
 	}
 }
 
+// operationTraitRef is the JSON Reference to an operation trait declared via
+// OperationTraits(...).
+func operationTraitRef(t *operationTrait) *spec.Reference {
+	return &spec.Reference{
+		Ref: "#/components/operationTraits/" + jsonpointer.Escape(t.name),
+	}
+}
+
+// messageTraitRef is the JSON Reference to a message trait declared via
+// MessageTraits(...).
+func messageTraitRef(t *messageTrait) *spec.Reference {
+	return &spec.Reference{Ref: "#/components/messageTraits/" + jsonpointer.Escape(t.name)}
+}
+
+// correlationIDRef is the JSON Reference to a correlation id declared via
+// CorrelationIDs(...).
+func correlationIDRef(c *correlationID) *spec.Reference {
+	return &spec.Reference{Ref: "#/components/correlationIds/" + jsonpointer.Escape(c.name)}
+}
+
 // replyRef is the JSON Reference to a reply declared via Replies(...).
 func replyRef(r *reply) *spec.Reference {
 	return &spec.Reference{Ref: "#/components/replies/" + jsonpointer.Escape(r.name)}
@@ -414,6 +534,220 @@ func channelMessageRef(ch *channel, m *message) *spec.Reference {
 			messageName(m),
 		),
 	}
+}
+
+// --- traits ------------------------------------------------------------------
+
+type operationTraitsItem []*operationTrait
+
+// OperationTraits adds one or more reusable operation traits to the document's
+// components.operationTraits. Reference one from an operation via
+// Operation.Traits.
+func OperationTraits(t ...*operationTrait) Item { return operationTraitsItem(t) }
+
+func (t operationTraitsItem) apply(b *builder) error {
+	var errs []error
+	for _, tr := range t {
+		if err := tr.apply(b); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// operationTrait is an Operation Trait Object under construction. Its field set
+// is the shareable subset of an operation: action, channel, messages, and traits
+// are not settable, because the specification excludes them.
+type operationTrait struct {
+	name string
+	t    spec.OperationTrait
+}
+
+// OperationTrait declares a reusable operation trait under the given name.
+// Reference it from an operation via Operation.Traits.
+func OperationTrait(name string) *operationTrait {
+	return &operationTrait{name: name}
+}
+
+func (t *operationTrait) Title(v string) *operationTrait       { t.t.Title = v; return t }
+func (t *operationTrait) Summary(v string) *operationTrait     { t.t.Summary = v; return t }
+func (t *operationTrait) Description(v string) *operationTrait { t.t.Description = v; return t }
+
+func (t *operationTrait) Tags(tags ...spec.Tag) *operationTrait {
+	t.t.Tags = append(t.t.Tags, tags...)
+	return t
+}
+
+func (t *operationTrait) ExternalDocs(d spec.ExternalDocs) *operationTrait {
+	t.t.ExternalDocs = &d
+	return t
+}
+
+// Security declares the security schemes a client must satisfy to use an
+// operation carrying this trait. Every scheme must be declared via
+// SecuritySchemes(...).
+func (t *operationTrait) Security(schemes ...*securityScheme) *operationTrait {
+	for _, sc := range schemes {
+		t.t.Security = append(t.t.Security, securitySchemeRef(sc))
+	}
+	return t
+}
+
+// Bindings replaces the trait's protocol bindings wholesale. Prefer the typed
+// Kafka/AMQP/NATS/MQTT helpers (see bindings.go) to set a single protocol.
+func (t *operationTrait) Bindings(bindings spec.OperationBindings) *operationTrait {
+	t.t.Bindings = bindings
+	return t
+}
+
+func (t *operationTrait) apply(b *builder) error {
+	var errs []error
+	if t.name == "" {
+		errs = append(errs, fmt.Errorf("operationTrait.name: is required"))
+	}
+	c := b.components()
+	if c.OperationTraits == nil {
+		c.OperationTraits = map[string]*spec.OperationTrait{}
+	}
+	if _, dup := c.OperationTraits[t.name]; dup && t.name != "" {
+		errs = append(errs, fmt.Errorf("operationTrait.%s: duplicate name", t.name))
+	} else {
+		c.OperationTraits[t.name] = &t.t
+	}
+	return errors.Join(errs...)
+}
+
+type messageTraitsItem []*messageTrait
+
+// MessageTraits adds one or more reusable message traits to the document's
+// components.messageTraits. Reference one from a message via its Traits method.
+func MessageTraits(t ...*messageTrait) Item { return messageTraitsItem(t) }
+
+func (t messageTraitsItem) apply(b *builder) error {
+	var errs []error
+	for _, tr := range t {
+		if err := tr.apply(b); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// messageTrait is a Message Trait Object under construction. Its field set is
+// the shareable subset of a message: payload and traits are not settable,
+// because the specification excludes them.
+type messageTrait struct {
+	name string
+	t    spec.MessageTrait
+}
+
+// MessageTrait declares a reusable message trait under the given name.
+// Reference it from a message via its Traits method.
+func MessageTrait(name string) *messageTrait {
+	return &messageTrait{name: name}
+}
+
+func (t *messageTrait) Headers(h *spec.Schema) *messageTrait { t.t.Headers = h; return t }
+func (t *messageTrait) ContentType(v string) *messageTrait   { t.t.ContentType = v; return t }
+func (t *messageTrait) Name(v string) *messageTrait          { t.t.Name = v; return t }
+func (t *messageTrait) Title(v string) *messageTrait         { t.t.Title = v; return t }
+func (t *messageTrait) Summary(v string) *messageTrait       { t.t.Summary = v; return t }
+func (t *messageTrait) Description(v string) *messageTrait   { t.t.Description = v; return t }
+
+// CorrelationID points the trait at a correlation id declared via
+// CorrelationIDs(...).
+func (t *messageTrait) CorrelationID(c *correlationID) *messageTrait {
+	t.t.CorrelationID = correlationIDRef(c)
+	return t
+}
+
+func (t *messageTrait) Tags(tags ...spec.Tag) *messageTrait {
+	t.t.Tags = append(t.t.Tags, tags...)
+	return t
+}
+
+func (t *messageTrait) ExternalDocs(d spec.ExternalDocs) *messageTrait {
+	t.t.ExternalDocs = &d
+	return t
+}
+
+// Example attaches a named payload example to the trait.
+func (t *messageTrait) Example(name string, payload any) *messageTrait {
+	t.t.Examples = append(t.t.Examples, spec.MessageExample{Name: name, Payload: payload})
+	return t
+}
+
+// Bindings replaces the trait's protocol bindings wholesale. Prefer the typed
+// Kafka/AMQP/NATS/MQTT helpers (see bindings.go) to set a single protocol.
+func (t *messageTrait) Bindings(bindings spec.MessageBindings) *messageTrait {
+	t.t.Bindings = bindings
+	return t
+}
+
+func (t *messageTrait) apply(b *builder) error {
+	var errs []error
+	if t.name == "" {
+		errs = append(errs, fmt.Errorf("messageTrait.name: is required"))
+	}
+	c := b.components()
+	if c.MessageTraits == nil {
+		c.MessageTraits = map[string]*spec.MessageTrait{}
+	}
+	if _, dup := c.MessageTraits[t.name]; dup && t.name != "" {
+		errs = append(errs, fmt.Errorf("messageTrait.%s: duplicate name", t.name))
+	} else {
+		c.MessageTraits[t.name] = &t.t
+	}
+	return errors.Join(errs...)
+}
+
+// --- correlation ids ---------------------------------------------------------
+
+type correlationIDsItem []*correlationID
+
+// CorrelationIDs adds one or more reusable correlation ids to the document's
+// components.correlationIds. Reference one from a message trait via
+// MessageTrait.CorrelationID.
+func CorrelationIDs(c ...*correlationID) Item { return correlationIDsItem(c) }
+
+func (c correlationIDsItem) apply(b *builder) error {
+	var errs []error
+	for _, ci := range c {
+		if err := ci.apply(b); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+type correlationID struct {
+	name string
+	c    spec.CorrelationID
+}
+
+// CorrelationID declares a reusable correlation id under the given name.
+func CorrelationID(name string, c spec.CorrelationID) *correlationID {
+	return &correlationID{name: name, c: c}
+}
+
+func (c *correlationID) apply(b *builder) error {
+	var errs []error
+	if c.name == "" {
+		errs = append(errs, fmt.Errorf("correlationId.name: is required"))
+	}
+	if c.c.Location == "" {
+		errs = append(errs, fmt.Errorf("correlationId.%s.location: is required", c.name))
+	}
+	comps := b.components()
+	if comps.CorrelationIDs == nil {
+		comps.CorrelationIDs = map[string]*spec.CorrelationID{}
+	}
+	if _, dup := comps.CorrelationIDs[c.name]; dup && c.name != "" {
+		errs = append(errs, fmt.Errorf("correlationId.%s: duplicate name", c.name))
+	} else {
+		comps.CorrelationIDs[c.name] = &c.c
+	}
+	return errors.Join(errs...)
 }
 
 // --- replies -----------------------------------------------------------------
@@ -567,6 +901,18 @@ func Channel(address string) *channel {
 func (c *channel) Title(t string) *channel       { c.s.Title = t; return c }
 func (c *channel) Description(d string) *channel { c.s.Description = d; return c }
 
+// Tags attaches tags for logical grouping and categorization of the channel.
+func (c *channel) Tags(tags ...spec.Tag) *channel {
+	c.s.Tags = append(c.s.Tags, tags...)
+	return c
+}
+
+// ExternalDocs attaches additional external documentation for the channel.
+func (c *channel) ExternalDocs(d spec.ExternalDocs) *channel {
+	c.s.ExternalDocs = &d
+	return c
+}
+
 // Servers references the servers (declared via Servers(...)) on which this
 // channel is available. If empty, the channel is available on all servers.
 func (c *channel) Servers(s ...*server) *channel {
@@ -614,14 +960,17 @@ func (c *channel) apply(b *builder) error {
 
 	for _, op := range c.ops {
 		specOp := &spec.Operation{
-			Action:      op.action,
-			Channel:     &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(c.address)},
-			Title:       op.title,
-			Summary:     op.summary,
-			Description: op.description,
-			Security:    op.security,
-			Bindings:    op.bindings,
-			Reply:       op.replyReference(),
+			Action:       op.action,
+			Channel:      &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(c.address)},
+			Title:        op.title,
+			Summary:      op.summary,
+			Description:  op.description,
+			Tags:         op.tags,
+			ExternalDocs: op.externalDocs,
+			Security:     op.security,
+			Bindings:     op.bindings,
+			Traits:       op.traits,
+			Reply:        op.replyReference(),
 		}
 		for _, m := range op.messages {
 			sm, err := m.build(b)
@@ -649,14 +998,17 @@ func (c *channel) apply(b *builder) error {
 // --- operation ---------------------------------------------------------------
 
 type operation struct {
-	action      string
-	title       string
-	summary     string
-	description string
-	messages    []*message
-	security    []*spec.Reference
-	bindings    spec.OperationBindings
-	reply       *reply
+	action       string
+	title        string
+	summary      string
+	description  string
+	tags         []spec.Tag
+	externalDocs *spec.ExternalDocs
+	messages     []*message
+	security     []*spec.Reference
+	bindings     spec.OperationBindings
+	traits       []*spec.Reference
+	reply        *reply
 }
 
 // Operation declares an operation on a channel.
@@ -665,6 +1017,18 @@ func Operation() *operation { return &operation{} }
 func (o *operation) Title(t string) *operation       { o.title = t; return o }
 func (o *operation) Summary(s string) *operation     { o.summary = s; return o }
 func (o *operation) Description(d string) *operation { o.description = d; return o }
+
+// Tags attaches tags for logical grouping and categorization of the operation.
+func (o *operation) Tags(tags ...spec.Tag) *operation {
+	o.tags = append(o.tags, tags...)
+	return o
+}
+
+// ExternalDocs attaches additional external documentation for the operation.
+func (o *operation) ExternalDocs(d spec.ExternalDocs) *operation {
+	o.externalDocs = &d
+	return o
+}
 
 // Message attaches one or more messages to the operation.
 func (o *operation) Message(m ...*message) *operation {
@@ -685,6 +1049,15 @@ func (o *operation) Security(schemes ...*securityScheme) *operation {
 // request/reply operation. The reply must be declared via Replies(...).
 func (o *operation) Reply(r *reply) *operation {
 	o.reply = r
+	return o
+}
+
+// Traits attaches one or more operation traits to the operation. Every trait
+// must be declared via OperationTraits(...).
+func (o *operation) Traits(traits ...*operationTrait) *operation {
+	for _, tr := range traits {
+		o.traits = append(o.traits, operationTraitRef(tr))
+	}
 	return o
 }
 

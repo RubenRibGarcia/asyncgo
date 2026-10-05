@@ -107,3 +107,81 @@ func TestMergeSecuritySchemes(t *testing.T) {
 	assert.Equal(t, "oauth2", out.Components.SecuritySchemes["oauth"].Type, "first occurrence wins")
 	assert.Equal(t, "basic", out.Components.SecuritySchemes["basic"].Scheme)
 }
+
+func TestMergeOperationAndMessageTraits(t *testing.T) {
+	first := spec.New()
+	first.Info = spec.Info{Title: "T", Version: "1.0.0"}
+	first.Components = &spec.Components{
+		OperationTraits: map[string]*spec.OperationTrait{
+			"Kafka": {Summary: "first"},
+		},
+		MessageTraits: map[string]*spec.MessageTrait{
+			"Traced": {ContentType: "application/json"},
+		},
+	}
+
+	second := spec.New()
+	second.Info = spec.Info{Title: "U", Version: "1.0.0"}
+	second.Components = &spec.Components{
+		OperationTraits: map[string]*spec.OperationTrait{
+			"Kafka": {Summary: "second"},
+			"AMQP":  {Summary: "amqp"},
+		},
+		MessageTraits: map[string]*spec.MessageTrait{
+			"Traced": {ContentType: "text/plain"},
+			"Other":  {},
+		},
+	}
+
+	out := Merge(first, second)
+	require.NotNil(t, out.Components)
+	assert.Len(t, out.Components.OperationTraits, 2)
+	assert.Len(t, out.Components.MessageTraits, 2)
+	assert.Equal(
+		t,
+		"first",
+		out.Components.OperationTraits["Kafka"].Summary,
+		"first occurrence wins",
+	)
+	assert.Equal(
+		t,
+		"application/json",
+		out.Components.MessageTraits["Traced"].ContentType,
+		"first occurrence wins",
+	)
+	assert.Equal(t, "amqp", out.Components.OperationTraits["AMQP"].Summary)
+}
+
+func TestMergeCorrelationIDs(t *testing.T) {
+	first := spec.New()
+	first.Info = spec.Info{Title: "T", Version: "1.0.0"}
+	first.Components = &spec.Components{
+		CorrelationIDs: map[string]*spec.CorrelationID{
+			"CorrelationID": {Location: "$message.header#/first"},
+		},
+	}
+
+	second := spec.New()
+	second.Info = spec.Info{Title: "U", Version: "1.0.0"}
+	second.Components = &spec.Components{
+		CorrelationIDs: map[string]*spec.CorrelationID{
+			"CorrelationID": {Location: "$message.header#/second"},
+			"Other":         {Location: "$message.header#/other"},
+		},
+	}
+
+	out := Merge(first, second)
+	require.NotNil(t, out.Components)
+	assert.Len(t, out.Components.CorrelationIDs, 2)
+	assert.Equal(
+		t,
+		"$message.header#/first",
+		out.Components.CorrelationIDs["CorrelationID"].Location,
+		"first occurrence wins",
+	)
+	assert.Equal(
+		t,
+		"$message.header#/other",
+		out.Components.CorrelationIDs["Other"].Location,
+	)
+}

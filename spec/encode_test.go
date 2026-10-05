@@ -456,3 +456,179 @@ func canonicalJSON(t *testing.T, v any) string {
 
 	return string(out)
 }
+
+func TestEncodeOperationTraits(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Operations = map[string]*Operation{
+		"order-placed.send": {
+			Action:  ActionSend,
+			Channel: &Reference{Ref: "#/channels/order-placed"},
+			Traits:  []*Reference{{Ref: "#/components/operationTraits/Kafka"}},
+		},
+	}
+	doc.Components = &Components{
+		OperationTraits: map[string]*OperationTrait{
+			"Kafka": {
+				Summary:      "Shared Kafka settings",
+				Security:     []*Reference{{Ref: "#/components/securitySchemes/basic"}},
+				Tags:         []Tag{{Name: "orders"}},
+				ExternalDocs: &ExternalDocs{URL: "https://example.com/traits"},
+				Bindings: OperationBindings{
+					ProtocolKafka: &KafkaOperationBinding{
+						GroupID:  &Schema{Type: "string"},
+						ClientID: &Schema{Type: "string"},
+					},
+				},
+			},
+		},
+	}
+
+	yamlOut, err := doc.YAML()
+	require.NoError(t, err)
+	for _, want := range []string{
+		"operationTraits:",
+		"#/components/operationTraits/Kafka",
+		"summary: Shared Kafka settings",
+		"externalDocs:",
+		"groupId:",
+		"type: string",
+	} {
+		assert.Contains(t, string(yamlOut), want)
+	}
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	for _, want := range []string{
+		`"operationTraits":`,
+		`"traits":[{"$ref":"#/components/operationTraits/Kafka"}]`,
+	} {
+		assert.Contains(t, string(jsonOut), want)
+	}
+
+	t.Run("should_decode_yaml_and_json_to_the_same_document", func(t *testing.T) {
+		var fromYAML, fromJSON AsyncAPI
+		require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
+		require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
+
+		assert.Equal(t, canonicalJSON(t, &fromYAML), canonicalJSON(t, &fromJSON))
+	})
+}
+
+func TestEncodeMessageTraits(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Channels = map[string]*Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Messages: map[string]*Message{
+				"OrderPlaced": {
+					Name:    "OrderPlaced",
+					Payload: &Schema{Type: "object"},
+					Traits:  []*Reference{{Ref: "#/components/messageTraits/Traced"}},
+				},
+			},
+		},
+	}
+	doc.Components = &Components{
+		MessageTraits: map[string]*MessageTrait{
+			"Traced": {
+				ContentType:   "application/json",
+				CorrelationID: &Reference{Ref: "#/components/correlationIds/CorrelationID"},
+				Tags:          []Tag{{Name: "traced"}},
+			},
+		},
+		CorrelationIDs: map[string]*CorrelationID{
+			"CorrelationID": {
+				Description: "Correlation ID",
+				Location:    "$message.header#/correlationId",
+			},
+		},
+	}
+
+	yamlOut, err := doc.YAML()
+	require.NoError(t, err)
+	for _, want := range []string{
+		"messageTraits:",
+		"correlationIds:",
+		"#/components/messageTraits/Traced",
+		"contentType: application/json",
+		`location: "$message.header#/correlationId"`,
+	} {
+		assert.Contains(t, string(yamlOut), want)
+	}
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	for _, want := range []string{
+		`"messageTraits":`,
+		`"traits":[{"$ref":"#/components/messageTraits/Traced"}]`,
+		`"correlationId":{"$ref":"#/components/correlationIds/CorrelationID"}`,
+	} {
+		assert.Contains(t, string(jsonOut), want)
+	}
+
+	t.Run("should_decode_yaml_and_json_to_the_same_document", func(t *testing.T) {
+		var fromYAML, fromJSON AsyncAPI
+		require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
+		require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
+
+		assert.Equal(t, canonicalJSON(t, &fromYAML), canonicalJSON(t, &fromJSON))
+	})
+}
+
+// TestEncodeCorrelationIDAlwaysEmitsLocation pins the one required field of a
+// Correlation ID Object: like an Operation Reply Address, an empty location has
+// to be emitted and fail validation rather than silently drop the key.
+func TestEncodeCorrelationIDAlwaysEmitsLocation(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Components = &Components{
+		CorrelationIDs: map[string]*CorrelationID{"CorrelationID": {}},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "location:")
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	assert.Contains(t, string(jsonOut), `"location":""`)
+}
+
+func TestEncodeTagsAndExternalDocs(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Servers = map[string]*Server{
+		"prod": {
+			Host:     "broker:9092",
+			Protocol: ProtocolKafka,
+			Tags:     []Tag{{Name: "prod"}},
+			ExternalDocs: &ExternalDocs{
+				Description: "Server docs",
+				URL:         "https://example.com/server",
+			},
+		},
+	}
+	doc.Channels = map[string]*Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Tags:    []Tag{{Name: "orders"}},
+			ExternalDocs: &ExternalDocs{
+				URL: "https://example.com/channel",
+			},
+		},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	for _, want := range []string{
+		"tags:",
+		"externalDocs:",
+		"name: prod",
+		"url: https://example.com/server",
+		"url: https://example.com/channel",
+	} {
+		assert.Contains(t, string(out), want)
+	}
+}

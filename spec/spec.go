@@ -76,6 +76,7 @@ type Server struct {
 	Variables       map[string]*ServerVariable `json:"variables,omitempty"       yaml:"variables,omitempty"`
 	Security        []*Reference               `json:"security,omitempty"        yaml:"security,omitempty"`
 	Tags            []Tag                      `json:"tags,omitempty"            yaml:"tags,omitempty"`
+	ExternalDocs    *ExternalDocs              `json:"externalDocs,omitempty"    yaml:"externalDocs,omitempty"`
 	Bindings        ServerBindings             `json:"bindings,omitempty"        yaml:"bindings,omitempty"`
 }
 
@@ -121,14 +122,15 @@ type OAuthFlow struct {
 
 // Channel describes a channel/topic/queue on which messages flow.
 type Channel struct {
-	Address     string                `json:"address,omitempty"     yaml:"address,omitempty"`
-	Messages    map[string]*Message   `json:"messages,omitempty"    yaml:"messages,omitempty"`
-	Title       string                `json:"title,omitempty"       yaml:"title,omitempty"`
-	Description string                `json:"description,omitempty" yaml:"description,omitempty"`
-	Servers     []*Reference          `json:"servers,omitempty"     yaml:"servers,omitempty"`
-	Parameters  map[string]*Parameter `json:"parameters,omitempty"  yaml:"parameters,omitempty"`
-	Tags        []Tag                 `json:"tags,omitempty"        yaml:"tags,omitempty"`
-	Bindings    ChannelBindings       `json:"bindings,omitempty"    yaml:"bindings,omitempty"`
+	Address      string                `json:"address,omitempty"      yaml:"address,omitempty"`
+	Messages     map[string]*Message   `json:"messages,omitempty"     yaml:"messages,omitempty"`
+	Title        string                `json:"title,omitempty"        yaml:"title,omitempty"`
+	Description  string                `json:"description,omitempty"  yaml:"description,omitempty"`
+	Servers      []*Reference          `json:"servers,omitempty"      yaml:"servers,omitempty"`
+	Parameters   map[string]*Parameter `json:"parameters,omitempty"   yaml:"parameters,omitempty"`
+	Tags         []Tag                 `json:"tags,omitempty"         yaml:"tags,omitempty"`
+	ExternalDocs *ExternalDocs         `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings     ChannelBindings       `json:"bindings,omitempty"     yaml:"bindings,omitempty"`
 }
 
 // Operation describes an application-defined operation on a channel.
@@ -145,6 +147,20 @@ type Operation struct {
 	Traits       []*Reference      `json:"traits,omitempty"       yaml:"traits,omitempty"`
 	Messages     []*Reference      `json:"messages,omitempty"     yaml:"messages,omitempty"`
 	Reply        *Reference        `json:"reply,omitempty"        yaml:"reply,omitempty"`
+}
+
+// OperationTrait is an AsyncAPI 3.1.0 Operation Trait Object: the shareable
+// subset of an Operation Object. action, channel, messages, and traits are
+// deliberately absent — the specification excludes them, and modeling the trait
+// as its own type makes them unrepresentable.
+type OperationTrait struct {
+	Title        string            `json:"title,omitempty"        yaml:"title,omitempty"`
+	Summary      string            `json:"summary,omitempty"      yaml:"summary,omitempty"`
+	Description  string            `json:"description,omitempty"  yaml:"description,omitempty"`
+	Security     []*Reference      `json:"security,omitempty"     yaml:"security,omitempty"`
+	Tags         []Tag             `json:"tags,omitempty"         yaml:"tags,omitempty"`
+	ExternalDocs *ExternalDocs     `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
+	Bindings     OperationBindings `json:"bindings,omitempty"     yaml:"bindings,omitempty"`
 }
 
 // Reference is a JSON Reference to a reusable component.
@@ -188,6 +204,23 @@ type Message struct {
 	Traits        []*Reference     `json:"traits,omitempty"        yaml:"traits,omitempty"`
 }
 
+// MessageTrait is an AsyncAPI 3.1.0 Message Trait Object: the shareable subset
+// of a Message Object. payload and traits are deliberately absent for the same
+// reason as OperationTrait's exclusions.
+type MessageTrait struct {
+	Headers       *Schema          `json:"headers,omitempty"       yaml:"headers,omitempty"`
+	CorrelationID *Reference       `json:"correlationId,omitempty" yaml:"correlationId,omitempty"`
+	ContentType   string           `json:"contentType,omitempty"   yaml:"contentType,omitempty"`
+	Name          string           `json:"name,omitempty"          yaml:"name,omitempty"`
+	Title         string           `json:"title,omitempty"         yaml:"title,omitempty"`
+	Summary       string           `json:"summary,omitempty"       yaml:"summary,omitempty"`
+	Description   string           `json:"description,omitempty"   yaml:"description,omitempty"`
+	Tags          []Tag            `json:"tags,omitempty"          yaml:"tags,omitempty"`
+	ExternalDocs  *ExternalDocs    `json:"externalDocs,omitempty"  yaml:"externalDocs,omitempty"`
+	Bindings      MessageBindings  `json:"bindings,omitempty"      yaml:"bindings,omitempty"`
+	Examples      []MessageExample `json:"examples,omitempty"      yaml:"examples,omitempty"`
+}
+
 // MessageExample is a named example of a message payload.
 type MessageExample struct {
 	Name    string         `json:"name,omitempty"    yaml:"name,omitempty"`
@@ -219,6 +252,8 @@ type Components struct {
 	SecuritySchemes map[string]*SecurityScheme        `json:"securitySchemes,omitempty" yaml:"securitySchemes,omitempty"`
 	Parameters      map[string]*Parameter             `json:"parameters,omitempty"      yaml:"parameters,omitempty"`
 	CorrelationIDs  map[string]*CorrelationID         `json:"correlationIds,omitempty"  yaml:"correlationIds,omitempty"`
+	OperationTraits map[string]*OperationTrait        `json:"operationTraits,omitempty" yaml:"operationTraits,omitempty"`
+	MessageTraits   map[string]*MessageTrait          `json:"messageTraits,omitempty"   yaml:"messageTraits,omitempty"`
 	Replies         map[string]*OperationReply        `json:"replies,omitempty"         yaml:"replies,omitempty"`
 	ReplyAddresses  map[string]*OperationReplyAddress `json:"replyAddresses,omitempty"  yaml:"replyAddresses,omitempty"`
 }

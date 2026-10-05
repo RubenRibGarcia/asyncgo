@@ -503,6 +503,185 @@ func TestValidationErrors(t *testing.T) {
 			},
 			want: "",
 		},
+		{
+			name: "should_return_error_when_operation_references_unknown_operation_trait",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Traits(OperationTrait("Missing")).
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
+					),
+				)
+			},
+			want: `operation.order-placed.send: references unknown operation trait "Missing"`,
+		},
+		{
+			name: "should_return_error_when_message_references_unknown_message_trait",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).
+									Name("OrderPlaced").
+									Traits(MessageTrait("Missing")))),
+					),
+				)
+			},
+			want: `channel.order-placed.messages.OrderPlaced: references unknown message trait "Missing"`,
+		},
+		{
+			name: "should_return_error_when_message_trait_references_unknown_correlation_id",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					MessageTraits(
+						MessageTrait("Traced").CorrelationID(
+							CorrelationID("Missing", spec.CorrelationID{
+								Location: "$message.header#/correlationId",
+							}),
+						),
+					),
+				)
+			},
+			want: `messageTrait.Traced: references unknown correlation id "Missing"`,
+		},
+		{
+			name: "should_return_error_when_operation_trait_references_unknown_security_scheme",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					OperationTraits(
+						OperationTrait("Kafka").
+							Security(SecurityScheme("basic", spec.SecurityScheme{Type: "http"})),
+					),
+				)
+			},
+			want: `operationTrait.Kafka: references unknown security scheme "basic"`,
+		},
+		{
+			name: "should_return_error_when_operation_trait_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(Info("Orders", "1.0.0"), OperationTraits(OperationTrait("")))
+			},
+			want: "operationTrait.name: is required",
+		},
+		{
+			name: "should_return_error_when_operation_trait_name_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					OperationTraits(OperationTrait("Kafka"), OperationTrait("Kafka")),
+				)
+			},
+			want: "operationTrait.Kafka: duplicate name",
+		},
+		{
+			name: "should_return_error_when_message_trait_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(Info("Orders", "1.0.0"), MessageTraits(MessageTrait("")))
+			},
+			want: "messageTrait.name: is required",
+		},
+		{
+			name: "should_return_error_when_message_trait_name_is_duplicate",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					MessageTraits(MessageTrait("Traced"), MessageTrait("Traced")),
+				)
+			},
+			want: "messageTrait.Traced: duplicate name",
+		},
+		{
+			name: "should_return_error_when_correlation_id_name_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					CorrelationIDs(CorrelationID("", spec.CorrelationID{
+						Location: "$message.header#/correlationId",
+					})),
+				)
+			},
+			want: "correlationId.name: is required",
+		},
+		{
+			name: "should_return_error_when_correlation_id_location_is_empty",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					CorrelationIDs(CorrelationID("CorrelationID", spec.CorrelationID{})),
+				)
+			},
+			want: "correlationId.CorrelationID.location: is required",
+		},
+		{
+			name: "should_return_error_when_correlation_id_name_is_duplicate",
+			spec: func() *SpecResult {
+				corr := spec.CorrelationID{Location: "$message.header#/correlationId"}
+				return Spec(
+					Info("Orders", "1.0.0"),
+					CorrelationIDs(
+						CorrelationID("CorrelationID", corr),
+						CorrelationID("CorrelationID", corr),
+					),
+				)
+			},
+			want: "correlationId.CorrelationID: duplicate name",
+		},
+		{
+			name: "should_allow_operation_trait_declared_after_it_is_referenced",
+			spec: func() *SpecResult {
+				trait := OperationTrait("Kafka")
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Traits(trait).
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
+					),
+					OperationTraits(trait),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_allow_message_trait_declared_after_it_is_referenced",
+			spec: func() *SpecResult {
+				trait := MessageTrait("Traced")
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").
+							Send(Operation().
+								Message(MessageOf(OrderPlaced{}).Name("OrderPlaced").Traits(trait)),
+							),
+					),
+					MessageTraits(trait),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_allow_correlation_id_declared_after_it_is_referenced",
+			spec: func() *SpecResult {
+				corr := CorrelationID("CorrelationID", spec.CorrelationID{
+					Location: "$message.header#/correlationId",
+				})
+				trait := MessageTrait("Traced").CorrelationID(corr)
+				return Spec(
+					Info("Orders", "1.0.0"),
+					MessageTraits(trait),
+					CorrelationIDs(corr),
+				)
+			},
+			want: "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -809,4 +988,266 @@ func TestOperationWithoutReplyOmitsReply(t *testing.T) {
 	require.NoError(t, c.apply(b))
 
 	assert.Nil(t, b.doc.Operations["order-placed.send"].Reply)
+}
+
+func TestOperationTraitFields(t *testing.T) {
+	basic := SecurityScheme("basic", spec.SecurityScheme{Type: "http", Scheme: "basic"})
+
+	tr := OperationTrait("KafkaOrders").
+		Title("Kafka orders").
+		Summary("Shared settings").
+		Description("Applied to every orders operation").
+		Security(basic).
+		Tags(spec.Tag{Name: "orders"}).
+		ExternalDocs(spec.ExternalDocs{URL: "https://example.com/orders"}).
+		Kafka(spec.KafkaOperationBinding{
+			GroupID:  &spec.Schema{Type: "string"},
+			ClientID: &spec.Schema{Type: "string"},
+		})
+
+	assert.Equal(t, "KafkaOrders", tr.name)
+	assert.Equal(t, "Kafka orders", tr.t.Title)
+	assert.Equal(t, "Shared settings", tr.t.Summary)
+	assert.Equal(t, "Applied to every orders operation", tr.t.Description)
+	require.Len(t, tr.t.Security, 1)
+	assert.Equal(t, "#/components/securitySchemes/basic", tr.t.Security[0].Ref)
+	assert.Equal(t, []spec.Tag{{Name: "orders"}}, tr.t.Tags)
+	require.NotNil(t, tr.t.ExternalDocs)
+	assert.Equal(t, "https://example.com/orders", tr.t.ExternalDocs.URL)
+	require.Contains(t, tr.t.Bindings, spec.ProtocolKafka)
+	assert.Equal(
+		t,
+		&spec.Schema{Type: "string"},
+		tr.t.Bindings[spec.ProtocolKafka].(*spec.KafkaOperationBinding).GroupID,
+	)
+}
+
+func TestMessageTraitFields(t *testing.T) {
+	corr := CorrelationID("CorrelationID", spec.CorrelationID{
+		Description: "Correlation ID",
+		Location:    "$message.header#/correlationId",
+	})
+
+	tr := MessageTrait("Traced").
+		ContentType("application/json").
+		Name("TracedMessage").
+		Title("Traced").
+		Summary("Shared headers").
+		Description("Applied to every traced message").
+		Headers(spec.Ref("#/components/schemas/Headers")).
+		CorrelationID(corr).
+		Tags(spec.Tag{Name: "traced"}).
+		ExternalDocs(spec.ExternalDocs{URL: "https://example.com/traced"}).
+		Example("simple", map[string]any{"order_id": "1"}).
+		Kafka(spec.KafkaMessageBinding{Key: &spec.Schema{Type: "string"}})
+
+	assert.Equal(t, "Traced", tr.name)
+	assert.Equal(t, "application/json", tr.t.ContentType)
+	assert.Equal(t, "TracedMessage", tr.t.Name)
+	assert.Equal(t, "Traced", tr.t.Title)
+	assert.Equal(t, "Shared headers", tr.t.Summary)
+	assert.Equal(t, "Applied to every traced message", tr.t.Description)
+	require.NotNil(t, tr.t.Headers)
+	assert.Equal(t, "#/components/schemas/Headers", tr.t.Headers.Ref)
+	require.NotNil(t, tr.t.CorrelationID)
+	assert.Equal(t, "#/components/correlationIds/CorrelationID", tr.t.CorrelationID.Ref)
+	assert.Equal(t, []spec.Tag{{Name: "traced"}}, tr.t.Tags)
+	require.NotNil(t, tr.t.ExternalDocs)
+	assert.Equal(t, "https://example.com/traced", tr.t.ExternalDocs.URL)
+	require.Len(t, tr.t.Examples, 1)
+	assert.Equal(t, "simple", tr.t.Examples[0].Name)
+	require.Contains(t, tr.t.Bindings, spec.ProtocolKafka)
+}
+
+func TestOperationTraitsRegistersComponents(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		OperationTraits(
+			OperationTrait("Kafka").Summary("kafka settings"),
+			OperationTrait("AMQP").Summary("amqp settings"),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	assert.Len(t, res.Doc.Components.OperationTraits, 2)
+	assert.Equal(t, "kafka settings", res.Doc.Components.OperationTraits["Kafka"].Summary)
+}
+
+func TestMessageTraitsRegistersComponents(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		MessageTraits(
+			MessageTrait("Traced").ContentType("application/json"),
+			MessageTrait("Untraced").ContentType("text/plain"),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	assert.Len(t, res.Doc.Components.MessageTraits, 2)
+	assert.Equal(t, "application/json", res.Doc.Components.MessageTraits["Traced"].ContentType)
+}
+
+func TestCorrelationIDsRegistersComponents(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		CorrelationIDs(CorrelationID("CorrelationID", spec.CorrelationID{
+			Description: "Correlation ID",
+			Location:    "$message.header#/correlationId",
+		})),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+	assert.Len(t, res.Doc.Components.CorrelationIDs, 1)
+	assert.Equal(
+		t,
+		"$message.header#/correlationId",
+		res.Doc.Components.CorrelationIDs["CorrelationID"].Location,
+	)
+}
+
+func TestOperationTraitRefEscapesPointer(t *testing.T) {
+	tr := OperationTrait("tenant/trait~prod")
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, OperationTraits(tr).apply(b))
+
+	assert.Equal(t, "#/components/operationTraits/tenant~1trait~0prod", operationTraitRef(tr).Ref)
+	assert.Contains(t, b.doc.Components.OperationTraits, "tenant/trait~prod")
+}
+
+func TestMessageTraitRefEscapesPointer(t *testing.T) {
+	tr := MessageTrait("tenant/trait~prod")
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, MessageTraits(tr).apply(b))
+
+	assert.Equal(t, "#/components/messageTraits/tenant~1trait~0prod", messageTraitRef(tr).Ref)
+	assert.Contains(t, b.doc.Components.MessageTraits, "tenant/trait~prod")
+}
+
+func TestCorrelationIDRefEscapesPointer(t *testing.T) {
+	c := CorrelationID("tenant/id~prod", spec.CorrelationID{Location: "$message.header#/id"})
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, CorrelationIDs(c).apply(b))
+
+	assert.Equal(t, "#/components/correlationIds/tenant~1id~0prod", correlationIDRef(c).Ref)
+	assert.Contains(t, b.doc.Components.CorrelationIDs, "tenant/id~prod")
+}
+
+func TestOperationTraits(t *testing.T) {
+	trait := OperationTrait("Kafka")
+
+	c := Channel("order-placed").
+		Send(Operation().
+			Traits(trait).
+			Message(MessageOf(OrderPlaced{}).Name("OrderPlaced")))
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, c.apply(b))
+
+	require.Contains(t, b.doc.Operations, "order-placed.send")
+	require.Len(t, b.doc.Operations["order-placed.send"].Traits, 1)
+	assert.Equal(
+		t,
+		"#/components/operationTraits/Kafka",
+		b.doc.Operations["order-placed.send"].Traits[0].Ref,
+	)
+}
+
+// TestSharedOperationTraitOnTwoOperations is the unit-level counterpart of the
+// fixture's headline case: one component, referenced by two operations.
+func TestSharedOperationTraitOnTwoOperations(t *testing.T) {
+	trait := OperationTrait("Kafka")
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, Channels(
+		Channel("order-placed").Send(Operation().
+			Traits(trait).
+			Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))),
+		Channel("order-shipped").Send(Operation().
+			Traits(trait).
+			Message(MessageOf(OrderPlaced{}).Name("OrderShipped"))),
+	).apply(b))
+
+	assert.Equal(
+		t,
+		"#/components/operationTraits/Kafka",
+		b.doc.Operations["order-placed.send"].Traits[0].Ref,
+	)
+	assert.Equal(
+		t,
+		"#/components/operationTraits/Kafka",
+		b.doc.Operations["order-shipped.send"].Traits[0].Ref,
+	)
+}
+
+func TestMessageTraits(t *testing.T) {
+	trait := MessageTrait("Traced")
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	msg, err := MessageOf(OrderPlaced{}).Name("OrderPlaced").Traits(trait).build(b)
+	require.NoError(t, err)
+
+	require.Len(t, msg.Traits, 1)
+	assert.Equal(t, "#/components/messageTraits/Traced", msg.Traits[0].Ref)
+}
+
+func TestServerTagsAndExternalDocs(t *testing.T) {
+	s := Server("prod", "kafka", "broker:9092").
+		Tags(spec.Tag{Name: "prod"}).
+		ExternalDocs(spec.ExternalDocs{URL: "https://example.com/prod"})
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, Servers(s).apply(b))
+
+	assert.Equal(t, []spec.Tag{{Name: "prod"}}, b.doc.Servers["prod"].Tags)
+	require.NotNil(t, b.doc.Servers["prod"].ExternalDocs)
+	assert.Equal(t, "https://example.com/prod", b.doc.Servers["prod"].ExternalDocs.URL)
+}
+
+func TestChannelTagsAndExternalDocs(t *testing.T) {
+	c := Channel("order-placed").
+		Tags(spec.Tag{Name: "orders"}).
+		ExternalDocs(spec.ExternalDocs{URL: "https://example.com/channel"})
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, c.apply(b))
+
+	assert.Equal(t, []spec.Tag{{Name: "orders"}}, b.doc.Channels["order-placed"].Tags)
+	require.NotNil(t, b.doc.Channels["order-placed"].ExternalDocs)
+	assert.Equal(t, "https://example.com/channel", b.doc.Channels["order-placed"].ExternalDocs.URL)
+}
+
+func TestOperationTagsAndExternalDocs(t *testing.T) {
+	c := Channel("order-placed").
+		Send(Operation().
+			Tags(spec.Tag{Name: "orders"}).
+			ExternalDocs(spec.ExternalDocs{URL: "https://example.com/operation"}).
+			Message(MessageOf(OrderPlaced{}).Name("OrderPlaced")))
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	require.NoError(t, c.apply(b))
+
+	op := b.doc.Operations["order-placed.send"]
+	assert.Equal(t, []spec.Tag{{Name: "orders"}}, op.Tags)
+	require.NotNil(t, op.ExternalDocs)
+	assert.Equal(t, "https://example.com/operation", op.ExternalDocs.URL)
+}
+
+func TestMessageTagsAndExternalDocs(t *testing.T) {
+	m := MessageOf(OrderPlaced{}).Name("OrderPlaced").
+		Tags(spec.Tag{Name: "orders"}).
+		ExternalDocs(spec.ExternalDocs{URL: "https://example.com/message"})
+
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	msg, err := m.build(b)
+	require.NoError(t, err)
+
+	assert.Equal(t, []spec.Tag{{Name: "orders"}}, msg.Tags)
+	require.NotNil(t, msg.ExternalDocs)
+	assert.Equal(t, "https://example.com/message", msg.ExternalDocs.URL)
 }

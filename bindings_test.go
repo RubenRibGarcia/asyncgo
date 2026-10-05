@@ -103,10 +103,10 @@ func TestChannelBindings(t *testing.T) {
 
 func TestOperationBindings(t *testing.T) {
 	t.Run("should_set_kafka_binding", func(t *testing.T) {
-		o := Operation().Kafka(spec.KafkaOperationBinding{GroupID: "g"})
+		o := Operation().Kafka(spec.KafkaOperationBinding{GroupID: &spec.Schema{Type: "string"}})
 		b, ok := o.bindings[spec.ProtocolKafka].(*spec.KafkaOperationBinding)
 		require.True(t, ok)
-		assert.Equal(t, "g", b.GroupID)
+		assert.Equal(t, &spec.Schema{Type: "string"}, b.GroupID)
 	})
 
 	t.Run("should_set_amqp_binding", func(t *testing.T) {
@@ -145,10 +145,12 @@ func TestOperationBindings(t *testing.T) {
 
 func TestMessageBindings(t *testing.T) {
 	t.Run("should_set_kafka_binding", func(t *testing.T) {
-		m := MessageOf(OrderPlaced{}).Kafka(spec.KafkaMessageBinding{Key: "k"})
+		m := MessageOf(
+			OrderPlaced{},
+		).Kafka(spec.KafkaMessageBinding{Key: &spec.Schema{Type: "string"}})
 		b, ok := m.bindings[spec.ProtocolKafka].(*spec.KafkaMessageBinding)
 		require.True(t, ok)
-		assert.Equal(t, "k", b.Key)
+		assert.Equal(t, &spec.Schema{Type: "string"}, b.Key)
 	})
 
 	t.Run("should_set_amqp_binding", func(t *testing.T) {

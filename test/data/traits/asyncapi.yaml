@@ -1,0 +1,106 @@
+asyncapi: 3.1.0
+info:
+  title: Traited Orders Service
+  version: 1.0.0
+  description: Order events whose operations share a Kafka trait
+servers:
+  prod:
+    host: broker.example.com:9092
+    protocol: kafka
+    description: Production Kafka cluster
+    tags:
+    - name: prod
+    externalDocs:
+      url: https://example.com/servers/prod
+channels:
+  order-placed:
+    address: order-placed
+    messages:
+      OrderPlaced:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
+        name: OrderPlaced
+        tags:
+        - name: orders
+        externalDocs:
+          url: https://example.com/messages/order-placed
+        traits:
+        - $ref: "#/components/messageTraits/TracedMessage"
+    description: Order placements
+    servers:
+    - $ref: "#/servers/prod"
+    tags:
+    - name: orders
+    externalDocs:
+      url: https://example.com/channels/order-placed
+  order-shipped:
+    address: order-shipped
+    messages:
+      OrderShipped:
+        payload:
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderShipped"
+        name: OrderShipped
+        traits:
+        - $ref: "#/components/messageTraits/TracedMessage"
+    description: Order shipments
+    servers:
+    - $ref: "#/servers/prod"
+operations:
+  order-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-placed"
+    tags:
+    - name: write
+    externalDocs:
+      url: https://example.com/operations/order-placed-send
+    traits:
+    - $ref: "#/components/operationTraits/KafkaOrders"
+    messages:
+    - $ref: "#/channels/order-placed/messages/OrderPlaced"
+  order-shipped.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-shipped"
+    traits:
+    - $ref: "#/components/operationTraits/KafkaOrders"
+    messages:
+    - $ref: "#/channels/order-shipped/messages/OrderShipped"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/traits.OrderPlaced:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required:
+      - order_id
+    github.com/RubenRibGarcia/asyncgo/test/data/traits.OrderShipped:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required:
+      - order_id
+  correlationIds:
+    OrderCorrelationID:
+      description: Correlation ID carried in the message headers
+      location: "$message.header#/correlationId"
+  operationTraits:
+    KafkaOrders:
+      summary: Shared Kafka settings for order operations
+      tags:
+      - name: orders
+      bindings:
+        kafka:
+          clientId:
+            type: string
+          groupId:
+            type: string
+  messageTraits:
+    TracedMessage:
+      correlationId:
+        $ref: "#/components/correlationIds/OrderCorrelationID"
+      contentType: application/json
+      tags:
+      - name: traced
