@@ -2,6 +2,7 @@ package spec
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -632,6 +633,102 @@ func TestEncodeTagsAndExternalDocs(t *testing.T) {
 	} {
 		assert.Contains(t, string(out), want)
 	}
+}
+
+// TestEncodeOmitsNonSpecFields pins the exported surface to AsyncAPI 3.1.0:
+// the root object has exactly eight fields and License exactly two. The three
+// fields removed by issue #20 must not reappear at the root or under `license`.
+// Nested `tags:`/`externalDocs:` on servers, channels, and messages stay legal,
+// so the assertions are scoped to the root and license maps — a nested key
+// cannot mask a root regression.
+func TestEncodeOmitsNonSpecFields(t *testing.T) {
+	doc := New()
+	doc.Info = Info{
+		Title:   "Orders",
+		Version: "1.0.0",
+		License: &License{Name: "MIT", URL: "https://opensource.org/license/mit"},
+	}
+	doc.Servers = map[string]*Server{
+		"prod": {
+			Host:     "broker:9092",
+			Protocol: ProtocolKafka,
+			Tags:     []Tag{{Name: "prod"}},
+			ExternalDocs: &ExternalDocs{
+				URL: "https://example.com/server",
+			},
+		},
+	}
+	doc.Channels = map[string]*Channel{
+		"order-placed": {Address: "order-placed"},
+	}
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+
+	var root map[string]any
+	require.NoError(t, yaml.Unmarshal(out, &root))
+
+	// Every root key has to be one of the eight 3.1.0 root-object fields.
+	specRootFields := map[string]bool{
+		"asyncapi": true, "id": true, "info": true, "servers": true,
+		"defaultContentType": true, "channels": true, "operations": true,
+		"components": true,
+	}
+	for key := range root {
+		assert.Truef(t, specRootFields[key], "unexpected root field %q", key)
+	}
+	_, hasTags := root["tags"]
+	assert.False(t, hasTags, "root must not emit tags")
+	_, hasExternalDocs := root["externalDocs"]
+	assert.False(t, hasExternalDocs, "root must not emit externalDocs")
+
+	info, ok := root["info"].(map[string]any)
+	require.True(t, ok, "info must decode to a map")
+	license, ok := info["license"].(map[string]any)
+	require.True(t, ok, "info.license must decode to a map")
+	assert.Contains(t, license, "name")
+	assert.Contains(t, license, "url")
+	assert.Len(t, license, 2)
+	_, hasIdentifier := license["identifier"]
+	assert.False(t, hasIdentifier, "license must not emit identifier")
+
+	// The nested, legal tags/externalDocs must still be emitted — proof the
+	// fixture exercises them rather than passing vacuously.
+	assert.Contains(t, string(out), "tags:")
+	assert.Contains(t, string(out), "externalDocs:")
+}
+
+// specFields returns a struct type's JSON field names — the wire names — in
+// declaration order. A field without a `json` tag falls back to its Go name.
+func specFields(t *testing.T, v any) []string {
+	t.Helper()
+	typ := reflect.TypeOf(v)
+	out := make([]string, 0, typ.NumField())
+	for i := range typ.NumField() {
+		f := typ.Field(i)
+		name := f.Tag.Get("json")
+		if i := strings.IndexByte(name, ','); i >= 0 {
+			name = name[:i]
+		}
+		if name == "" {
+			name = f.Name
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// TestStructFieldsMatchSpec pins AsyncAPI and License to their 3.1.0 field
+// lists in declaration order, mirroring the anchor-based derivation in
+// docs/asyncapi-3.1.0-coverage.md §9. It is the structural counterpart to
+// TestEncodeOmitsNonSpecFields: this catches a modeled-but-extra field, the
+// encode test catches one that leaks into the wire format.
+func TestStructFieldsMatchSpec(t *testing.T) {
+	assert.Equal(t, []string{
+		"asyncapi", "id", "info", "servers",
+		"defaultContentType", "channels", "operations", "components",
+	}, specFields(t, AsyncAPI{}))
+	assert.Equal(t, []string{"name", "url"}, specFields(t, License{}))
 }
 
 // multiFormatDoc returns a document whose only component is a Multi Format
