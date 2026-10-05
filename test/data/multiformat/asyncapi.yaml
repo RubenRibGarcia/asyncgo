@@ -67,7 +67,11 @@ channels:
       OrderCancelledProtobuf:
         payload:
           schemaFormat: application/vnd.google.protobuf;version=3
-          schema: message OrderCancelled { string order_id = 1; }
+          schema: |
+            message OrderCancelled {
+              string order_id = 1;
+              string reason = 2;
+            }
         name: OrderCancelledProtobuf
     description: Order cancellations described by a Protobuf message
   order-raml:

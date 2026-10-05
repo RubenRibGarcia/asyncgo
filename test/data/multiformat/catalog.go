@@ -77,9 +77,14 @@ var ramlPayload = spec.MultiFormat("application/raml+yaml;version=1.0",
 	})
 
 // protobufPayload is a Protocol Buffers definition. Its body is the .proto text,
-// the shape a Protobuf schema naturally takes.
+// the shape a Protobuf schema naturally takes, so it spans lines and is emitted
+// as a YAML literal block.
 var protobufPayload = spec.MultiFormat("application/vnd.google.protobuf;version=3",
-	"message OrderCancelled { string order_id = 1; }")
+	`message OrderCancelled {
+  string order_id = 1;
+  string reason = 2;
+}
+`)
 
 // Catalog is the AsyncAPI description of an orders service that carries one
 // payload per supported multi-format schema. The asyncgo CLI discovers it and
