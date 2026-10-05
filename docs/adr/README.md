@@ -55,3 +55,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | [0002](0002-custom-schema-providers.md) | Custom schema providers for types with custom (de)serialization | accepted | 2026-08-29 | 2026-08-29 |
 | [0003](0003-adopt-cobra-for-cli.md) | Adopt Cobra for the CLI command structure | accepted | 2026-08-31 | 2026-08-31 |
 | [0004](0004-fluent-dsl-validation.md) | Fluent DSL validation with a SpecResult type | accepted | 2026-09-03 | 2026-09-03 |
+| [0005](0005-multi-format-schema-objects.md) | Extend the Schema Object type to support Multi Format Schema Objects | accepted | 2026-10-05 | 2026-10-05 |
