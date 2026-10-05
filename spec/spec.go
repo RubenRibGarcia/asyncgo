@@ -25,8 +25,6 @@ type AsyncAPI struct {
 	Channels           map[string]*Channel   `json:"channels,omitempty"           yaml:"channels,omitempty"`
 	Operations         map[string]*Operation `json:"operations,omitempty"         yaml:"operations,omitempty"`
 	Components         *Components           `json:"components,omitempty"         yaml:"components,omitempty"`
-	Tags               []Tag                 `json:"tags,omitempty"               yaml:"tags,omitempty"`
-	ExternalDocs       *ExternalDocs         `json:"externalDocs,omitempty"       yaml:"externalDocs,omitempty"`
 }
 
 // Info provides metadata about the API.
@@ -49,9 +47,8 @@ type Contact struct {
 
 // License is the license information for the API.
 type License struct {
-	Name       string `json:"name"                 yaml:"name"`
-	URL        string `json:"url,omitempty"        yaml:"url,omitempty"`
-	Identifier string `json:"identifier,omitempty" yaml:"identifier,omitempty"`
+	Name string `json:"name"          yaml:"name"`
+	URL  string `json:"url,omitempty" yaml:"url,omitempty"`
 }
 
 // Tag is a metadata tag.

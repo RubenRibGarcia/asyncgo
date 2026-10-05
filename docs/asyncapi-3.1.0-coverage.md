@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -37,10 +37,10 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 
 | AsyncAPI 3.1.0 object | `spec` model | DSL can emit | Gap |
 | --- | --- | --- | --- |
-| AsyncAPI (root) | ✅ 8/8 +2 extra | 🟡 | `id` unsettable; root `tags`/`externalDocs` modeled but **not in 3.1.0** ([§7](#7-spec-deviations)) |
+| AsyncAPI (root) | ✅ 8/8 | 🟡 | `id` unsettable |
 | Info Object | 🟡 7/8 | 🟡 | no `externalDocs` |
 | Contact Object | ✅ 3/3 | ✅ | — |
-| License Object | ✅ +`identifier` | ✅ | `identifier` is not a 3.1.0 field ([§7](#7-spec-deviations)) |
+| License Object | ✅ 2/2 | ✅ | — |
 | Servers Object | ✅ | ✅ | — |
 | Server Object | 🟡 9/12 | 🟡 | no `pathname`, `title`, `summary` |
 | Server Variable Object | ✅ 4/4 | ✅ | — |
@@ -256,9 +256,6 @@ populated.
 
 | Field | Reality |
 | --- | --- |
-| `AsyncAPI.Tags` | The 3.1.0 root object has exactly 8 fields: `asyncapi`, `id`, `info`, `servers`, `defaultContentType`, `channels`, `operations`, `components`. There is no root `tags` or `externalDocs`. |
-| `AsyncAPI.ExternalDocs` | " |
-| `License.Identifier` | Not a 3.1.0 field; 3.1.0 `License` is `name` + `url` (this is an OpenAPI 3.1 field). |
 | `Parameter.Schema` | 3.1.0 `Parameter` is `enum`, `default`, `description`, `examples`, `location` (this is a 2.x shape). |
 
 The 3.1.0 `security` field is `[[Security Scheme Object | Reference Object]]` —
@@ -447,6 +444,12 @@ implementation effort.
 
 #### B9 — Remove spec deviations
 
+- **Implemented** — [#20](https://github.com/RubenRibGarcia/asyncgo/issues/20):
+  the three fields are gone from `spec`. `spec.AsyncAPI` now carries exactly the
+  eight 3.1.0 root fields and `spec.License` exactly `name` + `url`, pinned by
+  `TestStructFieldsMatchSpec` (field sets) and `TestEncodeOmitsNonSpecFields`
+  (wire format). `Parameter.Schema` is deliberately out of scope here and stays
+  with [B6](#b6--correct-and-expose-the-parameter-object).
 - **Gap** — `AsyncAPI.Tags`, `AsyncAPI.ExternalDocs`, and `License.Identifier`
   are modeled but are not 3.1.0 fields.
 - **Spec** — AsyncAPI Object (8 fields), License Object (`name`, `url`).
