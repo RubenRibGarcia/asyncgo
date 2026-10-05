@@ -224,7 +224,7 @@ library's differentiating feature and the area with the deepest coverage.
 | `asyncgo generate [dir] [-o file\|dir/] [--format yaml\|json]` | ✅ | `internal/cli/generate.go` |
 | `asyncgo check [dir]` byte-equality drift gate (YAML only) | ✅ | `internal/cli/check.go` |
 | `asyncgo version`, `--version`, shell completion | ✅ | `internal/cli/root.go`, Cobra |
-| Validate output against the official AsyncAPI 3.1.0 JSON Schema | 🟡 | `test/integration/asyncgo_generate_test.go` — test-time only: the pinned `asyncapi/cli` accepts both the YAML and JSON encodings of every fixture; there is no `asyncgo validate` command |
+| Validate output against the official AsyncAPI 3.1.0 JSON Schema | 🟡 | `test/integration/asyncgo_generate_test.go` — test-time only: the pinned `asyncapi/cli` accepts both the YAML and JSON encodings of every fixture except `multiformat`, which carries a Protobuf payload the CLI cannot parse; that skip is an explicit, logged entry that also asserts the CLI still rejects the document; there is no `asyncgo validate` command |
 | Bundle external / multi-file `$ref` | ❌ | — |
 | Serve / preview (e.g. AsyncAPI Studio) | ❌ | — |
 
@@ -374,10 +374,13 @@ implementation effort.
   one. The DSL adds `MessageFrom(name, schema)` as the type-free counterpart to
   `MessageOf`, plus `Schema(name, schema)` / `Schemas(...)` for reusable
   components. The `test/data/avro` golden declares one Avro record `$ref`'d from
-  two messages, an inline Avro payload, and multi-format headers. The pinned
-  `asyncapi/cli` validates Avro multi-format schemas but registers no parser for
-  the other formats, so Protobuf emission is covered by `spec/encode_test.go`
-  rather than the golden.
+  two messages, an inline Avro payload, and multi-format headers, and
+  `test/data/multiformat` carries OpenAPI 3.0.0, RAML 1.0, and Protobuf payloads.
+  The pinned `asyncapi/cli` validates Avro, OpenAPI, and RAML bodies that are
+  mappings, resolves a string-valued `schema` as a reference, and has no Protobuf
+  parser at all: `multiformat` is therefore excluded from the CLI check by an
+  explicit, logged entry in the integration test that also asserts the CLI still
+  rejects the document, so the exclusion cannot outlive the limitation.
 
 ### P1 — correctness and spec conformance
 

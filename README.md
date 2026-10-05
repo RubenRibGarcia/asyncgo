@@ -292,10 +292,13 @@ Two things to know:
   declaration. A declared name must not collide with a hoisted Go type's
   fully-qualified name — that is a catalog validation error.
 
-The pinned `asyncapi validate` used by the integration test checks Avro
-multi-format schemas. It has no parser registered for the other formats, so a
-Protobuf or RAML payload fails its validation with no reported error: asyncgo
-emits it correctly, but the reference validator cannot check it.
+The pinned `asyncapi validate` used by the integration test checks Avro, OpenAPI
+3.0.0, and RAML 1.0 multi-format schemas when the body is a mapping. It resolves
+a string-valued `schema` as a reference — so a string body fails for every
+format — and it has no Protobuf parser at all, rejecting every Protobuf body with
+an empty error list. asyncgo emits all of them correctly; the reference validator
+just cannot check Protobuf. The `test/data/multiformat` fixture records that
+exclusion explicitly.
 
 ### Generate & check
 
