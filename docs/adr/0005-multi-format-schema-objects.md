@@ -82,3 +82,11 @@ while requiring no field-type change at any schema location.
 - Issue: <https://github.com/RubenRibGarcia/asyncgo/issues/15>
 - Related: [0002](0002-custom-schema-providers.md) — the other "declare it when it
   cannot be derived" surface.
+- Implementation note (2026-10-05): the fixture shipped as a single
+  `test/data/multiformat` module covering Avro, OpenAPI 3.0.0, RAML 1.0, and
+  Protobuf, not the standalone `test/data/avro` the design doc planned; that doc
+  carries the amendment. The pinned `asyncapi/cli` validates Avro, OpenAPI, and
+  RAML bodies that are mappings, resolves a string-valued `schema` as a
+  reference, and has no Protobuf parser — so the combined fixture is excluded
+  from the CLI check by a self-policing entry in `test/integration`, and Protobuf
+  stays emitted-but-unvalidated rather than silently untested.
