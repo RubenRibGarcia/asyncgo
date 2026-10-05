@@ -1059,6 +1059,58 @@ func TestMessageTraitFields(t *testing.T) {
 	require.Contains(t, tr.t.Bindings, spec.ProtocolKafka)
 }
 
+// TestOperationTraitBindingsReplaces pins the documented whole-map semantics:
+// Bindings replaces the trait's protocol bindings, it does not merge them.
+func TestOperationTraitBindingsReplaces(t *testing.T) {
+	tr := OperationTrait("KafkaOrders").
+		Bindings(spec.OperationBindings{
+			spec.ProtocolAMQP: &spec.AMQPOperationBinding{Expiration: 30},
+		})
+
+	require.Len(t, tr.t.Bindings, 1)
+	assert.Equal(
+		t,
+		30,
+		tr.t.Bindings[spec.ProtocolAMQP].(*spec.AMQPOperationBinding).Expiration,
+	)
+
+	tr.Bindings(spec.OperationBindings{
+		spec.ProtocolNATS: &spec.NATSOperationBinding{Queue: "q"},
+	})
+
+	require.Len(t, tr.t.Bindings, 1)
+	assert.NotContains(t, tr.t.Bindings, spec.ProtocolAMQP)
+	assert.Equal(t, "q", tr.t.Bindings[spec.ProtocolNATS].(*spec.NATSOperationBinding).Queue)
+}
+
+// TestMessageTraitBindingsReplaces is the message-trait counterpart of
+// TestOperationTraitBindingsReplaces.
+func TestMessageTraitBindingsReplaces(t *testing.T) {
+	tr := MessageTrait("Traced").
+		Bindings(spec.MessageBindings{
+			spec.ProtocolAMQP: &spec.AMQPMessageBinding{ContentEncoding: "gzip"},
+		})
+
+	require.Len(t, tr.t.Bindings, 1)
+	assert.Equal(
+		t,
+		"gzip",
+		tr.t.Bindings[spec.ProtocolAMQP].(*spec.AMQPMessageBinding).ContentEncoding,
+	)
+
+	tr.Bindings(spec.MessageBindings{
+		spec.ProtocolMQTT: &spec.MQTTMessageBinding{BindingVersion: "0.2.0"},
+	})
+
+	require.Len(t, tr.t.Bindings, 1)
+	assert.NotContains(t, tr.t.Bindings, spec.ProtocolAMQP)
+	assert.Equal(
+		t,
+		"0.2.0",
+		tr.t.Bindings[spec.ProtocolMQTT].(*spec.MQTTMessageBinding).BindingVersion,
+	)
+}
+
 func TestOperationTraitsRegistersComponents(t *testing.T) {
 	res := Spec(
 		Info("Orders", "1.0.0"),

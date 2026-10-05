@@ -184,3 +184,89 @@ func TestMessageBindings(t *testing.T) {
 		assert.NotNil(t, m.bindings)
 	})
 }
+
+func TestOperationTraitBindings(t *testing.T) {
+	t.Run("should_set_kafka_binding", func(t *testing.T) {
+		tr := OperationTrait("T").Kafka(spec.KafkaOperationBinding{
+			GroupID: &spec.Schema{Type: "string"},
+		})
+		b, ok := tr.t.Bindings[spec.ProtocolKafka].(*spec.KafkaOperationBinding)
+		require.True(t, ok)
+		assert.Equal(t, &spec.Schema{Type: "string"}, b.GroupID)
+	})
+
+	t.Run("should_set_amqp_binding", func(t *testing.T) {
+		tr := OperationTrait("T").AMQP(spec.AMQPOperationBinding{Expiration: 30})
+		b, ok := tr.t.Bindings[spec.ProtocolAMQP].(*spec.AMQPOperationBinding)
+		require.True(t, ok)
+		assert.Equal(t, 30, b.Expiration)
+	})
+
+	t.Run("should_set_nats_binding", func(t *testing.T) {
+		tr := OperationTrait("T").NATS(spec.NATSOperationBinding{Queue: "q"})
+		b, ok := tr.t.Bindings[spec.ProtocolNATS].(*spec.NATSOperationBinding)
+		require.True(t, ok)
+		assert.Equal(t, "q", b.Queue)
+	})
+
+	t.Run("should_set_mqtt_binding", func(t *testing.T) {
+		tr := OperationTrait("T").MQTT(spec.MQTTOperationBinding{QoS: 1})
+		b, ok := tr.t.Bindings[spec.ProtocolMQTT].(*spec.MQTTOperationBinding)
+		require.True(t, ok)
+		assert.Equal(t, 1, b.QoS)
+	})
+
+	t.Run("should_set_generic_binding", func(t *testing.T) {
+		tr := OperationTrait("T").Binding("custom", "value")
+		assert.Equal(t, "value", tr.t.Bindings["custom"])
+	})
+
+	t.Run("should_initialize_bindings_when_nil", func(t *testing.T) {
+		tr := OperationTrait("T")
+		assert.Nil(t, tr.t.Bindings)
+		tr.Kafka(spec.KafkaOperationBinding{})
+		assert.NotNil(t, tr.t.Bindings)
+	})
+}
+
+func TestMessageTraitBindings(t *testing.T) {
+	t.Run("should_set_kafka_binding", func(t *testing.T) {
+		tr := MessageTrait("T").Kafka(spec.KafkaMessageBinding{
+			Key: &spec.Schema{Type: "string"},
+		})
+		b, ok := tr.t.Bindings[spec.ProtocolKafka].(*spec.KafkaMessageBinding)
+		require.True(t, ok)
+		assert.Equal(t, &spec.Schema{Type: "string"}, b.Key)
+	})
+
+	t.Run("should_set_amqp_binding", func(t *testing.T) {
+		tr := MessageTrait("T").AMQP(spec.AMQPMessageBinding{ContentEncoding: "gzip"})
+		b, ok := tr.t.Bindings[spec.ProtocolAMQP].(*spec.AMQPMessageBinding)
+		require.True(t, ok)
+		assert.Equal(t, "gzip", b.ContentEncoding)
+	})
+
+	t.Run("should_set_nats_binding", func(t *testing.T) {
+		tr := MessageTrait("T").NATS(spec.NATSMessageBinding{BindingVersion: "0.1.0"})
+		_, ok := tr.t.Bindings[spec.ProtocolNATS].(*spec.NATSMessageBinding)
+		assert.True(t, ok)
+	})
+
+	t.Run("should_set_mqtt_binding", func(t *testing.T) {
+		tr := MessageTrait("T").MQTT(spec.MQTTMessageBinding{BindingVersion: "0.2.0"})
+		_, ok := tr.t.Bindings[spec.ProtocolMQTT].(*spec.MQTTMessageBinding)
+		assert.True(t, ok)
+	})
+
+	t.Run("should_set_generic_binding", func(t *testing.T) {
+		tr := MessageTrait("T").Binding("custom", "value")
+		assert.Equal(t, "value", tr.t.Bindings["custom"])
+	})
+
+	t.Run("should_initialize_bindings_when_nil", func(t *testing.T) {
+		tr := MessageTrait("T")
+		assert.Nil(t, tr.t.Bindings)
+		tr.Kafka(spec.KafkaMessageBinding{})
+		assert.NotNil(t, tr.t.Bindings)
+	})
+}
