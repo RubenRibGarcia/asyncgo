@@ -34,3 +34,6 @@ Thumbs.db
 
 # local agent scratch
 .tmp/
+
+# Pi Lens
+.pi-lens.json
