@@ -59,7 +59,9 @@ AsyncAPI 3.0/3.1's Schema Object is a superset of **JSON Schema Draft 07** (not
 
 **Non-goals (v1)**
 
-- `discriminator` emission (event-envelope unions). Deferred.
+- `discriminator` **emission** (event-envelope unions). Deferred — the keyword is
+  now modelled and derivable from a tag; what remains is deriving it from a Go
+  union. See [schema-keywords](schema-keywords.md).
 - Sealed-interface implementer enumeration (magic unions). Deferred.
 - Cross-package selector sugar (`asyncapi:"oneOf=orders.OrderPlaced"`). Deferred;
   v1 accepts fully-qualified names or same-package short names.
@@ -368,8 +370,11 @@ components:
    marker + `RefByName`. Pure reflection, no discovery change.
 3. **Stage 2 — tag combinators** (`feat(schema)` + `feat(internal)`): §1, §2,
    §3a, §4 (registry, `Register`, `Finalize`, harness generation).
-4. **Stage 3 — deferred**: `discriminator`, sealed-interface enumeration,
-   cross-package selector sugar.
+4. **Stage 3 — deferred**: `discriminator` emission from Go unions,
+   sealed-interface enumeration, cross-package selector sugar. The
+   `discriminator` *keyword* itself is modelled and tag-derivable as of
+   [schema-keywords](schema-keywords.md); only its derivation from a union
+   remains open.
 
 ## Testing plan
 

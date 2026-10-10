@@ -56,3 +56,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | [0003](0003-adopt-cobra-for-cli.md) | Adopt Cobra for the CLI command structure | accepted | 2026-08-31 | 2026-08-31 |
 | [0004](0004-fluent-dsl-validation.md) | Fluent DSL validation with a SpecResult type | accepted | 2026-09-03 | 2026-09-03 |
 | [0005](0005-multi-format-schema-objects.md) | Extend the Schema Object type to support Multi Format Schema Objects | accepted | 2026-10-05 | 2026-10-05 |
+| [0006](0006-schema-keywords.md) | Model the full Draft-07 and AsyncAPI Schema keyword set | accepted | 2026-10-10 | 2026-10-10 |

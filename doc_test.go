@@ -931,6 +931,70 @@ func TestValidationErrors(t *testing.T) {
 			want: "schema." + schema.Name(reflect.TypeOf(OrderPlaced{})) +
 				": collides with an auto-hoisted schema of the same name",
 		},
+		{
+			name: "should_reject_multi_format_node_nested_in_if",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						Type: "object",
+						If: &spec.Schema{
+							SchemaFormat: "application/vnd.apache.avro;version=1.9.0",
+						},
+					})),
+				)
+			},
+			want: "schema.Avro.if.schema: is required alongside schemaFormat",
+		},
+		{
+			name: "should_reject_multi_format_node_nested_in_pattern_properties",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						Type: "object",
+						PatternProperties: map[string]*spec.Schema{
+							"^x-": {SchemaFormat: "application/vnd.apache.avro;version=1.9.0"},
+						},
+					})),
+				)
+			},
+			want: "schema.Avro.patternProperties.^x-.schema: is required alongside schemaFormat",
+		},
+		{
+			name: "should_descend_into_dependencies_schema",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						Type: "object",
+						Dependencies: map[string]*spec.Schema{
+							"creditCard": {
+								SchemaFormat: "application/vnd.apache.avro;version=1.9.0",
+							},
+						},
+					})),
+				)
+			},
+			want: "schema.Avro.dependencies.creditCard.schema: is required alongside schemaFormat",
+		},
+		{
+			name: "should_reject_json_schema_keyword_nested_in_then",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						Type: "object",
+						Then: &spec.Schema{
+							SchemaFormat: "application/vnd.apache.avro;version=1.9.0",
+							Schema:       map[string]any{"type": "record"},
+							Type:         "object",
+						},
+					})),
+				)
+			},
+			want: "schema.Avro.then: multi format schema must not carry JSON Schema keyword(s): type",
+		},
 	}
 
 	for _, tc := range tests {

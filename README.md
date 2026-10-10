@@ -519,6 +519,14 @@ func (Money) AsyncAPISchema() *spec.Schema {
 #     example: "12.34 USD"
 ```
 
+The example above sets `Example`, which is kept working but is deprecated:
+AsyncAPI 3.1.0's Schema Object uses the Draft-07 `examples` **array**, not a
+singular `example` keyword. Prefer `Examples: []any{…}` on the schema, or
+`Message.PayloadExamples(…)` to attach examples to a message's payload schema —
+when the payload is a `$ref` that writes them onto the referenced
+`components.schemas` entry, the only place JSON Schema applies them. The
+deviation is recorded in `docs/asyncapi-3.1.0-coverage.md` §7.
+
 `AsyncAPISchema` is invoked on a zero value, so it must describe the *type*
 (not an instance): be pure, deterministic, and panic-free. Return `nil` to fall
 back to reflection-derived derivation, or `&spec.Schema{}` for an explicitly

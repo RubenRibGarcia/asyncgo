@@ -678,3 +678,57 @@ func TestSchemaProviderFinalize(t *testing.T) {
 		assert.Equal(t, "uuid", custom.Format)
 	})
 }
+
+// keywordTagged covers the Schema keywords that are derivable from a struct tag
+// (docs/designdoc/schema-keywords.md, D6). The keywords that need a schema or an
+// object — if/then/else, contains, propertyNames, patternProperties,
+// dependencies, additionalItems, $id, $schema, externalDocs — are deliberately
+// absent: they are authoring-only. So are minLength/maxLength/pattern, which
+// stay reachable only through spec.SchemaProvider (coverage doc §4.3).
+type keywordTagged struct {
+	Kind  string   `json:"kind"  asyncapi:"required,const=OrderPlaced,discriminator=kind"`
+	Items []string `json:"items" asyncapi:"minItems=1,maxItems=10,uniqueItems,examples=sku-1,examples=sku-2"`
+	Note  string   `json:"note"  asyncapi:"deprecated,writeOnly"`
+	ID    string   `json:"id"    asyncapi:"readOnly"`
+	Meta  struct{} `json:"meta"  asyncapi:"minProperties=1,maxProperties=8"`
+}
+
+// TestFromTypeSchemaKeywordsDerivation walks the whole reflection path —
+// FromType -> fillFields -> applyTag — for every derivable keyword, so the
+// directives are proven reachable from a real struct and not only from a
+// hand-built spec.Schema.
+func TestFromTypeSchemaKeywordsDerivation(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+	s := FromType(reflect.TypeFor[keywordTagged](), defs)
+
+	key := "github.com/RubenRibGarcia/asyncgo/schema.keywordTagged"
+	require.Contains(t, defs, key)
+	require.NotEmpty(t, s.Ref)
+
+	obj := defs[key]
+	require.Equal(t, []string{"kind"}, obj.Required)
+
+	kind := obj.Properties["kind"]
+	require.Equal(t, "OrderPlaced", kind.Const)
+	assert.Equal(t, "kind", kind.Discriminator)
+
+	items := obj.Properties["items"]
+	require.NotNil(t, items.MinItems)
+	require.NotNil(t, items.MaxItems)
+	assert.Equal(t, uint64(1), *items.MinItems)
+	assert.Equal(t, uint64(10), *items.MaxItems)
+	assert.True(t, items.UniqueItems)
+	assert.Equal(t, []any{"sku-1", "sku-2"}, items.Examples)
+
+	note := obj.Properties["note"]
+	assert.True(t, note.Deprecated)
+	assert.True(t, note.WriteOnly)
+
+	assert.True(t, obj.Properties["id"].ReadOnly)
+
+	meta := obj.Properties["meta"]
+	require.NotNil(t, meta.MinProperties)
+	require.NotNil(t, meta.MaxProperties)
+	assert.Equal(t, uint64(1), *meta.MinProperties)
+	assert.Equal(t, uint64(8), *meta.MaxProperties)
+}

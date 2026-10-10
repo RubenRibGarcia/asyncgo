@@ -924,3 +924,342 @@ components:
 			decoded.Components.Schemas["OrderProto"].Schema)
 	})
 }
+
+// schemaKeywordDoc returns a document whose only schema is an object with set
+// applied — the fixture every keyword round-trip case starts from.
+func schemaKeywordDoc(set func(*Schema)) *AsyncAPI {
+	s := &Schema{Type: "object"}
+	set(s)
+
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Components = &Components{Schemas: map[string]*Schema{"Schema": s}}
+	return doc
+}
+
+// decodedSchema returns the fixture schema after a round-trip through a codec.
+func decodedSchema(t *testing.T, doc *AsyncAPI) *Schema {
+	t.Helper()
+	require.NotNil(t, doc.Components)
+	s := doc.Components.Schemas["Schema"]
+	require.NotNil(t, s, "the round-tripped document must still carry the schema")
+	return s
+}
+
+// TestEncodeSchemaKeywords covers every Schema keyword this library models: for
+// each one the fixture document must emit the exact wire keyword, decode it
+// back, and survive the YAML round-trip byte-identically — the invariant the
+// one-struct spec.Schema design exists to protect, since the discovery harness
+// materializes every document through YAML.
+func TestEncodeSchemaKeywords(t *testing.T) {
+	u64 := func(v uint64) *uint64 { return &v }
+
+	tt := []struct {
+		name   string
+		wire   string
+		set    func(*Schema)
+		verify func(*testing.T, *Schema)
+	}{
+		{
+			name: "should_round_trip_id",
+			wire: "$id",
+			set:  func(s *Schema) { s.ID = "https://example.com/order.schema.json" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "https://example.com/order.schema.json", s.ID)
+			},
+		},
+		{
+			name: "should_round_trip_schema_uri",
+			wire: "$schema",
+			set:  func(s *Schema) { s.SchemaURI = "http://json-schema.org/draft-07/schema#" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "http://json-schema.org/draft-07/schema#", s.SchemaURI)
+			},
+		},
+		{
+			name: "should_round_trip_comment",
+			wire: "$comment",
+			set:  func(s *Schema) { s.Comment = "hand-authored" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "hand-authored", s.Comment)
+			},
+		},
+		{
+			name: "should_round_trip_external_docs",
+			wire: "externalDocs",
+			set: func(s *Schema) {
+				s.ExternalDocs = &ExternalDocs{URL: "https://example.com/schema"}
+			},
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.ExternalDocs)
+				assert.Equal(t, "https://example.com/schema", s.ExternalDocs.URL)
+			},
+		},
+		{
+			name: "should_round_trip_deprecated",
+			wire: "deprecated",
+			set:  func(s *Schema) { s.Deprecated = true },
+			verify: func(t *testing.T, s *Schema) {
+				assert.True(t, s.Deprecated)
+			},
+		},
+		{
+			name: "should_round_trip_additional_items",
+			wire: "additionalItems",
+			set:  func(s *Schema) { s.AdditionalItems = &Schema{Type: "string"} },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.AdditionalItems)
+				assert.Equal(t, "string", s.AdditionalItems.Type)
+			},
+		},
+		{
+			name: "should_round_trip_pattern_properties",
+			wire: "patternProperties",
+			set: func(s *Schema) {
+				s.PatternProperties = map[string]*Schema{"^x-": {Type: "string"}}
+			},
+			verify: func(t *testing.T, s *Schema) {
+				require.Contains(t, s.PatternProperties, "^x-")
+				assert.Equal(t, "string", s.PatternProperties["^x-"].Type)
+			},
+		},
+		{
+			name: "should_round_trip_property_names",
+			wire: "propertyNames",
+			set:  func(s *Schema) { s.PropertyNames = &Schema{Pattern: "^[a-z]+$"} },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.PropertyNames)
+				assert.Equal(t, "^[a-z]+$", s.PropertyNames.Pattern)
+			},
+		},
+		{
+			name: "should_round_trip_dependencies",
+			wire: "dependencies",
+			set: func(s *Schema) {
+				s.Dependencies = map[string]*Schema{
+					"creditCard": {Required: []string{"billing"}},
+				}
+			},
+			verify: func(t *testing.T, s *Schema) {
+				require.Contains(t, s.Dependencies, "creditCard")
+				assert.Equal(t, []string{"billing"}, s.Dependencies["creditCard"].Required)
+			},
+		},
+		{
+			name: "should_round_trip_contains",
+			wire: "contains",
+			set:  func(s *Schema) { s.Contains = &Schema{Type: "string"} },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.Contains)
+				assert.Equal(t, "string", s.Contains.Type)
+			},
+		},
+		{
+			name: "should_round_trip_const",
+			wire: "const",
+			set:  func(s *Schema) { s.Const = "OrderPlaced" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "OrderPlaced", s.Const)
+			},
+		},
+		{
+			name: "should_round_trip_examples",
+			wire: "examples",
+			set:  func(s *Schema) { s.Examples = []any{"sku-1", "sku-2"} },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, []any{"sku-1", "sku-2"}, s.Examples)
+			},
+		},
+		{
+			name: "should_round_trip_if",
+			wire: "if",
+			set: func(s *Schema) {
+				s.If = &Schema{Properties: map[string]*Schema{"kind": {Const: "a"}}}
+			},
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.If)
+				require.Contains(t, s.If.Properties, "kind")
+				assert.Equal(t, "a", s.If.Properties["kind"].Const)
+			},
+		},
+		{
+			name: "should_round_trip_then",
+			wire: "then",
+			set:  func(s *Schema) { s.Then = &Schema{Required: []string{"a"}} },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.Then)
+				assert.Equal(t, []string{"a"}, s.Then.Required)
+			},
+		},
+		{
+			name: "should_round_trip_else",
+			wire: "else",
+			set:  func(s *Schema) { s.Else = &Schema{Required: []string{"b"}} },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.Else)
+				assert.Equal(t, []string{"b"}, s.Else.Required)
+			},
+		},
+		{
+			name: "should_round_trip_min_items",
+			wire: "minItems",
+			set:  func(s *Schema) { s.MinItems = u64(1) },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.MinItems)
+				assert.Equal(t, uint64(1), *s.MinItems)
+			},
+		},
+		{
+			name: "should_round_trip_max_items",
+			wire: "maxItems",
+			set:  func(s *Schema) { s.MaxItems = u64(10) },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.MaxItems)
+				assert.Equal(t, uint64(10), *s.MaxItems)
+			},
+		},
+		{
+			name: "should_round_trip_unique_items",
+			wire: "uniqueItems",
+			set:  func(s *Schema) { s.UniqueItems = true },
+			verify: func(t *testing.T, s *Schema) {
+				assert.True(t, s.UniqueItems)
+			},
+		},
+		{
+			name: "should_round_trip_min_properties",
+			wire: "minProperties",
+			set:  func(s *Schema) { s.MinProperties = u64(1) },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.MinProperties)
+				assert.Equal(t, uint64(1), *s.MinProperties)
+			},
+		},
+		{
+			name: "should_round_trip_max_properties",
+			wire: "maxProperties",
+			set:  func(s *Schema) { s.MaxProperties = u64(8) },
+			verify: func(t *testing.T, s *Schema) {
+				require.NotNil(t, s.MaxProperties)
+				assert.Equal(t, uint64(8), *s.MaxProperties)
+			},
+		},
+		{
+			name: "should_round_trip_read_only",
+			wire: "readOnly",
+			set:  func(s *Schema) { s.ReadOnly = true },
+			verify: func(t *testing.T, s *Schema) {
+				assert.True(t, s.ReadOnly)
+			},
+		},
+		{
+			name: "should_round_trip_write_only",
+			wire: "writeOnly",
+			set:  func(s *Schema) { s.WriteOnly = true },
+			verify: func(t *testing.T, s *Schema) {
+				assert.True(t, s.WriteOnly)
+			},
+		},
+		{
+			name: "should_round_trip_discriminator",
+			wire: "discriminator",
+			set:  func(s *Schema) { s.Discriminator = "kind" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "kind", s.Discriminator)
+			},
+		},
+	}
+
+	require.Len(t, tt, 23, "every modeled Schema keyword needs a case")
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := schemaKeywordDoc(tc.set)
+
+			yamlOut, err := doc.YAML()
+			require.NoError(t, err)
+			assert.Contains(t, string(yamlOut), tc.wire+":", "the wire keyword must be emitted")
+
+			var fromYAML AsyncAPI
+			require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
+			tc.verify(t, decodedSchema(t, &fromYAML))
+
+			// The harness materializes through YAML: a non-byte-stable round-trip
+			// would rewrite committed golden files.
+			yamlAgain, err := fromYAML.YAML()
+			require.NoError(t, err)
+			assert.Equal(t, string(yamlOut), string(yamlAgain),
+				"the YAML round-trip must be byte-stable")
+
+			jsonOut, err := doc.JSON()
+			require.NoError(t, err)
+			assert.Contains(t, string(jsonOut), `"`+tc.wire+`":`,
+				"the wire keyword must be emitted in JSON too")
+
+			var fromJSON AsyncAPI
+			require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
+			tc.verify(t, decodedSchema(t, &fromJSON))
+		})
+	}
+}
+
+// TestEncodeSchemaDiscriminatorIsAScalar pins the AsyncAPI 3.1.0 shape: the
+// discriminator is the *name* of the property that differentiates the schemas,
+// not the OpenAPI Discriminator Object that wraps it.
+func TestEncodeSchemaDiscriminatorIsAScalar(t *testing.T) {
+	doc := schemaKeywordDoc(func(s *Schema) {
+		s.Properties = map[string]*Schema{"kind": {Type: "string"}}
+		s.Required = []string{"kind"}
+		s.Discriminator = "kind"
+	})
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+
+	assert.Contains(t, string(out), "discriminator: kind")
+	assert.NotContains(t, string(out), "propertyName",
+		"discriminator is a plain string in AsyncAPI 3.1.0, not the OpenAPI object")
+}
+
+// TestEncodeSchemaExampleAndExamples covers the one place two keywords model the
+// same idea: the deprecated singular `example` and the Draft-07 `examples`
+// array are independent fields, and setting one must not suppress the other.
+func TestEncodeSchemaExampleAndExamples(t *testing.T) {
+	doc := schemaKeywordDoc(func(s *Schema) {
+		s.Example = "legacy"
+		s.Examples = []any{"draft-07"}
+	})
+
+	out, err := doc.YAML()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "example: legacy")
+	assert.Contains(t, string(out), "examples:")
+
+	var decoded AsyncAPI
+	require.NoError(t, yaml.Unmarshal(out, &decoded))
+	s := decodedSchema(t, &decoded)
+	assert.Equal(t, "legacy", s.Example)
+	assert.Equal(t, []any{"draft-07"}, s.Examples)
+}
+
+// TestSchemaFieldsMatchSpec pins spec.Schema's wire names in declaration order,
+// mirroring TestStructFieldsMatchSpec for AsyncAPI and License. Declaration
+// order is emitted key order, so a reshuffle here silently rewrites documents;
+// this is the structural counterpart to TestEncodeSchemaKeywords.
+func TestSchemaFieldsMatchSpec(t *testing.T) {
+	assert.Equal(t, []string{
+		"schemaFormat", "schema",
+		"$ref", "$id", "$schema",
+		"type", "title", "description", "format", "$comment", "externalDocs", "deprecated",
+		"properties", "required", "items", "additionalProperties", "additionalItems",
+		"patternProperties", "propertyNames", "dependencies", "contains",
+		"enum", "const", "example", "examples", "default",
+		"definitions", "oneOf", "allOf", "anyOf", "not", "if", "then", "else",
+		"minLength", "maxLength", "pattern",
+		"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+		"minItems", "maxItems", "uniqueItems",
+		"minProperties", "maxProperties",
+		"readOnly", "writeOnly",
+		"discriminator",
+	}, specFields(t, Schema{}))
+}
