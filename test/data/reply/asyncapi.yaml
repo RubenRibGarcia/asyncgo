@@ -8,17 +8,13 @@ channels:
     address: order-placed
     messages:
       OrderPlaced:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderPlaced"
-        name: OrderPlaced
+        $ref: "#/components/messages/OrderPlaced"
     description: Order requests
   order-replies:
     address: order-replies
     messages:
       OrderAccepted:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderAccepted"
-        name: OrderAccepted
+        $ref: "#/components/messages/OrderAccepted"
     description: Order replies
 operations:
   order-placed.send:
@@ -51,6 +47,15 @@ components:
           type: string
       required:
       - order_id
+  messages:
+    OrderAccepted:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderAccepted"
+      name: OrderAccepted
+    OrderPlaced:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderPlaced"
+      name: OrderPlaced
   replies:
     OrderAcceptedReply:
       channel:

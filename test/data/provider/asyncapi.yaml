@@ -17,9 +17,7 @@ channels:
     address: order-placed
     messages:
       OrderPlaced:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.OrderPlaced"
-        name: OrderPlaced
+        $ref: "#/components/messages/OrderPlaced"
     description: Emitted when an order is placed
     bindings:
       kafka:
@@ -47,3 +45,8 @@ components:
           $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.Money"
       required:
       - order_id
+  messages:
+    OrderPlaced:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.OrderPlaced"
+      name: OrderPlaced

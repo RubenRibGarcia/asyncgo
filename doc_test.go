@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
 	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
@@ -534,7 +535,7 @@ func TestValidationErrors(t *testing.T) {
 					),
 				)
 			},
-			want: `channel.order-placed.messages.OrderPlaced: references unknown message trait "Missing"`,
+			want: `message.OrderPlaced: references unknown message trait "Missing"`,
 		},
 		{
 			name: "should_return_error_when_message_trait_references_unknown_correlation_id",
@@ -651,7 +652,7 @@ func TestValidationErrors(t *testing.T) {
 					),
 				)
 			},
-			want: `channel.order-placed.messages.OrderPlaced: references unknown correlation id "Missing"`,
+			want: `message.OrderPlaced: references unknown correlation id "Missing"`,
 		},
 		{
 			name: "should_return_error_when_message_sets_both_correlation_forms",
@@ -1211,12 +1212,160 @@ func TestSchemasRegistersComponents(t *testing.T) {
 	require.Contains(t, res.Doc.Components.Schemas, "UserAvro")
 	assert.Same(t, avro, res.Doc.Components.Schemas["UserAvro"])
 
-	placed := res.Doc.Channels["order-placed"].Messages["OrderPlaced"]
-	shipped := res.Doc.Channels["order-shipped"].Messages["OrderShipped"]
+	placed := res.Doc.Components.Messages["OrderPlaced"]
+	shipped := res.Doc.Components.Messages["OrderShipped"]
 	require.NotNil(t, placed.Payload)
 	require.NotNil(t, shipped.Payload)
 	assert.Equal(t, "#/components/schemas/UserAvro", placed.Payload.Ref)
 	assert.Equal(t, "#/components/schemas/UserAvro", shipped.Payload.Ref)
+
+	// Each channel carries a $ref to its hoisted message instead of the object.
+	assert.Equal(
+		t,
+		"#/components/messages/OrderPlaced",
+		res.Doc.Channels["order-placed"].Messages["OrderPlaced"].Ref,
+	)
+	assert.Equal(
+		t,
+		"#/components/messages/OrderShipped",
+		res.Doc.Channels["order-shipped"].Messages["OrderShipped"].Ref,
+	)
+}
+
+// TestMessagesAreHoisted covers the document shape the generator emits:
+// components.messages owns the Message Object, the channel's messages map
+// carries a $ref to it, and the operation keeps pointing at the message as
+// defined in the channel — the specification forbids an operation from
+// referencing components.messages directly.
+func TestMessagesAreHoisted(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		Channels(
+			Channel("order-placed").Send(Operation().Message(MessageOf(OrderPlaced{}))),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	require.NotNil(t, res.Doc.Components)
+
+	key := schema.Name(reflect.TypeOf(OrderPlaced{}))
+	require.Contains(t, res.Doc.Components.Messages, key)
+	hoisted := res.Doc.Components.Messages[key]
+	assert.Equal(t, "OrderPlaced", hoisted.Name)
+	require.NotNil(t, hoisted.Payload)
+	assert.Equal(t, schema.Ref(reflect.TypeOf(OrderPlaced{})), hoisted.Payload.Ref)
+
+	entry := res.Doc.Channels["order-placed"].Messages[key]
+	require.NotNil(t, entry)
+	assert.Equal(t, "#/components/messages/"+jsonpointer.Escape(key), entry.Ref)
+
+	require.Len(t, res.Doc.Operations["order-placed.send"].Messages, 1)
+	assert.Equal(
+		t,
+		"#/channels/order-placed/messages/"+jsonpointer.Escape(key),
+		res.Doc.Operations["order-placed.send"].Messages[0].Ref,
+	)
+}
+
+// TestMessagesAreSharedAcrossChannels pins the reuse half of the component-key
+// rule: the same message carried by two channels is hoisted once and referenced
+// twice.
+func TestMessagesAreSharedAcrossChannels(t *testing.T) {
+	msg := MessageOf(OrderPlaced{})
+
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		Channels(
+			Channel("order-placed").Send(Operation().Message(msg)),
+			Channel("order-shipped").Receive(Operation().Message(msg)),
+		),
+	)
+
+	require.NoError(t, res.Err)
+	key := schema.Name(reflect.TypeOf(OrderPlaced{}))
+	assert.Len(t, res.Doc.Components.Messages, 1)
+	require.Contains(t, res.Doc.Channels["order-shipped"].Messages, key)
+	assert.Equal(
+		t,
+		"#/components/messages/"+jsonpointer.Escape(key),
+		res.Doc.Channels["order-shipped"].Messages[key].Ref,
+	)
+}
+
+// TestMessagesDuplicateKeyRejected pins the other half: two different messages
+// under one key are a duplicate, not a silent overwrite, and the error names the
+// channel that declared the second one.
+func TestMessagesDuplicateKeyRejected(t *testing.T) {
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		Channels(
+			Channel("order-placed").Send(Operation().Message(
+				MessageOf(OrderPlaced{}).Name("OrderEvent"),
+			)),
+			Channel("order-shipped").Send(Operation().Message(
+				MessageOf(OrderPlaced{}).Name("OrderEvent").Description("Shipped"),
+			)),
+		),
+	)
+
+	require.Error(t, res.Err)
+	assert.EqualError(
+		t,
+		res.Err,
+		"message.OrderEvent: duplicate name with different content (channel.order-shipped)",
+	)
+}
+
+// TestReplyMessageMustBeOnTheReplyChannel pins the tightened reply check: a
+// reply message $ref has to name a message the reply channel actually carries,
+// not merely one whose pointer starts with the channel's prefix.
+func TestReplyMessageMustBeOnTheReplyChannel(t *testing.T) {
+	replyChannel := Channel("order-replies").Receive(Operation().Message(
+		MessageOf(OrderPlaced{}).Name("OrderAccepted"),
+	))
+	missing := MessageOf(OrderPlaced{}).Name("OrderMissing")
+
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		Replies(Reply("OrderReply").Channel(replyChannel).Message(replyChannel, missing)),
+		Channels(replyChannel),
+	)
+
+	require.Error(t, res.Err)
+	assert.EqualError(
+		t,
+		res.Err,
+		`reply.OrderReply: message "#/channels/order-replies/messages/OrderMissing" is not in channel "order-replies"`,
+	)
+}
+
+// TestValidateMessageRefs covers the post-pass that guards a document assembled
+// through the spec package: a channel message entry that is a $ref has to
+// resolve to a declared component. The generator hoists and references a message
+// in one step, so the dangling document is built by hand.
+func TestValidateMessageRefs(t *testing.T) {
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	b.doc.Channels = map[string]*spec.Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Messages: map[string]*spec.Message{
+				"OrderPlaced": {Ref: "#/components/messages/OrderPlaced"},
+			},
+		},
+	}
+
+	errs := b.validateMessageRefs()
+	require.Len(t, errs, 1)
+	assert.EqualError(
+		t,
+		errs[0],
+		`channel.order-placed.messages.OrderPlaced: references unknown message "OrderPlaced"`,
+	)
+
+	b.components().Messages = map[string]*spec.Message{
+		"OrderPlaced": {Name: "OrderPlaced"},
+	}
+	assert.Empty(t, b.validateMessageRefs())
 }
 
 func TestReplyRefEscapesPointer(t *testing.T) {

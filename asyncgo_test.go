@@ -48,9 +48,13 @@ func TestSpecBuildsDocument(t *testing.T) {
 	require.NotNil(t, op.Channel)
 	assert.Equal(t, "#/channels/order-placed", op.Channel.Ref)
 
-	// Payload is a $ref; schema is hoisted into components under the
-	// fully-qualified type name.
-	msg := ch.Messages["OrderPlaced"]
+	// The channel carries a $ref to the hoisted message, whose payload is a
+	// $ref to the schema hoisted under the fully-qualified type name.
+	entry := ch.Messages["OrderPlaced"]
+	assert.Equal(t, "#/components/messages/OrderPlaced", entry.Ref)
+
+	require.Contains(t, doc.Components.Messages, "OrderPlaced")
+	msg := doc.Components.Messages["OrderPlaced"]
 	require.NotNil(t, msg.Payload)
 	assert.NotEmpty(t, msg.Payload.Ref)
 

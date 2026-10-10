@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,6 +48,40 @@ func TestMessageName(t *testing.T) {
 
 	t.Run("should_fallback_to_message_for_nil_type", func(t *testing.T) {
 		assert.Equal(t, "message", messageName(MessageOf(nil)))
+	})
+}
+
+func TestMessageKey(t *testing.T) {
+	t.Run("should_key_authored_message_by_its_name", func(t *testing.T) {
+		assert.Equal(t, "UserSignedUp", messageKey(MessageFrom("UserSignedUp", &spec.Schema{})))
+	})
+
+	t.Run("should_key_explicitly_named_message_by_its_name", func(t *testing.T) {
+		assert.Equal(t, "Explicit", messageKey(MessageOf(OrderPlaced{}).Name("Explicit")))
+	})
+
+	t.Run("should_key_type_derived_message_by_fully_qualified_type_name", func(t *testing.T) {
+		assert.Equal(
+			t,
+			schema.Name(reflect.TypeOf(OrderPlaced{})),
+			messageKey(MessageOf(OrderPlaced{})),
+		)
+	})
+
+	t.Run("should_dereference_pointer_type", func(t *testing.T) {
+		assert.Equal(
+			t,
+			schema.Name(reflect.TypeOf(OrderPlaced{})),
+			messageKey(MessageOf(&OrderPlaced{})),
+		)
+	})
+
+	t.Run("should_fallback_to_message_for_anonymous_type", func(t *testing.T) {
+		assert.Equal(t, "message", messageKey(MessageOf(struct{ X int }{})))
+	})
+
+	t.Run("should_fallback_to_message_for_nil_type", func(t *testing.T) {
+		assert.Equal(t, "message", messageKey(MessageOf(nil)))
 	})
 }
 

@@ -145,19 +145,47 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 	}, nil
 }
 
-func messageName(m *message) string {
-	if m.name != "" {
-		return m.name
-	}
+// messagePayloadType returns the payload type a message derives its name and
+// component key from, with pointers dereferenced, or nil when the payload was
+// supplied by hand (MessageFrom).
+func messagePayloadType(m *message) reflect.Type {
 	if m.typ == nil {
-		return "message"
+		return nil
 	}
 	t := m.typ
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if t.Name() != "" {
+	return t
+}
+
+// messageName is the message's Name field: the authored name, or the payload
+// type's short name when MessageOf left it unset.
+func messageName(m *message) string {
+	if m.name != "" {
+		return m.name
+	}
+	if t := messagePayloadType(m); t != nil && t.Name() != "" {
 		return t.Name()
+	}
+	return "message"
+}
+
+// messageKey is the message's identity in the document: the key of its
+// components.messages entry, and therefore the message id a channel's messages
+// map and every $ref into the message use.
+//
+// A name the author set — MessageFrom's name argument, or MessageOf followed by
+// Name — is that identity. Otherwise the name is derived from the payload type,
+// and the key is the type's fully-qualified name (pkgPath.TypeName, as
+// schema.Name defines it), so every channel carrying the same Go type shares one
+// hoisted component while two packages' same-named types stay distinct.
+func messageKey(m *message) string {
+	if m.name != "" {
+		return m.name
+	}
+	if t := messagePayloadType(m); t != nil && t.Name() != "" {
+		return schema.Name(t)
 	}
 	return "message"
 }

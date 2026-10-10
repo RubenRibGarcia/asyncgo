@@ -8,88 +8,37 @@ channels:
     address: order-avro-placed
     messages:
       OrderPlaced:
-        headers:
-          schemaFormat: application/vnd.apache.avro;version=1.9.0
-          schema:
-            fields:
-            - name: correlationId
-              type: string
-            name: OrderHeaders
-            type: record
-        payload:
-          $ref: "#/components/schemas/UserAvro"
-        name: OrderPlaced
+        $ref: "#/components/messages/OrderPlaced"
     description: Order placements carrying the shared Avro record and Avro headers
   order-avro-refunded:
     address: order-avro-refunded
     messages:
       OrderRefunded:
-        payload:
-          schemaFormat: application/vnd.apache.avro;version=1.9.0
-          schema:
-            fields:
-            - name: orderId
-              type: string
-            name: OrderRefunded
-            type: record
-        name: OrderRefunded
+        $ref: "#/components/messages/OrderRefunded"
     description: Order refunds carrying an inline Avro record
   order-avro-shipped:
     address: order-avro-shipped
     messages:
       OrderShipped:
-        payload:
-          $ref: "#/components/schemas/UserAvro"
-        name: OrderShipped
+        $ref: "#/components/messages/OrderShipped"
     description: Order shipments carrying the shared Avro record
   order-openapi:
     address: order-openapi
     messages:
       OrderPlacedOpenAPI:
-        payload:
-          schemaFormat: application/vnd.oai.openapi;version=3.0.0
-          schema:
-            properties:
-              amount:
-                format: double
-                type: number
-              orderId:
-                format: uuid
-                type: string
-            required:
-            - orderId
-            type: object
-        name: OrderPlacedOpenAPI
+        $ref: "#/components/messages/OrderPlacedOpenAPI"
     description: Order placements described by an OpenAPI 3.0.0 schema
   order-protobuf:
     address: order-protobuf
     messages:
       OrderCancelledProtobuf:
-        payload:
-          schemaFormat: application/vnd.google.protobuf;version=3
-          schema: |
-            message OrderCancelled {
-              string order_id = 1;
-              string reason = 2;
-            }
-        name: OrderCancelledProtobuf
+        $ref: "#/components/messages/OrderCancelledProtobuf"
     description: Order cancellations described by a Protobuf message
   order-raml:
     address: order-raml
     messages:
       OrderShippedRAML:
-        payload:
-          schemaFormat: application/raml+yaml;version=1.0
-          schema:
-            properties:
-              carrier:
-                type: string
-              orderId:
-                type: string
-            required:
-            - orderId
-            type: object
-        name: OrderShippedRAML
+        $ref: "#/components/messages/OrderShippedRAML"
     description: Order shipments described by a RAML 1.0 data type
 operations:
   order-avro-placed.send:
@@ -140,3 +89,67 @@ components:
           type: int
         name: User
         type: record
+  messages:
+    OrderCancelledProtobuf:
+      payload:
+        schemaFormat: application/vnd.google.protobuf;version=3
+        schema: |
+          message OrderCancelled {
+            string order_id = 1;
+            string reason = 2;
+          }
+      name: OrderCancelledProtobuf
+    OrderPlaced:
+      headers:
+        schemaFormat: application/vnd.apache.avro;version=1.9.0
+        schema:
+          fields:
+          - name: correlationId
+            type: string
+          name: OrderHeaders
+          type: record
+      payload:
+        $ref: "#/components/schemas/UserAvro"
+      name: OrderPlaced
+    OrderPlacedOpenAPI:
+      payload:
+        schemaFormat: application/vnd.oai.openapi;version=3.0.0
+        schema:
+          properties:
+            amount:
+              format: double
+              type: number
+            orderId:
+              format: uuid
+              type: string
+          required:
+          - orderId
+          type: object
+      name: OrderPlacedOpenAPI
+    OrderRefunded:
+      payload:
+        schemaFormat: application/vnd.apache.avro;version=1.9.0
+        schema:
+          fields:
+          - name: orderId
+            type: string
+          name: OrderRefunded
+          type: record
+      name: OrderRefunded
+    OrderShipped:
+      payload:
+        $ref: "#/components/schemas/UserAvro"
+      name: OrderShipped
+    OrderShippedRAML:
+      payload:
+        schemaFormat: application/raml+yaml;version=1.0
+        schema:
+          properties:
+            carrier:
+              type: string
+            orderId:
+              type: string
+          required:
+          - orderId
+          type: object
+      name: OrderShippedRAML
