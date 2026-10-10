@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -60,7 +60,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Components Object | 🟡 **12/19** | 🟡 | `schemas`, `messages`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; `spec.Schema` and `spec.Message` carry a `$ref` field instead of a union type |
 | **Multi Format Schema Object** | ✅ | ✅ | — |
-| Schema Object | 🟡 Draft-07 subset | ✅ | see [§4](#4-schema-derivation) |
+| Schema Object | ✅ Draft-07 + AsyncAPI keywords | 🟡 | all 23 keywords modeled; the structural ones (`if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `additionalItems`, `$id`, `$schema`, `$comment`, `externalDocs`) are authoring-only, and `additionalItems` is inert — see [§4](#4-schema-derivation) |
 | Security Scheme Object | ✅ 9/9 | ✅ | — |
 | OAuth Flows Object | ✅ 4/4 | ✅ | — |
 | OAuth Flow Object | ✅ 4/4 | ✅ | — |
@@ -192,7 +192,13 @@ library's differentiating feature and the area with the deepest coverage.
 | field doc comment | `description` | ✅ static AST pass (`internal/discovery/descriptions.go`) |
 | `asyncapi:"required"` | `required: [...]` | ✅ |
 | `asyncapi:"enum=a\|b"` | `enum` (strings only) | 🟡 no typed / `iota` enum detection |
-| `asyncapi:"example=…"` | `example` | ✅ |
+| `asyncapi:"examples=…"` | `examples` | ✅ repeatable — one entry appended per directive |
+| `asyncapi:"const=…"` | `const` | ✅ string-valued; use `SchemaProvider` for a typed constant |
+| `asyncapi:"discriminator=…"` | `discriminator` | ✅ the property name, a plain string in 3.1.0 |
+| `asyncapi:"minItems=N"` / `maxItems` / `minProperties` / `maxProperties` | matching keyword | ✅ |
+| `asyncapi:"readOnly"` / `writeOnly` / `uniqueItems` / `deprecated` | matching keyword | ✅ bare flags |
+| `Message.PayloadExamples(…)` | `examples` on the payload schema | ✅ resolves a `$ref` payload into its `components.schemas` entry; an unresolvable ref is an error |
+| malformed directive value (`minItems=abc`, `examples=`) | — | ❌ silently ignored; the derivation chain has no error channel ([§8 B7](#b7)) |
 | `asyncapi:"format=…"` | `format` | ✅ |
 | `asyncapi:"oneOf=A\|B"` / `anyOf` / `allOf` | `$ref` list, members auto-hoisted | ✅ |
 | `spec.SchemaProvider` | full schema override, hoisted as-is | ✅ struct types only |
@@ -203,12 +209,12 @@ library's differentiating feature and the area with the deepest coverage.
 | --- | --- |
 | `default` from Go | ❌ only via `SchemaProvider` |
 | `minLength`, `maxLength`, `pattern` from Go | ❌ only via `SchemaProvider` |
-| `minItems`, `maxItems`, `uniqueItems` | ❌ not even in `spec.Schema` |
-| `minProperties`, `maxProperties` | ❌ not in `spec.Schema` |
 | validation-tag bridging (`validate:"required,min=1"`, `jsonschema:"…"`) | ❌ |
-| `discriminator`, `externalDocs`, `deprecated` (3.1.0 Schema keywords) | ❌ not in `spec.Schema` |
-| `$id`, `$schema`, `$comment`, `const`, `if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `readOnly`, `writeOnly` | ❌ not in `spec.Schema` |
-| `$ref` with sibling keywords on one node | ❌ `Schema` carries `Ref` alongside sibling fields, so the pair does serialize — but siblings are a no-op under JSON Reference, and `spec.Ref()` sets none |
+| `externalDocs`, `$id`, `$schema`, `$comment` on a schema | ❌ model-only; author them on `spec.Schema` via `MessageFrom`, `Schema(...)`, or `SchemaProvider` |
+| `if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `additionalItems` from Go | ❌ schema-valued, so not tag-derivable; author them on `spec.Schema` the same way |
+| `additionalItems` in effect | ❌ modeled but inert — it applies only to the tuple (array) form of `items`, which `Schema.Items` cannot express ([§8 B7](#b7)) |
+| the `dependencies` `[string]` shorthand | ❌ the schema form is modeled instead; rewrite as `{required: [...]}`, which means the same thing ([ADR 0006](adr/0006-schema-keywords.md)) |
+| `$ref` with sibling keywords on one node | ❌ `Schema` carries `Ref` alongside sibling fields, so the pair does serialize — but siblings are a no-op under JSON Reference, and `spec.Ref()` sets none. `Message.PayloadExamples` resolves through the ref instead of writing beside it |
 | non-JSON-Schema formats from Go (Avro, Protobuf, OpenAPI) | ❌ not derivable; declare the body by hand with `spec.MultiFormat` ([§8 B4](#b4)) |
 
 ## 5. Tooling and pipeline
@@ -259,6 +265,8 @@ populated.
 | Field | Reality |
 | --- | --- |
 | `Parameter.Schema` | 3.1.0 `Parameter` is `enum`, `default`, `description`, `examples`, `location` (this is a 2.x shape). |
+
+`Schema.Example` was a second deviation until [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18): 3.1.0's Schema Object defines only the Draft-07 `examples` array, never a singular `example`. The field and its `asyncapi:"example=…"` directive were removed rather than deprecated, which was a breaking change to a pre-1.0 surface — see [ADR 0006](adr/0006-schema-keywords.md). Because `applyTag` ignores an unrecognised directive, a stale `example=` tag is now silently dropped; making that loud is tracked as follow-up work in the design doc (O2).
 
 The 3.1.0 `security` field is `[[Security Scheme Object | Reference Object]]` —
 an array of schemes or `$ref`s, and 3.1.0 defines no Security Requirement
@@ -415,6 +423,16 @@ implementation effort.
 
 #### B7 — Schema Object: add the 3.1.0 and remaining Draft-07 keywords
 
+- **Implemented** — [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18):
+  all 23 keywords are on `spec.Schema` and round-trip through JSON and YAML
+  byte-stably; the mechanically derivable subset is settable from `asyncapi`
+  struct tags; and `Message.PayloadExamples(...)` attaches the Draft-07
+  `examples` array to the `components.schemas` entry a `$ref` payload points at,
+  rather than writing a keyword beside `$ref` where JSON Schema would ignore it.
+  `schemaChildren` was extended in the same change so the Multi Format invariant
+  is still enforced inside `if`/`contains`/`patternProperties`/`dependencies`.
+  See [ADR 0006](adr/0006-schema-keywords.md) and the
+  [design doc](designdoc/schema-keywords.md).
 - **Gap** — Missing the three AsyncAPI-specific keywords (`discriminator`,
   `externalDocs`, `deprecated`) and most structural Draft-07 keywords
   (`const`, `if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`,

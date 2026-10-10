@@ -34,7 +34,8 @@ components:
   schemas:
     github.com/RubenRibGarcia/asyncgo/test/data/provider.Money:
       type: string
-      example: 12.34 USD
+      examples:
+      - 12.34 USD
       pattern: "^\\d+\\.\\d{2} [A-Z]{3}$"
     github.com/RubenRibGarcia/asyncgo/test/data/provider.OrderPlaced:
       type: object

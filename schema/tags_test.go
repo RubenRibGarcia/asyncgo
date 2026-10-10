@@ -5,6 +5,7 @@ import (
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestApplyTag(t *testing.T) {
@@ -18,7 +19,6 @@ func TestApplyTag(t *testing.T) {
 			tag:  "required,,",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Empty(t, s.Enum)
-				assert.Nil(t, s.Example)
 				assert.Empty(t, s.Format)
 			},
 		},
@@ -30,10 +30,15 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
-			name: "should_apply_example",
+			// example= was removed along with spec.Schema.Example: 3.1.0 defines only
+			// the Draft-07 `examples` array. applyTag ignores an unknown directive, so
+			// a stale example= is dropped rather than quietly mapped onto examples=.
+			// Pinned so that silent-ignore stays deliberate and visible.
+			name: "should_ignore_the_removed_example_directive",
 			tag:  "example=hello",
 			verify: func(t *testing.T, s *spec.Schema) {
-				assert.Equal(t, "hello", s.Example)
+				assert.Empty(t, s.Examples)
+				assert.Empty(t, s.Enum)
 			},
 		},
 		{
@@ -49,7 +54,123 @@ func TestApplyTag(t *testing.T) {
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Empty(t, s.Enum)
 				assert.Empty(t, s.Format)
-				assert.Nil(t, s.Example)
+			},
+		},
+		{
+			name: "should_apply_read_only_flag",
+			tag:  "readOnly",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.True(t, s.ReadOnly)
+			},
+		},
+		{
+			name: "should_apply_write_only_flag",
+			tag:  "writeOnly",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.True(t, s.WriteOnly)
+			},
+		},
+		{
+			name: "should_apply_unique_items_flag",
+			tag:  "uniqueItems",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.True(t, s.UniqueItems)
+			},
+		},
+		{
+			name: "should_apply_deprecated_flag",
+			tag:  "deprecated",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.True(t, s.Deprecated)
+			},
+		},
+		{
+			name: "should_apply_all_flags_together",
+			tag:  "required,readOnly,writeOnly,uniqueItems,deprecated",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.True(t, s.ReadOnly)
+				assert.True(t, s.WriteOnly)
+				assert.True(t, s.UniqueItems)
+				assert.True(t, s.Deprecated)
+			},
+		},
+		{
+			name: "should_append_repeated_examples",
+			tag:  "examples=sku-1,examples=sku-2",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, []any{"sku-1", "sku-2"}, s.Examples)
+			},
+		},
+		{
+			name: "should_keep_examples_when_a_removed_example_directive_is_present",
+			tag:  "examples=draft-07,example=legacy",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, []any{"draft-07"}, s.Examples,
+					"the removed example= is ignored, not merged into examples=")
+			},
+		},
+		{
+			name: "should_ignore_empty_examples",
+			tag:  "examples=",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Empty(t, s.Examples)
+			},
+		},
+		{
+			name: "should_apply_const",
+			tag:  "const=OrderPlaced",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "OrderPlaced", s.Const)
+			},
+		},
+		{
+			name: "should_ignore_empty_const",
+			tag:  "const=",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Nil(t, s.Const)
+			},
+		},
+		{
+			name: "should_apply_discriminator",
+			tag:  "discriminator=kind",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "kind", s.Discriminator)
+			},
+		},
+		{
+			name: "should_apply_numeric_bounds",
+			tag:  "minItems=1,maxItems=10,minProperties=1,maxProperties=8",
+			verify: func(t *testing.T, s *spec.Schema) {
+				require.NotNil(t, s.MinItems)
+				require.NotNil(t, s.MaxItems)
+				require.NotNil(t, s.MinProperties)
+				require.NotNil(t, s.MaxProperties)
+				assert.Equal(t, uint64(1), *s.MinItems)
+				assert.Equal(t, uint64(10), *s.MaxItems)
+				assert.Equal(t, uint64(1), *s.MinProperties)
+				assert.Equal(t, uint64(8), *s.MaxProperties)
+			},
+		},
+		{
+			name: "should_apply_zero_bound",
+			tag:  "minItems=0",
+			verify: func(t *testing.T, s *spec.Schema) {
+				require.NotNil(t, s.MinItems, "zero is a real bound, not an absent one")
+				assert.Equal(t, uint64(0), *s.MinItems)
+			},
+		},
+		{
+			name: "should_ignore_non_numeric_bound",
+			tag:  "minItems=abc",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Nil(t, s.MinItems)
+			},
+		},
+		{
+			name: "should_ignore_negative_bound",
+			tag:  "maxItems=-1",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Nil(t, s.MaxItems)
 			},
 		},
 	}
