@@ -45,6 +45,7 @@ var fixtures = []string{
 	"reply",
 	"traits",
 	"multiformat",
+	"derived",
 }
 
 // cliUnsupported lists the fixtures the pinned AsyncAPI CLI cannot validate, with

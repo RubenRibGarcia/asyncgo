@@ -17,11 +17,7 @@ channels:
     address: order-cancelled
     messages:
       OrderCancelled:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
-        correlationId:
-          $ref: "#/components/correlationIds/OrderCancelledCorrelationID"
-        name: OrderCancelled
+        $ref: "#/components/messages/OrderCancelled"
     description: Order cancellations
     servers:
     - $ref: "#/servers/prod"
@@ -29,15 +25,7 @@ channels:
     address: order-placed
     messages:
       OrderPlaced:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
-        name: OrderPlaced
-        tags:
-        - name: orders
-        externalDocs:
-          url: https://example.com/messages/order-placed
-        traits:
-        - $ref: "#/components/messageTraits/TracedMessage"
+        $ref: "#/components/messages/OrderPlaced"
     description: Order placements
     servers:
     - $ref: "#/servers/prod"
@@ -49,11 +37,7 @@ channels:
     address: order-shipped
     messages:
       OrderShipped:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderShipped"
-        name: OrderShipped
-        traits:
-        - $ref: "#/components/messageTraits/TracedMessage"
+        $ref: "#/components/messages/OrderShipped"
     description: Order shipments
     servers:
     - $ref: "#/servers/prod"
@@ -100,6 +84,29 @@ components:
           type: string
       required:
       - order_id
+  messages:
+    OrderCancelled:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
+      correlationId:
+        $ref: "#/components/correlationIds/OrderCancelledCorrelationID"
+      name: OrderCancelled
+    OrderPlaced:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
+      name: OrderPlaced
+      tags:
+      - name: orders
+      externalDocs:
+        url: https://example.com/messages/order-placed
+      traits:
+      - $ref: "#/components/messageTraits/TracedMessage"
+    OrderShipped:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderShipped"
+      name: OrderShipped
+      traits:
+      - $ref: "#/components/messageTraits/TracedMessage"
   correlationIds:
     OrderCancelledCorrelationID:
       description: Correlation ID carried in the cancellation headers

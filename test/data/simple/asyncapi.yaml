@@ -17,9 +17,7 @@ channels:
     address: order-placed
     messages:
       OrderPlaced:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1simple.OrderPlaced"
-        name: OrderPlaced
+        $ref: "#/components/messages/OrderPlaced"
     description: Emitted when an order is placed
     servers:
     - $ref: "#/servers/prod"
@@ -50,3 +48,8 @@ components:
       required:
       - order_id
       - amount
+  messages:
+    OrderPlaced:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1simple.OrderPlaced"
+      name: OrderPlaced

@@ -1,0 +1,45 @@
+asyncapi: 3.1.0
+info:
+  title: Derived Message Keys
+  version: 1.0.0
+  description: One payload type hoisted once and shared by two channels
+channels:
+  order-placed:
+    address: order-placed
+    messages:
+      github.com/RubenRibGarcia/asyncgo/test/data/derived.OrderPlaced:
+        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1derived.OrderPlaced"
+    description: Order placements
+  order-shipped:
+    address: order-shipped
+    messages:
+      github.com/RubenRibGarcia/asyncgo/test/data/derived.OrderPlaced:
+        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1derived.OrderPlaced"
+    description: Order shipments carrying the same message
+operations:
+  order-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-placed"
+    messages:
+    - $ref: "#/channels/order-placed/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1derived.OrderPlaced"
+  order-shipped.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-shipped"
+    messages:
+    - $ref: "#/channels/order-shipped/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1derived.OrderPlaced"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/derived.OrderPlaced:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required:
+      - order_id
+  messages:
+    github.com/RubenRibGarcia/asyncgo/test/data/derived.OrderPlaced:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1derived.OrderPlaced"
+      name: OrderPlaced

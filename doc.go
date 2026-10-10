@@ -55,6 +55,7 @@ func Spec(items ...Item) *SpecResult {
 	errs = append(errs, b.validateServerRefs()...)
 	errs = append(errs, b.validateSecurityRefs()...)
 	errs = append(errs, b.validateReplyRefs()...)
+	errs = append(errs, b.validateMessageRefs()...)
 	errs = append(errs, b.validateTraitRefs()...)
 	errs = append(errs, b.validateSchemaNodes()...)
 	if len(b.defs) > 0 {
@@ -153,7 +154,8 @@ func (b *builder) validateSecurityRefs() []error {
 
 // validateReplyRefs checks that every operation reply reference points at a
 // reply declared via Replies(...), that every declared reply's address and
-// channel resolve, and that a reply never combines an address with a channel.
+// channel resolve, that a reply never combines an address with a channel, and
+// that every message a reply names is one the reply's channel actually carries.
 // It is a post-pass for the same reason as validateServerRefs: declaration order
 // is arbitrary, so a reply may be referenced before it is declared.
 //
@@ -230,6 +232,58 @@ func (b *builder) validateReplyRefs() []error {
 					msg.Ref,
 					channel,
 				))
+				continue
+			}
+			key := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
+			if _, ok := b.doc.Channels[channel].Messages[key]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"reply.%s: message %q is not in channel %q",
+					name,
+					msg.Ref,
+					channel,
+				))
+			}
+		}
+	}
+
+	return errs
+}
+
+// validateMessageRefs checks that every channel messages entry that is a
+// Reference Object points at a message declared in components.messages. It is a
+// post-pass for the same reason as validateServerRefs: declaration order is
+// arbitrary. The generator hoists and references a message in one step, so it
+// cannot produce a dangling reference; the check guards a document assembled
+// through the spec package directly.
+func (b *builder) validateMessageRefs() []error {
+	const prefix = "#/components/messages/"
+
+	var declared map[string]*spec.Message
+	if b.doc.Components != nil {
+		declared = b.doc.Components.Messages
+	}
+
+	var errs []error
+	// Channels and their messages are walked in sorted order so the joined error
+	// message is stable: SpecResult.Err is compared by exact string in tests.
+	for _, address := range slices.Sorted(maps.Keys(b.doc.Channels)) {
+		ch := b.doc.Channels[address]
+		if ch == nil {
+			continue
+		}
+		for _, key := range slices.Sorted(maps.Keys(ch.Messages)) {
+			msg := ch.Messages[key]
+			if msg == nil || msg.Ref == "" {
+				continue
+			}
+			name := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
+			if _, ok := declared[name]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"channel.%s.messages.%s: references unknown message %q",
+					address,
+					key,
+					name,
+				))
 			}
 		}
 	}
@@ -253,10 +307,12 @@ func (b *builder) validateTraitRefs() []error {
 	var declaredOperationTraits map[string]*spec.OperationTrait
 	var declaredMessageTraits map[string]*spec.MessageTrait
 	var declaredCorrelationIDs map[string]*spec.CorrelationID
+	var declaredMessages map[string]*spec.Message
 	if b.doc.Components != nil {
 		declaredOperationTraits = b.doc.Components.OperationTraits
 		declaredMessageTraits = b.doc.Components.MessageTraits
 		declaredCorrelationIDs = b.doc.Components.CorrelationIDs
+		declaredMessages = b.doc.Components.Messages
 	}
 
 	var errs []error
@@ -276,30 +332,29 @@ func (b *builder) validateTraitRefs() []error {
 		}
 	}
 
-	for _, address := range slices.Sorted(maps.Keys(b.doc.Channels)) {
-		messages := b.doc.Channels[address].Messages
-		for _, name := range slices.Sorted(maps.Keys(messages)) {
-			for _, ref := range messages[name].Traits {
-				trait := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, messageTraitsPrefix))
-				if _, ok := declaredMessageTraits[trait]; !ok {
-					errs = append(errs, fmt.Errorf(
-						"channel.%s.messages.%s: references unknown message trait %q",
-						address,
-						name,
-						trait,
-					))
-				}
+	for _, key := range slices.Sorted(maps.Keys(declaredMessages)) {
+		msg := declaredMessages[key]
+		if msg == nil {
+			continue
+		}
+		for _, ref := range msg.Traits {
+			trait := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, messageTraitsPrefix))
+			if _, ok := declaredMessageTraits[trait]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"message.%s: references unknown message trait %q",
+					key,
+					trait,
+				))
 			}
-			if ref := messages[name].CorrelationID; ref != nil {
-				id := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, correlationIDsPrefix))
-				if _, ok := declaredCorrelationIDs[id]; !ok {
-					errs = append(errs, fmt.Errorf(
-						"channel.%s.messages.%s: references unknown correlation id %q",
-						address,
-						name,
-						id,
-					))
-				}
+		}
+		if ref := msg.CorrelationID; ref != nil {
+			id := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, correlationIDsPrefix))
+			if _, ok := declaredCorrelationIDs[id]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"message.%s: references unknown correlation id %q",
+					key,
+					id,
+				))
 			}
 		}
 	}
@@ -349,21 +404,16 @@ func (b *builder) validateSchemaNodes() []error {
 				)
 			}
 		}
-	}
-
-	// Channels are keyed by address and carry the message map, so every payload
-	// and header that can reach the document is walked here.
-	for _, address := range slices.Sorted(maps.Keys(b.doc.Channels)) {
-		ch := b.doc.Channels[address]
-		if ch == nil {
-			continue
-		}
-		for _, name := range slices.Sorted(maps.Keys(ch.Messages)) {
-			msg := ch.Messages[name]
+		// Messages are hoisted into components.messages and a channel's messages
+		// map holds only references to them (validateMessageRefs checks that the
+		// references resolve), so every payload and header that can reach the
+		// document is walked here.
+		for _, key := range slices.Sorted(maps.Keys(comps.Messages)) {
+			msg := comps.Messages[key]
 			if msg == nil {
 				continue
 			}
-			base := "channel." + address + ".messages." + name
+			base := "message." + key
 			errs = append(errs, schemaNodeErrors(msg.Payload, base+".payload")...)
 			errs = append(errs, schemaNodeErrors(msg.Headers, base+".headers")...)
 		}
@@ -715,13 +765,48 @@ func channelRef(ch *channel) *spec.Reference {
 
 // channelMessageRef is the JSON Reference to a message carried by ch. It
 // mirrors the refs channel.apply builds for an operation's own messages, so the
-// two agree on how an unnamed message is named.
+// two agree on the message's key in the channel.
 func channelMessageRef(ch *channel, m *message) *spec.Reference {
 	return &spec.Reference{
 		Ref: "#/channels/" + jsonpointer.Escape(ch.address) + "/messages/" + jsonpointer.Escape(
-			messageName(m),
+			messageKey(m),
 		),
 	}
+}
+
+// hoistMessage registers msg in components.messages under key — the message's
+// identity, as messageKey derives it — and returns the Reference Object a
+// channel's messages map carries in its place. The same message may be carried
+// by several channels, and an identical one may legitimately be declared twice,
+// so an existing entry under the same key is reused when it is identical and
+// rejected as a duplicate when it is not. owner names the declaring channel in
+// that error.
+//
+// The returned entry is a Reference Object, whose Ref is the only field set: a
+// channel messages entry may be a Message Object or a Reference Object, and the
+// generator always hoists.
+func hoistMessage(
+	b *builder,
+	key string,
+	owner string,
+	msg *spec.Message,
+) (*spec.Message, error) {
+	c := b.components()
+	if c.Messages == nil {
+		c.Messages = map[string]*spec.Message{}
+	}
+	if existing, ok := c.Messages[key]; ok {
+		if !reflect.DeepEqual(existing, msg) {
+			return nil, fmt.Errorf(
+				"message.%s: duplicate name with different content (%s)",
+				key,
+				owner,
+			)
+		}
+	} else {
+		c.Messages[key] = msg
+	}
+	return &spec.Message{Ref: "#/components/messages/" + jsonpointer.Escape(key)}, nil
 }
 
 // --- traits ------------------------------------------------------------------
@@ -1241,15 +1326,21 @@ func (c *channel) apply(b *builder) error {
 				errs = append(errs, err)
 				continue
 			}
+			key := messageKey(m)
+			entry, err := hoistMessage(b, key, "channel."+c.address, sm)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
 			if ch.Messages == nil {
 				ch.Messages = map[string]*spec.Message{}
 			}
-			ch.Messages[sm.Name] = sm
+			ch.Messages[key] = entry
 			specOp.Messages = append(specOp.Messages, &spec.Reference{
 				Ref: "#/channels/" + jsonpointer.Escape(
 					c.address,
 				) + "/messages/" + jsonpointer.Escape(
-					sm.Name,
+					key,
 				),
 			})
 		}

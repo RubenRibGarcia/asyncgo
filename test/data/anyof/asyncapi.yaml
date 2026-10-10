@@ -17,9 +17,7 @@ channels:
     address: order-event
     messages:
       OrderEvent:
-        payload:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1anyof.OrderEvent"
-        name: OrderEvent
+        $ref: "#/components/messages/OrderEvent"
     description: Envelope carrying any of the order event types
     bindings:
       kafka:
@@ -67,3 +65,8 @@ components:
       required:
       - order_id
       - amount
+  messages:
+    OrderEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1anyof.OrderEvent"
+      name: OrderEvent
