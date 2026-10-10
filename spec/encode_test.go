@@ -408,6 +408,58 @@ func TestEncodeReply(t *testing.T) {
 	})
 }
 
+// TestEncodeReferenceMessage covers a channel messages entry that is a
+// Reference Object pointing at components.messages: the shape the generator
+// emits for a hoisted message, and the referencing half of the Message Object |
+// Reference Object union.
+func TestEncodeReferenceMessage(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Channels = map[string]*Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Messages: map[string]*Message{
+				"OrderPlaced": {Ref: "#/components/messages/OrderPlaced"},
+			},
+		},
+	}
+	doc.Components = &Components{
+		Messages: map[string]*Message{
+			"OrderPlaced": {
+				Name:    "OrderPlaced",
+				Payload: Ref("#/components/schemas/OrderPlaced"),
+			},
+		},
+	}
+
+	yamlOut, err := doc.YAML()
+	require.NoError(t, err)
+	for _, want := range []string{
+		"messages:",
+		"#/components/messages/OrderPlaced",
+		"name: OrderPlaced",
+	} {
+		assert.Contains(t, string(yamlOut), want)
+	}
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	assert.Contains(
+		t,
+		string(jsonOut),
+		`"channels":{"order-placed":{"address":"order-placed","messages":`+
+			`{"OrderPlaced":{"$ref":"#/components/messages/OrderPlaced"}}}}`,
+	)
+
+	t.Run("should_decode_yaml_and_json_to_the_same_document", func(t *testing.T) {
+		var fromYAML, fromJSON AsyncAPI
+		require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
+		require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
+
+		assert.Equal(t, canonicalJSON(t, &fromYAML), canonicalJSON(t, &fromJSON))
+	})
+}
+
 // TestEncodeReplyAddressAlwaysEmitsLocation pins the one required field of an
 // Operation Reply Address: it has to be emitted even when empty, because a
 // dropped key would pass silently where an empty location is a validation error.

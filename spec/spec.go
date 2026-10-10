@@ -185,7 +185,16 @@ type OperationReplyAddress struct {
 }
 
 // Message describes a message exchanged on a channel.
+//
+// The same struct models the Reference Object half of the Message Object |
+// Reference Object union a channel's messages entry accepts: when Ref is set
+// the node renders as a bare $ref, which is the shape a hoisted message takes
+// in the channel. A reference carries no other field. One struct rather than a
+// separate union type follows Schema, and keeps the discovery harness's YAML
+// round-trip lossless — a node that is not a concrete struct decodes into a map
+// and is re-encoded with sorted keys, which would rewrite committed fixtures.
 type Message struct {
+	Ref           string           `json:"$ref,omitempty"          yaml:"$ref,omitempty"`
 	Headers       *Schema          `json:"headers,omitempty"       yaml:"headers,omitempty"`
 	Payload       *Schema          `json:"payload,omitempty"       yaml:"payload,omitempty"`
 	CorrelationID *Reference       `json:"correlationId,omitempty" yaml:"correlationId,omitempty"`
