@@ -65,7 +65,13 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
    comment by the discovery pass, not from the tag.
 
 4. **Always hoist** — named struct types go into `components.schemas` and are
-   referenced via `$ref`; only anonymous inline types are inlined.
+   referenced via `$ref`; only anonymous inline types are inlined. Messages are
+   hoisted the same way into `components.messages`: a channel's `messages` entry
+   is a `$ref` to the hoisted message, keyed by the authored name or, when
+   `MessageOf` leaves it unset, by the payload type's fully-qualified name.
+   Operations and replies still point at `#/channels/<id>/messages/<key>` —
+   the specification requires their `messages` to be a subset of the messages
+   defined in the referenced channel, not of `components.messages`.
 
 5. **Static discovery + harness materialization** — catalogs are located
    statically via `go/packages`; their values are materialized by running a
@@ -106,7 +112,7 @@ asyncgo/
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat, derived — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
@@ -175,7 +181,8 @@ The version is the git tag — never stored in source.
   hand-written.
 - **Testing**: `make test` must pass. The `test/integration` test is end-to-end
   and asserts three independent things for each `test/data/` fixture (`simple`,
-  `allof`, `oneof`, `anyof`, `provider`, `security`, `reply`, `traits`):
+  `allof`, `oneof`, `anyof`, `provider`, `security`, `reply`, `traits`,
+  `multiformat`, `derived`):
 
   1. **Golden** — the generator output reproduces the committed `asyncapi.yaml`
      exactly.

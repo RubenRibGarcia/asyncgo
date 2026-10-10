@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -46,7 +46,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Server Variable Object | ✅ 4/4 | ✅ | — |
 | Channels Object | ✅ | ✅ | — |
 | Channel Object | 🟡 9/10 | 🟡 | no `summary`; `parameters` is 🟠; `address` cannot be `null` |
-| Messages Object | ✅ | ✅ | key is the message `name`; collisions overwrite silently |
+| Messages Object | ✅ | ✅ | channel `messages` entries are `$ref`s to `components.messages`; the key is the authored name, or the payload type's fully-qualified name when unpinned; a key carrying different content is a validation error |
 | Operations Object | ✅ | 🟡 | key is auto-derived `${address}.${action}`; a second `Send`/`Receive` on one channel overwrites |
 | Operation Object | ✅ 12/12 | ✅ | — |
 | Operation Trait Object | ✅ 7/7 | ✅ | — |
@@ -57,8 +57,8 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Message Example Object | ✅ 4/4 | 🟡 | `Example()` sets `name` + `payload` only |
 | Tag Object | ✅ 3/3 | ✅ | — |
 | External Documentation Object | ✅ | ✅ | — |
-| Components Object | 🟡 **12/19** | 🟡 | `schemas`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
-| Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; internal use only |
+| Components Object | 🟡 **12/19** | 🟡 | `schemas`, `messages`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
+| Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; `spec.Schema` and `spec.Message` carry a `$ref` field instead of a union type |
 | **Multi Format Schema Object** | ✅ | ✅ | — |
 | Schema Object | 🟡 Draft-07 subset | ✅ | see [§4](#4-schema-derivation) |
 | Security Scheme Object | ✅ 9/9 | ✅ | — |
@@ -75,7 +75,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 
 ## 2. Components Object
 
-3.1.0 defines 19 fields. The library models 12 and populates 7.
+3.1.0 defines 19 fields. The library models 12 and populates 8.
 
 | Field | Modeled | Populated |
 | --- | :--: | :--: |
@@ -83,7 +83,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | `servers` | ✅ | ❌ |
 | `channels` | ✅ | ❌ |
 | `operations` | ✅ | ❌ |
-| `messages` | ✅ | ❌ |
+| `messages` | ✅ | ✅ |
 | `parameters` | ✅ | ❌ |
 | `correlationIds` | ✅ | ✅ |
 | `securitySchemes` | ✅ | ✅ |
@@ -99,14 +99,15 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | `operationBindings` | ❌ | ❌ |
 | `messageBindings` | ❌ | ❌ |
 
-The five modeled-but-unpopulated maps exist only so `Merge()` can union them
-across catalogs (`internal/discovery/merge.go`); nothing in the DSL or the
-generator ever writes them. `components.schemas` is filled by
-`builder.components()` (`doc.go`) and `schema.Finalize` (`schema/registry.go`),
-`components.securitySchemes` by the `SecuritySchemes(...)` item's `apply`
-(`doc.go`), `components.replies` / `components.replyAddresses` by
-`Replies(...)` / `ReplyAddresses(...)` (`doc.go`), and
-`components.correlationIds` / `components.operationTraits` /
+The four modeled-but-unpopulated maps (`servers`, `channels`, `operations`,
+`parameters`) exist only so `Merge()` can union them across catalogs
+(`internal/discovery/merge.go`); nothing in the DSL or the generator ever writes
+them. `components.schemas` is filled by `builder.components()` (`doc.go`) and
+`schema.Finalize` (`schema/registry.go`), `components.messages` by the message
+hoisting in `channel.apply` (`doc.go`), `components.securitySchemes` by the
+`SecuritySchemes(...)` item's `apply` (`doc.go`), `components.replies` /
+`components.replyAddresses` by `Replies(...)` / `ReplyAddresses(...)` (`doc.go`),
+and `components.correlationIds` / `components.operationTraits` /
 `components.messageTraits` by `CorrelationIDs(...)` / `OperationTraits(...)` /
 `MessageTraits(...)` (`doc.go`).
 
@@ -244,7 +245,8 @@ post-pass, and surface as a per-catalog `discovery.CatalogErrors` report.
 | key pattern `^[A-Za-z0-9_\-]+$` (server, channel, message, component keys) | ❌ |
 | `operation.messages` ⊆ channel `messages` | ❌ |
 | channel address expressions `{p}` ↔ declared `parameters` | ❌ |
-| operation / message map-key collision (silent overwrite today) | ❌ |
+| operation map-key collision (a second `Send`/`Receive` on one channel overwrites) | ❌ |
+| message component-key collision (same key, different content) | ✅ `hoistMessage` rejects it; identical content is shared |
 | required-field presence per object, beyond the checks above | ❌ |
 | spec-conformance of the final document (schema validation) | ❌ |
 

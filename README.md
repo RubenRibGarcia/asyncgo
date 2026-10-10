@@ -47,6 +47,50 @@ var Catalog = asyncgo.Spec(
 `MessageOf` *references* your struct rather than duplicating the shape, so the
 schema cannot drift from the data contract.
 
+### Messages
+
+Every message is hoisted into `components.messages`. The channel's `messages`
+map — and every operation or reply that names the message — carries a `$ref`:
+
+```go
+var Catalog = asyncgo.Spec(
+ asyncgo.Info("Orders Service", "1.0.0"),
+ asyncgo.Channels(
+  asyncgo.Channel("order-placed").
+   Send(asyncgo.Operation().Message(asyncgo.MessageOf(OrderPlaced{}))),
+ ),
+)
+```
+
+```yaml
+# channels:
+#   order-placed:
+#     address: order-placed
+#     messages:
+#       github.com/acme/orders.OrderPlaced:
+#         $ref: '#/components/messages/github.com~1acme~1orders.OrderPlaced'
+# operations:
+#   order-placed.send:
+#     messages:
+#     - $ref: '#/channels/order-placed/messages/github.com~1acme~1orders.OrderPlaced'
+# components:
+#   messages:
+#     github.com/acme/orders.OrderPlaced:
+#       name: OrderPlaced
+#       payload:
+#         $ref: '#/components/schemas/github.com~1acme~1orders.OrderPlaced'
+```
+
+The component key is the message's identity, and it is also the channel's
+message id. A name you set — `MessageFrom("Name", ...)` or
+`MessageOf(T{}).Name("Name")` — is that key; an unpinned `MessageOf` derives it
+from the payload type's fully-qualified name, so `Name(...)` is how you keep the
+key short. Two channels carrying the same message share one component, while the
+same key carrying different content is a catalog validation error. Operations
+and replies keep pointing at `#/channels/<id>/messages/<key>` rather than at
+`components.messages`: the specification requires their `messages` to be a
+subset of the messages defined in the referenced channel.
+
 ### Servers on a channel
 
 A channel is available on all declared servers by default. To restrict it to a
@@ -291,13 +335,16 @@ var Catalog = asyncgo.Spec(
 #       schema:
 #         type: record
 #         name: User
+#   messages:
+#     OrderShipped:
+#       payload:
+#         schemaFormat: application/vnd.google.protobuf;version=3
+#         schema: message OrderShipped { string order_id = 1; }
 # channels:
 #   order-shipped:
 #     messages:
 #       OrderShipped:
-#         payload:
-#           schemaFormat: application/vnd.google.protobuf;version=3
-#           schema: message OrderShipped { string order_id = 1; }
+#         $ref: '#/components/messages/OrderShipped'
 ```
 
 `schemaFormat` is emitted verbatim and `schema` is opaque: asyncgo never parses,
