@@ -6,10 +6,9 @@
 version: 2
 updates:
   - package-ecosystem: "gomod" # See documentation for possible values
-    directory: "/" # Location of package manifests
+    directories:
+      - "/" # Location of package manifests
+      - "/tools"
+      - "/test/**/*"
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "gomod"
-    directory: "/tools"
-    schedule:
-      interval: "weekly"
+      interval: daily
