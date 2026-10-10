@@ -504,9 +504,9 @@ type Money struct {
 // Wire format is a single "12.34 USD" string, not an object.
 func (Money) AsyncAPISchema() *spec.Schema {
  return &spec.Schema{
-  Type:    "string",
-  Pattern: `^\d+\.\d{2} [A-Z]{3}$`,
-  Example: "12.34 USD",
+  Type:     "string",
+  Pattern:  `^\d+\.\d{2} [A-Z]{3}$`,
+  Examples: []any{"12.34 USD"},
  }
 }
 ```
@@ -515,17 +515,16 @@ func (Money) AsyncAPISchema() *spec.Schema {
 # components.schemas (abridged; "..." elides the fully-qualified name):
 #   ...Money:
 #     type: string
+#     examples:
+#     - 12.34 USD
 #     pattern: "^\d+\.\d{2} [A-Z]{3}$"
-#     example: "12.34 USD"
 ```
 
-The example above sets `Example`, which is kept working but is deprecated:
-AsyncAPI 3.1.0's Schema Object uses the Draft-07 `examples` **array**, not a
-singular `example` keyword. Prefer `Examples: []any{…}` on the schema, or
-`Message.PayloadExamples(…)` to attach examples to a message's payload schema —
-when the payload is a `$ref` that writes them onto the referenced
-`components.schemas` entry, the only place JSON Schema applies them. The
-deviation is recorded in `docs/asyncapi-3.1.0-coverage.md` §7.
+`Examples` is the Draft-07 keyword, and the only example keyword AsyncAPI 3.1.0
+has — its Schema Object defines no singular `example`. `Message.PayloadExamples(…)`
+is the same keyword at the message level: when the payload is a `$ref` it writes
+the examples onto the referenced `components.schemas` entry, the only place JSON
+Schema applies them.
 
 `AsyncAPISchema` is invoked on a zero value, so it must describe the *type*
 (not an instance): be pure, deterministic, and panic-free. Return `nil` to fall

@@ -51,8 +51,10 @@ correctness bug introduced by adding the fields, so the fix ships with them.
 ### The tag vocabulary today
 
 `schema/tags.go` parses the `asyncapi` struct tag. `applyTag` (`:21`) handles
-`key=value` directives (`enum=`, `example=`, `format=`); `hasFlag` (`:39`)
-handles bare flags (`required`, `allOf`). `oneOf=`/`anyOf=`/`allOf=` are
+`key=value` directives (`enum=`, `examples=`, `format=`, `const=`,
+`discriminator=`, and the four numeric bounds); `hasFlag` (`:39`) handles bare
+flags (`required`, `allOf`, `readOnly`, `writeOnly`, `uniqueItems`,
+`deprecated`). `oneOf=`/`anyOf=`/`allOf=` are
 recognized by `combinatorNames` (`:54`) and acted on by the **caller**
 (`fillFields` in `schema/derive.go`), not by `applyTag`.
 
@@ -76,10 +78,10 @@ described by Reference Object instead of the one in JSON Schema definition"*.
 Sibling keywords beside `$ref` therefore do not compose — which is what forces
 D7.
 
-`example` (singular) is a 2.x carry-over: `spec.Schema.Example` models it and
-`test/data/provider/asyncapi.yaml:37` emits it. It is not a 3.1.0 keyword, and
-`docs/asyncapi-3.1.0-coverage.md` §7 does not yet list it. D2 keeps it working
-and documents it.
+`example` (singular) was, until this change, a 2.x carry-over the model emitted:
+`spec.Schema.Example`, mapped from `asyncapi:"example=…"`, with a committed
+usage in `test/data/provider`. It is not a 3.1.0 keyword, so it was a §7
+deviation. D2 removes it and migrates that fixture to `Examples`.
 
 ## Goals / Non-goals
 
@@ -92,7 +94,10 @@ and documents it.
    including through a `$ref`, without ever writing a sibling of `$ref`.
 4. Validation recursion (`schemaChildren`) covers every new schema-valued
    keyword, so the Multi Format invariant still holds at depth.
-5. Zero change to committed golden fixtures.
+5. No *incidental* change to committed golden fixtures: a document that does not
+   use the new keywords serializes unchanged. The one deliberate exception is
+   the `test/data/provider` fixture migrated from the removed `example` to
+   `examples` (D2).
 
 **Non-goals (v1)**
 
@@ -108,7 +113,6 @@ and documents it.
 - **2019-09 / 2020-12 keywords.** `$defs`, `unevaluatedProperties`,
   `dependentRequired`, `prefixItems`, and friends are out of scope: 3.1.0 is a
   Draft-07 superset. The repo already uses `definitions`, not `$defs`.
-- **Retiring `Example`.** Deprecated, not removed (D2).
 - **Tag value validation errors.** Deferred (D6, O2).
 - **A new `test/data` fixture.** Keyword coverage is asserted at the `spec`
   layer; the existing integration suite must stay green unchanged.
@@ -125,16 +129,24 @@ The spec's own bullet list and Draft-07 define four more that the body omits:
 out would leave §4.3 stale and the gap half-closed. All four are additive
 `omitempty` fields with no behavior change.
 
-### D2 — Add `Examples []any`; keep `Example any` working and deprecated
+### D2 — `Examples` is the only example keyword; the singular `Example` is removed
 
-`Examples` is the Draft-07 array and the keyword 3.1.0 defines. `Example`
-(singular) stays exported, keeps its `asyncapi:"example=…"` mapping, and is
-marked deprecated in godoc with a new §7 deviations row.
+`Examples` is the Draft-07 array and the only example keyword AsyncAPI 3.1.0
+defines. The 2.x singular `Example` field and its `asyncapi:"example=…"`
+directive are **removed**, not deprecated. Its committed usage in
+`test/data/provider` was migrated to `Examples`.
 
-**Rationale**: `Example` is public API with a committed fixture using it.
-Removing it is a breaking change with no migration path for existing catalogs,
-and it is unrelated to the issue's goal. Deprecation is honest and reversible;
-removal can be a later, deliberate change (O3).
+**Rationale**: `example` is not a 3.1.0 Schema keyword, so the field made the
+model emit non-conformant output — a §7 deviation with no upside once `Examples`
+exists — and two fields expressing one idea invites picking the wrong one. This
+is a breaking change, taken deliberately while the library is pre-1.0.
+
+**Consequence, accepted knowingly**: `applyTag` ignores an unrecognised
+directive, so a catalog still carrying `asyncapi:"example=x"` is silently
+dropped — no error, no warning. Mapping `example=` onto `examples=` was the
+alternative and was rejected because it keeps the deprecated spelling alive.
+Making unknown directives loud (O2) is the real fix for the whole class; until
+then a test pins the silent ignore so it stays deliberate and visible.
 
 ### D3 — Keyword-to-field names
 
@@ -166,7 +178,7 @@ expressiveness, only a shorthand. That keeps the field type-safe and byte-stable
 with no custom codec, for a keyword Draft 2019-09 already deprecated in favour
 of `dependentRequired`/`dependentSchemas`.
 
-### D5 — Booleans are `bool`; `Const`/`Default`/`Example` keep `omitempty`
+### D5 — Booleans are `bool`; `Const`/`Default` keep `omitempty`
 
 `deprecated`, `readOnly`, `writeOnly`, `uniqueItems` are plain `bool` with
 `omitempty`: absent and `false` are semantically identical for these keywords,
@@ -174,8 +186,12 @@ so dropping `false` is correct — this is **not** the
 [B8](../asyncapi-3.1.0-coverage.md#b8--binding-zero-values-are-dropped)
 zero-value problem, where zero is semantically distinct.
 
-`Const any`, like the existing `Default` and `Example`, loses a falsy value
-(`false`, `0`, `""`) to `omitempty`.
+`Const any`, like the existing `Default`, loses a falsy value (`false`, `0`,
+`""`) to `omitempty`.
+
+**Rationale**: Consistency with the existing any-valued field, and a one-off
+presence wrapper for `Const` alone would be a wart. The general fix belongs with
+B8 for both at once (O4). Documented, not hidden.
 
 **Rationale**: Consistency with the two existing any-valued fields, and a
 one-off presence wrapper for `Const` alone would be a wart. The general fix
@@ -267,7 +283,7 @@ Ref, ID, SchemaURI                                      identification
 Type, Title, Description, Format, Comment, ExternalDocs, Deprecated
 Properties, Required, Items, AdditionalProperties, AdditionalItems,
   PatternProperties, PropertyNames, Dependencies, Contains
-Enum, Const, Example, Examples, Default
+Enum, Const, Examples, Default
 Definitions, OneOf, AllOf, AnyOf, Not, If, Then, Else
 MinLength, MaxLength, Pattern                           string constraints
 Minimum, Maximum, ExclusiveMinimum, ExclusiveMaximum, MultipleOf
@@ -341,9 +357,6 @@ WriteOnly bool `json:"writeOnly,omitempty" yaml:"writeOnly,omitempty"`
 // AsyncAPI polymorphism
 Discriminator string `json:"discriminator,omitempty" yaml:"discriminator,omitempty"`
 ```
-
-`Example` gains a `Deprecated:` godoc paragraph pointing at `Examples` and
-`Message.PayloadExamples`.
 
 ### 2. `doc.go` — validation recursion
 
@@ -467,15 +480,21 @@ components:
   not the number/boolean. A tag cannot express the type; use
   `spec.SchemaProvider` for typed constants. Documented.
 - **`additionalItems` without tuple `items`** — emitted and inert (D10).
+- **A stale `asyncapi:"example=…"` tag** — the directive is gone (D2), so it is
+  silently ignored like any unknown directive. Nothing is emitted and nothing is
+  reported; O2 is the fix for the whole class. A test pins this.
 - **A document using none of the 23 keywords** — byte-identical output; the
   integration golden fixtures are the proof.
 
 ## Rollout plan
 
-One PR; the stages are review-sized commits.
+One PR. The stages below are the logical increments of the change rather than
+separate commits — the repository squash-merges every PR, so intra-branch
+granularity is review-only. The `Example` removal D2 calls for landed as a
+follow-up commit on the same PR.
 
 1. **Stage 0 — object model** (`feat(spec)`): the 23 fields, per-keyword
-   round-trip tests, the `spec.Schema` wire-name pin, `Example` deprecation.
+   round-trip tests, and the `spec.Schema` wire-name pin.
    No behavior change for existing catalogs.
 2. **Stage 1 — validation recursion** (`fix(spec)`): `schemaChildren`
    extension plus the nested-Multi-Format regression test. Fixes a gap the
@@ -495,7 +514,8 @@ One PR; the stages are review-sized commits.
     **and** JSON and the decoded field.
   - `should_emit_discriminator_as_a_scalar_string` — guards against a reviewer
     "correcting" it into an OpenAPI-style object.
-  - `should_emit_example_and_examples_as_distinct_keys`.
+  - `TestEncodeSchemaExamples` — the removed singular `example` key is not
+    emitted, and the `examples` array survives the round-trip.
   - `TestSchemaFieldsMatchSpec` — the full declaration-ordered wire-name list,
     sibling of `TestStructFieldsMatchSpec` (`spec/encode_test.go:778`), reusing
     `specFields` (`:755`).
@@ -521,16 +541,13 @@ One PR; the stages are review-sized commits.
 - **O1 — tuple-form `items`.** Widen `Items` to a union/array so
   `additionalItems` has meaning. Needs the same "one struct, sorted-key
   round-trip" reasoning as the Multi Format decision.
-- **O2 — tag value validation.** Surface `minItems=abc` as a discovery/generator
-  error rather than ignoring it. Requires an error channel through
-  `FromType`/`fillFields`/`applyTag`, or a static tag-lint pass in
+- **O2 — tag value validation.** Surface `minItems=abc` — and a directive that
+  no longer exists, such as the removed `example=` (D2) — as a
+  discovery/generator error rather than ignoring it. Requires an error channel
+  through `FromType`/`fillFields`/`applyTag`, or a static tag-lint pass in
   `internal/discovery`.
-- **O3 — retire `Example` (singular).** Remove the field and move
-  `asyncapi:"example=…"` onto `Examples`, migrating
-  `test/data/provider/{schema.go,asyncapi.yaml}` and `README.md`. Breaking;
-  deliberately deferred (D2).
-- **O4 — presence-aware `Const`/`Default`/`Example`.** Apply the B8 fix to the
-  three any-valued fields together so `const: false` and `default: 0` survive.
+- **O4 — presence-aware `Const`/`Default`.** Apply the B8 fix to both
+  any-valued fields so `const: false` and `default: 0` survive.
 - **O5 — derive structural keywords.** `if=Type`, `contains=Type`,
   `patternProperties=…` via the `combinatorNames` mechanism. Needs hoisting rules
   for schema-valued keywords that have no counterpart today.

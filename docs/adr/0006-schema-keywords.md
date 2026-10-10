@@ -84,10 +84,15 @@ Chosen option: "Model plus derivation", with `dependencies` as
   Format invariant is still enforced *inside* `if`/`contains`/
   `patternProperties`/`dependencies` rather than silently stopping at the new
   keywords.
-- Bad, because `example` (singular) and `examples` (plural) now both exist.
-  `example` is not a 3.1.0 Schema keyword; it is kept working and marked
-  deprecated rather than removed, which is a documented inconsistency (§7) and
-  leaves two ways to express one idea.
+- Bad, because removing `Schema.Example` (singular) and its `asyncapi:"example=…"`
+  directive is a breaking change to the public API. It was taken deliberately
+  while the library is pre-1.0, and it removes the last Schema-keyword deviation
+  in §7.
+- Bad, because `applyTag` ignores an unrecognised directive, so a stale
+  `example=` tag is now dropped in silence rather than mapped onto `examples=`.
+  The alternative — keeping the deprecated spelling as an alias — was rejected
+  because it perpetuates the name this change exists to delete; making unknown
+  directives a build error is the real fix, and is deferred.
 - Bad, because `additionalItems` is modelled but inert: it applies only to the
   tuple form of `items`, which this model cannot express.
 - Bad, because a malformed tag value (`minItems=abc`) is ignored rather than

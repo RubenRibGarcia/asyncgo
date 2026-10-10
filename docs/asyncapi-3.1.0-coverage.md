@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -192,7 +192,6 @@ library's differentiating feature and the area with the deepest coverage.
 | field doc comment | `description` | ✅ static AST pass (`internal/discovery/descriptions.go`) |
 | `asyncapi:"required"` | `required: [...]` | ✅ |
 | `asyncapi:"enum=a\|b"` | `enum` (strings only) | 🟡 no typed / `iota` enum detection |
-| `asyncapi:"example=…"` | `example` | 🟡 deprecated 2.x keyword, not in 3.1.0; prefer `examples=` ([§7](#7-spec-deviations)) |
 | `asyncapi:"examples=…"` | `examples` | ✅ repeatable — one entry appended per directive |
 | `asyncapi:"const=…"` | `const` | ✅ string-valued; use `SchemaProvider` for a typed constant |
 | `asyncapi:"discriminator=…"` | `discriminator` | ✅ the property name, a plain string in 3.1.0 |
@@ -266,7 +265,8 @@ populated.
 | Field | Reality |
 | --- | --- |
 | `Parameter.Schema` | 3.1.0 `Parameter` is `enum`, `default`, `description`, `examples`, `location` (this is a 2.x shape). |
-| `Schema.Example` | 3.1.0's Schema Object uses the Draft-07 `examples` **array**; there is no singular `example` keyword. Kept exported for backward compatibility and deprecated in favour of `Schema.Examples` and `Message.PayloadExamples`, but still emitted verbatim when set — including by the `asyncapi:"example=…"` tag. |
+
+`Schema.Example` was a second deviation until [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18): 3.1.0's Schema Object defines only the Draft-07 `examples` array, never a singular `example`. The field and its `asyncapi:"example=…"` directive were removed rather than deprecated, which was a breaking change to a pre-1.0 surface — see [ADR 0006](adr/0006-schema-keywords.md). Because `applyTag` ignores an unrecognised directive, a stale `example=` tag is now silently dropped; making that loud is tracked as follow-up work in the design doc (O2).
 
 The 3.1.0 `security` field is `[[Security Scheme Object | Reference Object]]` —
 an array of schemes or `$ref`s, and 3.1.0 defines no Security Requirement

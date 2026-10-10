@@ -11,7 +11,6 @@ import (
 //
 //	required         (handled by the caller; ignored here)
 //	enum=a|b|c       enumerated string values
-//	example=...      singular example value (the deprecated 2.x keyword)
 //	examples=...     append one Draft-07 examples entry; repeatable
 //	format=...       JSON Schema format (e.g. "date-time", "uuid", "email")
 //	const=...        constant value
@@ -30,7 +29,9 @@ import (
 //
 // A malformed value — a non-numeric bound, an empty examples= — is ignored
 // rather than reported: the FromType/fillFields/applyTag chain returns no error,
-// matching how an unknown directive is already treated. See the design doc
+// matching how an unknown directive is already treated. A directive that no
+// longer exists is ignored the same way, so the removed `example=` is silently
+// dropped rather than mapped onto `examples=`. See the design doc
 // (docs/designdoc/schema-keywords.md, D6).
 //
 // Descriptions are not carried in the tag; the generator's discovery pass reads
@@ -53,8 +54,6 @@ func applyTag(s *spec.Schema, tag string) {
 			for v := range strings.SplitSeq(strings.TrimPrefix(part, "enum="), "|") {
 				s.Enum = append(s.Enum, v)
 			}
-		case strings.HasPrefix(part, "example="):
-			s.Example = strings.TrimPrefix(part, "example=")
 		case strings.HasPrefix(part, "examples="):
 			if v := strings.TrimPrefix(part, "examples="); v != "" {
 				s.Examples = append(s.Examples, v)

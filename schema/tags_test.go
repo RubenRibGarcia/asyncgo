@@ -19,7 +19,6 @@ func TestApplyTag(t *testing.T) {
 			tag:  "required,,",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Empty(t, s.Enum)
-				assert.Nil(t, s.Example)
 				assert.Empty(t, s.Format)
 			},
 		},
@@ -31,10 +30,15 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
-			name: "should_apply_example",
+			// example= was removed along with spec.Schema.Example: 3.1.0 defines only
+			// the Draft-07 `examples` array. applyTag ignores an unknown directive, so
+			// a stale example= is dropped rather than quietly mapped onto examples=.
+			// Pinned so that silent-ignore stays deliberate and visible.
+			name: "should_ignore_the_removed_example_directive",
 			tag:  "example=hello",
 			verify: func(t *testing.T, s *spec.Schema) {
-				assert.Equal(t, "hello", s.Example)
+				assert.Empty(t, s.Examples)
+				assert.Empty(t, s.Enum)
 			},
 		},
 		{
@@ -50,7 +54,6 @@ func TestApplyTag(t *testing.T) {
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Empty(t, s.Enum)
 				assert.Empty(t, s.Format)
-				assert.Nil(t, s.Example)
 			},
 		},
 		{
@@ -99,11 +102,11 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
-			name: "should_not_confuse_examples_with_example",
+			name: "should_keep_examples_when_a_removed_example_directive_is_present",
 			tag:  "examples=draft-07,example=legacy",
 			verify: func(t *testing.T, s *spec.Schema) {
-				assert.Equal(t, []any{"draft-07"}, s.Examples)
-				assert.Equal(t, "legacy", s.Example)
+				assert.Equal(t, []any{"draft-07"}, s.Examples,
+					"the removed example= is ignored, not merged into examples=")
 			},
 		},
 		{

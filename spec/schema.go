@@ -59,11 +59,10 @@ type Schema struct {
 
 	Contains *Schema `json:"contains,omitempty" yaml:"contains,omitempty"`
 
-	// Values. Examples is the Draft-07 array; Example is the singular 2.x
-	// keyword. Both are emitted verbatim and neither implies the other.
+	// Values. Examples is the Draft-07 array — the only example keyword 3.1.0
+	// defines. The 2.x singular `example` was removed as a spec deviation.
 	Enum     []any `json:"enum,omitempty"     yaml:"enum,omitempty"`
 	Const    any   `json:"const,omitempty"    yaml:"const,omitempty"`
-	Example  any   `json:"example,omitempty"  yaml:"example,omitempty"`
 	Examples []any `json:"examples,omitempty" yaml:"examples,omitempty"`
 	Default  any   `json:"default,omitempty"  yaml:"default,omitempty"`
 

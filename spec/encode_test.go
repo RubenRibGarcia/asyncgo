@@ -139,8 +139,8 @@ func TestEncodeYAML(t *testing.T) {
 
 // TestEncodeYAMLEqualsJSON pins both codecs to the same document. They are
 // independent implementations (goccy/go-yaml vs encoding/json) over a model
-// whose Bindings, Example and Default fields are any-valued, so their outputs
-// could diverge without any single-codec test noticing.
+// whose Bindings, Const, Examples and Default fields are any-valued, so their
+// outputs could diverge without any single-codec test noticing.
 //
 // Both sides are canonicalized through encoding/json before comparison: a
 // direct require.Equal on the decoded documents is a false negative, because
@@ -164,7 +164,7 @@ func TestEncodeYAMLEqualsJSON(t *testing.T) {
 		Schemas: map[string]*Schema{
 			"OrderPlaced": {
 				Type:       "object",
-				Properties: map[string]*Schema{"id": {Type: "string", Example: "order-1"}},
+				Properties: map[string]*Schema{"id": {Type: "string", Const: "order-1"}},
 				Required:   []string{"id"},
 			},
 		},
@@ -1221,25 +1221,30 @@ func TestEncodeSchemaDiscriminatorIsAScalar(t *testing.T) {
 		"discriminator is a plain string in AsyncAPI 3.1.0, not the OpenAPI object")
 }
 
-// TestEncodeSchemaExampleAndExamples covers the one place two keywords model the
-// same idea: the deprecated singular `example` and the Draft-07 `examples`
-// array are independent fields, and setting one must not suppress the other.
-func TestEncodeSchemaExampleAndExamples(t *testing.T) {
+// TestEncodeSchemaExamples covers the one example keyword 3.1.0 defines. The 2.x
+// singular `example` was removed as a spec deviation, so nothing in an emitted
+// document may reintroduce that key.
+func TestEncodeSchemaExamples(t *testing.T) {
 	doc := schemaKeywordDoc(func(s *Schema) {
-		s.Example = "legacy"
-		s.Examples = []any{"draft-07"}
+		s.Examples = []any{"draft-07", 7}
 	})
 
 	out, err := doc.YAML()
 	require.NoError(t, err)
-	assert.Contains(t, string(out), "example: legacy")
 	assert.Contains(t, string(out), "examples:")
+	assert.NotContains(t, string(out), "example:",
+		"the removed singular `example` keyword must not be emitted")
 
 	var decoded AsyncAPI
 	require.NoError(t, yaml.Unmarshal(out, &decoded))
+
+	// Examples is []any, so a decoded number is uint64 where the source was int;
+	// canonicalJSON is how the rest of this file compares any-valued documents.
+	assert.Equal(t, canonicalJSON(t, doc), canonicalJSON(t, &decoded))
+
 	s := decodedSchema(t, &decoded)
-	assert.Equal(t, "legacy", s.Example)
-	assert.Equal(t, []any{"draft-07"}, s.Examples)
+	require.Len(t, s.Examples, 2)
+	assert.Equal(t, "draft-07", s.Examples[0])
 }
 
 // TestSchemaFieldsMatchSpec pins spec.Schema's wire names in declaration order,
@@ -1253,7 +1258,7 @@ func TestSchemaFieldsMatchSpec(t *testing.T) {
 		"type", "title", "description", "format", "$comment", "externalDocs", "deprecated",
 		"properties", "required", "items", "additionalProperties", "additionalItems",
 		"patternProperties", "propertyNames", "dependencies", "contains",
-		"enum", "const", "example", "examples", "default",
+		"enum", "const", "examples", "default",
 		"definitions", "oneOf", "allOf", "anyOf", "not", "if", "then", "else",
 		"minLength", "maxLength", "pattern",
 		"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",

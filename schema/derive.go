@@ -11,8 +11,11 @@
 //     allOf instead (opt-in).
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
-//   - asyncapi struct tags carry "required", "enum=a|b|...", "example=...",
-//     and "format=...". Descriptions are read from the field's doc comment by
+//   - asyncapi struct tags carry "required", "enum=a|b|...", "examples=...",
+//     "format=...", "const=...", "discriminator=...", the numeric bounds
+//     ("minItems=", "maxItems=", "minProperties=", "maxProperties="), and the
+//     flags "readOnly", "writeOnly", "uniqueItems", "deprecated".
+//     Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
 //     cannot see comments.
 //   - A named struct type implementing spec.SchemaProvider overrides
