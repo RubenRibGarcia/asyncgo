@@ -23,10 +23,16 @@ type Item interface {
 	apply(b *builder) error
 }
 
-// builder accumulates a document and the hoisted schemas it references.
+// builder accumulates a document and the hoisted schemas it references, plus
+// the PayloadExamples resolutions deferred to the end of the build.
 type builder struct {
 	doc  *spec.AsyncAPI
 	defs map[string]*spec.Schema
+
+	// pendingExamples holds PayloadExamples calls whose target is a $ref. They
+	// are applied by resolvePayloadExamples once every item has run, since a
+	// message may reference a component declared later in the same Spec() call.
+	pendingExamples []payloadExamplesRef
 }
 
 // SpecResult is the outcome of building a catalog: the assembled document plus
@@ -53,6 +59,7 @@ func Spec(items ...Item) *SpecResult {
 		}
 	}
 	errs = append(errs, b.validateServerRefs()...)
+	errs = append(errs, b.resolvePayloadExamples()...)
 	errs = append(errs, b.validateSecurityRefs()...)
 	errs = append(errs, b.validateReplyRefs()...)
 	errs = append(errs, b.validateMessageRefs()...)
@@ -466,6 +473,12 @@ type schemaChild struct {
 }
 
 // schemaChildren returns the nested schemas of s in a deterministic order.
+//
+// Every schema-valued keyword is walked, not just the combinators: an invalid
+// Multi Format node nested under one of them must still be reported by
+// schemaNodeErrors. jsonSchemaKeywords needs no matching edit — it reflects over
+// the struct — and that asymmetry is exactly what this list has to cover, so a
+// new *Schema field belongs here too.
 func schemaChildren(s *spec.Schema) []schemaChild {
 	var children []schemaChild
 	for _, name := range slices.Sorted(maps.Keys(s.Properties)) {
@@ -491,6 +504,30 @@ func schemaChildren(s *spec.Schema) []schemaChild {
 	}
 	if s.Not != nil {
 		children = append(children, schemaChild{"not", s.Not})
+	}
+	for _, name := range slices.Sorted(maps.Keys(s.PatternProperties)) {
+		children = append(
+			children,
+			schemaChild{"patternProperties." + name, s.PatternProperties[name]},
+		)
+	}
+	for _, name := range slices.Sorted(maps.Keys(s.Dependencies)) {
+		children = append(children, schemaChild{"dependencies." + name, s.Dependencies[name]})
+	}
+	for _, kw := range []struct {
+		name string
+		node *spec.Schema
+	}{
+		{"additionalItems", s.AdditionalItems},
+		{"contains", s.Contains},
+		{"propertyNames", s.PropertyNames},
+		{"if", s.If},
+		{"then", s.Then},
+		{"else", s.Else},
+	} {
+		if kw.node != nil {
+			children = append(children, schemaChild{kw.name, kw.node})
+		}
 	}
 	return children
 }

@@ -15,9 +15,9 @@ type Money struct {
 // AsyncAPISchema declares the wire schema in place of the struct fields.
 func (Money) AsyncAPISchema() *spec.Schema {
 	return &spec.Schema{
-		Type:    "string",
-		Pattern: `^\d+\.\d{2} [A-Z]{3}$`,
-		Example: "12.34 USD",
+		Type:     "string",
+		Pattern:  `^\d+\.\d{2} [A-Z]{3}$`,
+		Examples: []any{"12.34 USD"},
 	}
 }
 

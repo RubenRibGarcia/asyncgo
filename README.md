@@ -14,7 +14,7 @@ touchpoints in your code.
 ### 1. The struct (data contract)
 
 Message payloads are derived from your Go structs via reflection. `json` tags
-drive field names; `asyncapi` tags carry `required`, `enum`, `example`, `format`,
+drive field names; `asyncapi` tags carry `required`, `enum`, `examples`, `format`,
 and the `allOf`/`oneOf`/`anyOf` composition directives. Field descriptions are
 read from the field's doc comment.
 
@@ -90,6 +90,20 @@ same key carrying different content is a catalog validation error. Operations
 and replies keep pointing at `#/channels/<id>/messages/<key>` rather than at
 `components.messages`: the specification requires their `messages` to be a
 subset of the messages defined in the referenced channel.
+
+`Message.PayloadExamples(...)` attaches the Draft-07 `examples` array to the
+payload schema. Because a payload is a `$ref` and JSON Schema does not apply
+keywords beside a `$ref`, the builder writes the examples onto the referenced
+`components.schemas` entry, resolving the ref after every item has run so the
+component may be declared later. An unresolvable ref is a build error, and two
+messages declaring different examples for one shared component is a conflict
+rather than an order-dependent merge.
+
+```go
+asyncgo.MessageOf(OrderPlaced{}).
+ Name("OrderPlaced").
+ PayloadExamples(map[string]any{"order_id": "1", "amount": 12.5})
+```
 
 ### Servers on a channel
 
@@ -409,8 +423,10 @@ harness to materialize them (never executing your `main` package).
   (e.g. `example.com/orders/orders.OrderPlaced`); `$ref` escapes `/` per JSON
   Pointer.
 - **Optional by default** — a field is required only with `asyncapi:"required"`.
+- **Whitespace-separated directives** — `asyncapi:"required examples=1,000"`
+  separates directives with spaces, so a value may itself contain a comma.
 - **Descriptions from comments** — a field's `description` is read from its doc
-  comment; `enum`, `example`, and `format` still come from the `asyncapi` tag.
+  comment; `enum`, `examples`, and `format` still come from the `asyncapi` tag.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
   inline types are inlined.
 - **Embedding** — embedded structs are flattened by default (matching
@@ -471,7 +487,7 @@ type OrderCancelled struct {
 }
 
 type OrderEvent struct {
- Data any `json:"data" asyncapi:"required,oneOf=OrderPlaced|OrderCancelled"`
+ Data any `json:"data" asyncapi:"required oneOf=OrderPlaced|OrderCancelled"`
 }
 ```
 
@@ -504,9 +520,9 @@ type Money struct {
 // Wire format is a single "12.34 USD" string, not an object.
 func (Money) AsyncAPISchema() *spec.Schema {
  return &spec.Schema{
-  Type:    "string",
-  Pattern: `^\d+\.\d{2} [A-Z]{3}$`,
-  Example: "12.34 USD",
+  Type:     "string",
+  Pattern:  `^\d+\.\d{2} [A-Z]{3}$`,
+  Examples: []any{"12.34 USD"},
  }
 }
 ```
@@ -515,9 +531,16 @@ func (Money) AsyncAPISchema() *spec.Schema {
 # components.schemas (abridged; "..." elides the fully-qualified name):
 #   ...Money:
 #     type: string
+#     examples:
+#     - 12.34 USD
 #     pattern: "^\d+\.\d{2} [A-Z]{3}$"
-#     example: "12.34 USD"
 ```
+
+`Examples` is the Draft-07 keyword, and the only example keyword AsyncAPI 3.1.0
+has — its Schema Object defines no singular `example`. `Message.PayloadExamples(…)`
+is the same keyword at the message level: when the payload is a `$ref` it writes
+the examples onto the referenced `components.schemas` entry, the only place JSON
+Schema applies them.
 
 `AsyncAPISchema` is invoked on a zero value, so it must describe the *type*
 (not an instance): be pure, deterministic, and panic-free. Return `nil` to fall

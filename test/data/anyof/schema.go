@@ -20,5 +20,5 @@ type OrderCancelled struct {
 
 // OrderEvent is an envelope whose data field is any of the order event types.
 type OrderEvent struct {
-	Data any `json:"data" asyncapi:"required,anyOf=OrderPlaced|OrderCancelled"`
+	Data any `json:"data" asyncapi:"required anyOf=OrderPlaced|OrderCancelled"`
 }

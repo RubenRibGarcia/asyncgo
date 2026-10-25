@@ -59,7 +59,9 @@ AsyncAPI 3.0/3.1's Schema Object is a superset of **JSON Schema Draft 07** (not
 
 **Non-goals (v1)**
 
-- `discriminator` emission (event-envelope unions). Deferred.
+- `discriminator` **emission** (event-envelope unions). Deferred — the keyword is
+  now modelled and derivable from a tag; what remains is deriving it from a Go
+  union. See [schema-keywords](schema-keywords.md).
 - Sealed-interface implementer enumeration (magic unions). Deferred.
 - Cross-package selector sugar (`asyncapi:"oneOf=orders.OrderPlaced"`). Deferred;
   v1 accepts fully-qualified names or same-package short names.
@@ -110,16 +112,18 @@ hoist `required` to the outer schema.
 `required`) is exactly the behavior we're *replacing* only when `allOf` is
 opt-in.
 
-### D5 — Discriminator: deferred
+### D5 — Discriminator emission: deferred
 
-Deferred to a follow-up. When needed, add `spec.Discriminator` and a
-`discriminator=` directive; nothing here blocks that.
+Deriving the keyword from a Go union is deferred to a follow-up. The keyword
+itself is modelled (`spec.Schema.Discriminator`) and tag-derivable
+(`discriminator=kind`) as of [schema-keywords](schema-keywords.md); what remains
+is emitting it from a union.
 
 ## Detailed design
 
 ### 1. Tag grammar (`schema/tags.go`)
 
-Existing directives are unchanged: `required`, `enum=a|b`, `example=...`,
+Existing directives are unchanged: `required`, `enum=a|b`, `examples=...`,
 `format=...`. New:
 
 | Directive | Form | Meaning |
@@ -368,8 +372,11 @@ components:
    marker + `RefByName`. Pure reflection, no discovery change.
 3. **Stage 2 — tag combinators** (`feat(schema)` + `feat(internal)`): §1, §2,
    §3a, §4 (registry, `Register`, `Finalize`, harness generation).
-4. **Stage 3 — deferred**: `discriminator`, sealed-interface enumeration,
-   cross-package selector sugar.
+4. **Stage 3 — deferred**: `discriminator` emission from Go unions,
+   sealed-interface enumeration, cross-package selector sugar. The
+   `discriminator` *keyword* itself is modelled and tag-derivable as of
+   [schema-keywords](schema-keywords.md); only its derivation from a union
+   remains open.
 
 ## Testing plan
 
