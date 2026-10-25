@@ -192,7 +192,7 @@ library's differentiating feature and the area with the deepest coverage.
 | field doc comment | `description` | ✅ static AST pass (`internal/discovery/descriptions.go`) |
 | `asyncapi:"required"` | `required: [...]` | ✅ |
 | `asyncapi:"enum=a\|b"` | `enum` (strings only) | 🟡 no typed / `iota` enum detection |
-| `asyncapi:"examples=…"` | `examples` | ✅ repeatable — one entry appended per directive |
+| `asyncapi:"examples=…"` | `examples` | ✅ repeatable — one entry appended per directive; a value cannot contain a comma |
 | `asyncapi:"const=…"` | `const` | ✅ string-valued; use `SchemaProvider` for a typed constant |
 | `asyncapi:"discriminator=…"` | `discriminator` | ✅ the property name, a plain string in 3.1.0 |
 | `asyncapi:"minItems=N"` / `maxItems` / `minProperties` / `maxProperties` | matching keyword | ✅ |

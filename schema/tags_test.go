@@ -117,6 +117,16 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
+			// The tag is comma-separated, so a value cannot contain a comma: the
+			// fragment after it parses as a separate, unknown directive and is
+			// ignored. Pinned so the truncation stays deliberate and visible.
+			name: "should_truncate_a_value_at_a_comma",
+			tag:  "examples=1,000",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, []any{"1"}, s.Examples)
+			},
+		},
+		{
 			name: "should_apply_const",
 			tag:  "const=OrderPlaced",
 			verify: func(t *testing.T, s *spec.Schema) {

@@ -212,6 +212,21 @@ func TestPayloadExamples(t *testing.T) {
 		assert.Equal(t, []any{"first", "second"}, payload.Examples)
 	})
 
+	t.Run("should_reject_examples_on_a_multi_format_payload", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			Channels(Channel("order-placed").Send(Operation().Message(
+				MessageFrom("Avro", spec.MultiFormat(
+					"application/vnd.apache.avro;version=1.9.0",
+					map[string]any{"type": "record"},
+				)).PayloadExamples("a"),
+			))),
+		)
+		require.Error(t, res.Err)
+		assert.Contains(t, res.Err.Error(),
+			"message.Avro: examples: the payload is a multi format schema")
+	})
+
 	t.Run("should_accumulate_across_calls", func(t *testing.T) {
 		m := MessageFrom("Inline", &spec.Schema{Type: "object"}).
 			PayloadExamples("a").

@@ -214,6 +214,10 @@ Derivable from a Go struct tag, all on `*Schema`-valued properties:
 Bare flags use camelCase, matching the existing `allOf` flag; `deprecated` is
 lowercase because it is one word. `examples=` is **repeatable** rather than
 `|`-separated so an example containing `|` is expressible, unlike `enum=`.
+The tag itself is comma-separated, so a *value* still cannot contain a comma:
+`examples=1,000` yields the example `"1"` and drops `000`. The same applies to
+every `key=value` directive, `const=` included; O2 is where loud parsing would
+land.
 
 **A malformed value is ignored.** `minItems=abc` sets nothing. `applyTag` has no
 error channel and the whole derivation chain is error-free, so surfacing this
@@ -235,6 +239,7 @@ payload schema. Resolution in `(*message).build`:
 | Payload shape | Where `examples` is written |
 | --- | --- |
 | inline (`MessageFrom` with a non-`$ref`, or `SchemaProvider`) | `payload.Examples` |
+| inline Multi Format (`MessageFrom` + `spec.MultiFormat`) | error — a multi format schema cannot carry JSON Schema keywords |
 | `$ref` (`MessageOf`, or `MessageFrom` + `spec.Ref`) | the resolved `*spec.Schema` in `b.defs`, else `b.components().Schemas` |
 | `$ref` that resolves to nothing | error — never a silent no-op |
 
@@ -458,6 +463,9 @@ components:
 
 - **A message payload that is a `$ref` to a `components.schemas` entry no item
   declared** — build error naming the message and the ref; never a no-op.
+- **`PayloadExamples` on an inline Multi Format payload** — error naming the
+  message; a multi format schema cannot carry JSON Schema keywords, `examples`
+  included.
 - **Two messages, same hoisted type, different `PayloadExamples`** — error
   (D7). Identical sets are idempotent.
 - **A `dependencies` entry written in the `[string]` shorthand** — not

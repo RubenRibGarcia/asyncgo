@@ -232,6 +232,12 @@ func (m *message) queuePayloadExamples(b *builder, payload *spec.Schema) error {
 	if len(m.payloadExamples) == 0 {
 		return nil
 	}
+	if payload.SchemaFormat != "" || payload.Schema != nil {
+		return fmt.Errorf(
+			"message.%s: examples: the payload is a multi format schema, which cannot carry JSON Schema keywords",
+			messageName(m),
+		)
+	}
 	if payload.Ref == "" {
 		return mergePayloadExamples(
 			payload,
@@ -320,7 +326,7 @@ func mergePayloadExamples(target *spec.Schema, owner, where string, examples []a
 		return nil
 	default:
 		return fmt.Errorf(
-			"message.%s: examples: conflicts with the examples already declared on %s by another message",
+			"message.%s: examples: conflicts with the examples already declared on %s",
 			owner,
 			where,
 		)

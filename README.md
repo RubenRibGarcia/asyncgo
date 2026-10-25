@@ -91,6 +91,20 @@ and replies keep pointing at `#/channels/<id>/messages/<key>` rather than at
 `components.messages`: the specification requires their `messages` to be a
 subset of the messages defined in the referenced channel.
 
+`Message.PayloadExamples(...)` attaches the Draft-07 `examples` array to the
+payload schema. Because a payload is a `$ref` and JSON Schema does not apply
+keywords beside a `$ref`, the builder writes the examples onto the referenced
+`components.schemas` entry, resolving the ref after every item has run so the
+component may be declared later. An unresolvable ref is a build error, and two
+messages declaring different examples for one shared component is a conflict
+rather than an order-dependent merge.
+
+```go
+asyncgo.MessageOf(OrderPlaced{}).
+ Name("OrderPlaced").
+ PayloadExamples(map[string]any{"order_id": "1", "amount": 12.5})
+```
+
 ### Servers on a channel
 
 A channel is available on all declared servers by default. To restrict it to a

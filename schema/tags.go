@@ -34,6 +34,10 @@ import (
 // dropped rather than mapped onto `examples=`. See the design doc
 // (docs/designdoc/schema-keywords.md, D6).
 //
+// The tag is comma-separated, so a directive value cannot contain a comma:
+// `examples=1,000` parses as `examples=1` followed by an unknown `000`, which is
+// ignored. This applies to every key=value directive, `const=` included.
+//
 // Descriptions are not carried in the tag; the generator's discovery pass reads
 // them from the field's doc comment instead.
 func applyTag(s *spec.Schema, tag string) {
