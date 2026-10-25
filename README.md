@@ -423,6 +423,8 @@ harness to materialize them (never executing your `main` package).
   (e.g. `example.com/orders/orders.OrderPlaced`); `$ref` escapes `/` per JSON
   Pointer.
 - **Optional by default** — a field is required only with `asyncapi:"required"`.
+- **Whitespace-separated directives** — `asyncapi:"required examples=1,000"`
+  separates directives with spaces, so a value may itself contain a comma.
 - **Descriptions from comments** — a field's `description` is read from its doc
   comment; `enum`, `examples`, and `format` still come from the `asyncapi` tag.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
@@ -485,7 +487,7 @@ type OrderCancelled struct {
 }
 
 type OrderEvent struct {
- Data any `json:"data" asyncapi:"required,oneOf=OrderPlaced|OrderCancelled"`
+ Data any `json:"data" asyncapi:"required oneOf=OrderPlaced|OrderCancelled"`
 }
 ```
 

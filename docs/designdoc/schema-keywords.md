@@ -208,16 +208,15 @@ Derivable from a Go struct tag, all on `*Schema`-valued properties:
 | `minProperties` | `minProperties=1` | `key=value`, `*uint64` |
 | `maxProperties` | `maxProperties=8` | `key=value`, `*uint64` |
 | `const` | `const=OrderPlaced` | `key=value`, string |
-| `examples` | `examples=a,examples=b` | `key=value`, repeatable, appends |
+| `examples` | `examples=a examples=b` | `key=value`, repeatable, appends |
 | `discriminator` | `discriminator=kind` | `key=value`, string |
 
 Bare flags use camelCase, matching the existing `allOf` flag; `deprecated` is
 lowercase because it is one word. `examples=` is **repeatable** rather than
 `|`-separated so an example containing `|` is expressible, unlike `enum=`.
-The tag itself is comma-separated, so a *value* still cannot contain a comma:
-`examples=1,000` yields the example `"1"` and drops `000`. The same applies to
-every `key=value` directive, `const=` included; O2 is where loud parsing would
-land.
+Directives are separated by whitespace — `asyncapi:"required examples=1,000"` —
+so a value may contain a comma but not a space. A legacy comma-separated tag is
+one unrecognized directive and sets nothing; O2 is where loud parsing would land.
 
 **A malformed value is ignored.** `minItems=abc` sets nothing. `applyTag` has no
 error channel and the whole derivation chain is error-free, so surfacing this
@@ -424,9 +423,9 @@ merge at `doc.go:63` — the same pattern as `validateServerRefs`.
 
 ```go
 type OrderPlaced struct {
-	Kind   string   `json:"kind"   asyncapi:"required,const=OrderPlaced"`
-	Items  []string `json:"items"  asyncapi:"minItems=1,maxItems=10,uniqueItems,examples=sku-1,examples=sku-2"`
-	Note   string   `json:"note"   asyncapi:"deprecated,writeOnly,maxLength=140"`
+	Kind   string   `json:"kind"   asyncapi:"required const=OrderPlaced"`
+	Items  []string `json:"items"  asyncapi:"minItems=1 maxItems=10 uniqueItems examples=sku-1 examples=sku-2"`
+	Note   string   `json:"note"   asyncapi:"deprecated writeOnly maxLength=140"`
 	Secret string   `json:"secret" asyncapi:"readOnly"`
 }
 

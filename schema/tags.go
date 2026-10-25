@@ -34,15 +34,15 @@ import (
 // dropped rather than mapped onto `examples=`. See the design doc
 // (docs/designdoc/schema-keywords.md, D6).
 //
-// The tag is comma-separated, so a directive value cannot contain a comma:
-// `examples=1,000` parses as `examples=1` followed by an unknown `000`, which is
-// ignored. This applies to every key=value directive, `const=` included.
+// Directives are separated by whitespace — `asyncapi:"required examples=1,000"`
+// yields the example "1,000" — so a value may contain a comma but not a space. A
+// legacy comma-separated tag is a single unknown directive and is therefore
+// ignored like any other.
 //
 // Descriptions are not carried in the tag; the generator's discovery pass reads
 // them from the field's doc comment instead.
 func applyTag(s *spec.Schema, tag string) {
-	for part := range strings.SplitSeq(tag, ",") {
-		part = strings.TrimSpace(part)
+	for _, part := range strings.Fields(tag) {
 		switch {
 		case part == "" || part == "required":
 			// nothing to set on the schema itself
@@ -95,8 +95,8 @@ func setUint(dst **uint64, value string) {
 }
 
 func hasFlag(tag, flag string) bool {
-	for part := range strings.SplitSeq(tag, ",") {
-		if strings.TrimSpace(part) == flag {
+	for _, part := range strings.Fields(tag) {
+		if part == flag {
 			return true
 		}
 	}
@@ -107,8 +107,7 @@ func hasFlag(tag, flag string) bool {
 // directive (oneOf=/anyOf=/allOf=), or ok=false when the directive is absent.
 func combinatorNames(tag, key string) ([]string, bool) {
 	prefix := key + "="
-	for part := range strings.SplitSeq(tag, ",") {
-		part = strings.TrimSpace(part)
+	for _, part := range strings.Fields(tag) {
 		if strings.HasPrefix(part, prefix) {
 			raw := strings.TrimPrefix(part, prefix)
 			if raw == "" {

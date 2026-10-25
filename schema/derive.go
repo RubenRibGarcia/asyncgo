@@ -15,6 +15,7 @@
 //     "format=...", "const=...", "discriminator=...", the numeric bounds
 //     ("minItems=", "maxItems=", "minProperties=", "maxProperties="), and the
 //     flags "readOnly", "writeOnly", "uniqueItems", "deprecated".
+//     Directives are separated by whitespace, so a value may contain a comma.
 //     Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
 //     cannot see comments.

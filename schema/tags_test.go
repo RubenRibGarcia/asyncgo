@@ -15,8 +15,8 @@ func TestApplyTag(t *testing.T) {
 		verify func(*testing.T, *spec.Schema)
 	}{
 		{
-			name: "should_ignore_required_and_empty_parts",
-			tag:  "required,,",
+			name: "should_ignore_required",
+			tag:  "required",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Empty(t, s.Enum)
 				assert.Empty(t, s.Format)
@@ -86,7 +86,7 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_apply_all_flags_together",
-			tag:  "required,readOnly,writeOnly,uniqueItems,deprecated",
+			tag:  "required readOnly writeOnly uniqueItems deprecated",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.True(t, s.ReadOnly)
 				assert.True(t, s.WriteOnly)
@@ -96,14 +96,14 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_append_repeated_examples",
-			tag:  "examples=sku-1,examples=sku-2",
+			tag:  "examples=sku-1 examples=sku-2",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Equal(t, []any{"sku-1", "sku-2"}, s.Examples)
 			},
 		},
 		{
 			name: "should_keep_examples_when_a_removed_example_directive_is_present",
-			tag:  "examples=draft-07,example=legacy",
+			tag:  "examples=draft-07 example=legacy",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Equal(t, []any{"draft-07"}, s.Examples,
 					"the removed example= is ignored, not merged into examples=")
@@ -117,13 +117,22 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
-			// The tag is comma-separated, so a value cannot contain a comma: the
-			// fragment after it parses as a separate, unknown directive and is
-			// ignored. Pinned so the truncation stays deliberate and visible.
-			name: "should_truncate_a_value_at_a_comma",
+			// Whitespace separates directives, so a comma is an ordinary value
+			// character: "1,000" survives as a single example.
+			name: "should_keep_a_comma_inside_a_value",
 			tag:  "examples=1,000",
 			verify: func(t *testing.T, s *spec.Schema) {
-				assert.Equal(t, []any{"1"}, s.Examples)
+				assert.Equal(t, []any{"1,000"}, s.Examples)
+			},
+		},
+		{
+			// The separator changed from comma to whitespace, so a legacy tag is
+			// now one unrecognized directive and sets nothing. Pinned so the
+			// silent drop stays deliberate and visible.
+			name: "should_ignore_a_legacy_comma_separated_tag",
+			tag:  "required,readOnly",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.False(t, s.ReadOnly)
 			},
 		},
 		{
@@ -149,7 +158,7 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_apply_numeric_bounds",
-			tag:  "minItems=1,maxItems=10,minProperties=1,maxProperties=8",
+			tag:  "minItems=1 maxItems=10 minProperties=1 maxProperties=8",
 			verify: func(t *testing.T, s *spec.Schema) {
 				require.NotNil(t, s.MinItems)
 				require.NotNil(t, s.MaxItems)
@@ -206,6 +215,13 @@ func TestCombinatorNames(t *testing.T) {
 			tag:    "oneOf=A|B",
 			key:    "oneOf",
 			want:   []string{"A", "B"},
+			wantOK: true,
+		},
+		{
+			name:   "should_find_a_directive_after_whitespace",
+			tag:    "required anyOf=A",
+			key:    "anyOf",
+			want:   []string{"A"},
 			wantOK: true,
 		},
 		{
