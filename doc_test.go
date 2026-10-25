@@ -917,7 +917,7 @@ func TestValidationErrors(t *testing.T) {
 		{
 			name: "should_reject_declared_name_colliding_with_hoisted_schema",
 			spec: func() *SpecResult {
-				fqn := schema.Name(reflect.TypeOf(OrderPlaced{}))
+				fqn := schema.Name(reflect.TypeFor[OrderPlaced]())
 				return Spec(
 					Info("Orders", "1.0.0"),
 					Schemas(Schema(fqn, &spec.Schema{Type: "object"})),
@@ -928,7 +928,7 @@ func TestValidationErrors(t *testing.T) {
 					),
 				)
 			},
-			want: "schema." + schema.Name(reflect.TypeOf(OrderPlaced{})) +
+			want: "schema." + schema.Name(reflect.TypeFor[OrderPlaced]()) +
 				": collides with an auto-hoisted schema of the same name",
 		},
 		{
@@ -1312,12 +1312,12 @@ func TestMessagesAreHoisted(t *testing.T) {
 	require.NoError(t, res.Err)
 	require.NotNil(t, res.Doc.Components)
 
-	key := schema.Name(reflect.TypeOf(OrderPlaced{}))
+	key := schema.Name(reflect.TypeFor[OrderPlaced]())
 	require.Contains(t, res.Doc.Components.Messages, key)
 	hoisted := res.Doc.Components.Messages[key]
 	assert.Equal(t, "OrderPlaced", hoisted.Name)
 	require.NotNil(t, hoisted.Payload)
-	assert.Equal(t, schema.Ref(reflect.TypeOf(OrderPlaced{})), hoisted.Payload.Ref)
+	assert.Equal(t, schema.Ref(reflect.TypeFor[OrderPlaced]()), hoisted.Payload.Ref)
 
 	entry := res.Doc.Channels["order-placed"].Messages[key]
 	require.NotNil(t, entry)
@@ -1346,7 +1346,7 @@ func TestMessagesAreSharedAcrossChannels(t *testing.T) {
 	)
 
 	require.NoError(t, res.Err)
-	key := schema.Name(reflect.TypeOf(OrderPlaced{}))
+	key := schema.Name(reflect.TypeFor[OrderPlaced]())
 	assert.Len(t, res.Doc.Components.Messages, 1)
 	require.Contains(t, res.Doc.Channels["order-shipped"].Messages, key)
 	assert.Equal(

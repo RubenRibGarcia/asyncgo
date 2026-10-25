@@ -756,8 +756,7 @@ func specFields(t *testing.T, v any) []string {
 	t.Helper()
 	typ := reflect.TypeOf(v)
 	out := make([]string, 0, typ.NumField())
-	for i := range typ.NumField() {
-		f := typ.Field(i)
+	for f := range typ.Fields() {
 		name := f.Tag.Get("json")
 		if i := strings.IndexByte(name, ','); i >= 0 {
 			name = name[:i]

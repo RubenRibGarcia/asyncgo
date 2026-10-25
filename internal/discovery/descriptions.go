@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"maps"
 	"reflect"
 	"strconv"
 	"strings"
@@ -93,9 +94,7 @@ func collectFieldDescriptions(
 	out := map[string]string{}
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 { // anonymous embedded field
-			for k, v := range embeddedFieldDescriptions(pkg, field.Type, named) {
-				out[k] = v
-			}
+			maps.Copy(out, embeddedFieldDescriptions(pkg, field.Type, named))
 			continue
 		}
 		for _, name := range field.Names {

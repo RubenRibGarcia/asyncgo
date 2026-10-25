@@ -63,7 +63,7 @@ func TestMessageKey(t *testing.T) {
 	t.Run("should_key_type_derived_message_by_fully_qualified_type_name", func(t *testing.T) {
 		assert.Equal(
 			t,
-			schema.Name(reflect.TypeOf(OrderPlaced{})),
+			schema.Name(reflect.TypeFor[OrderPlaced]()),
 			messageKey(MessageOf(OrderPlaced{})),
 		)
 	})
@@ -71,7 +71,7 @@ func TestMessageKey(t *testing.T) {
 	t.Run("should_dereference_pointer_type", func(t *testing.T) {
 		assert.Equal(
 			t,
-			schema.Name(reflect.TypeOf(OrderPlaced{})),
+			schema.Name(reflect.TypeFor[OrderPlaced]()),
 			messageKey(MessageOf(&OrderPlaced{})),
 		)
 	})
@@ -155,7 +155,7 @@ func TestMessageFrom(t *testing.T) {
 	t.Run("should_return_error_when_payload_type_and_schema_are_both_set", func(t *testing.T) {
 		b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
 		m := &message{
-			typ:     reflect.TypeOf(OrderPlaced{}),
+			typ:     reflect.TypeFor[OrderPlaced](),
 			payload: &spec.Schema{Type: "object"},
 		}
 
@@ -182,7 +182,7 @@ func TestPayloadExamples(t *testing.T) {
 		)
 		require.NoError(t, res.Err)
 
-		key := schema.Name(reflect.TypeOf(OrderPlaced{}))
+		key := schema.Name(reflect.TypeFor[OrderPlaced]())
 		require.NotNil(t, res.Doc.Components)
 		target := res.Doc.Components.Schemas[key]
 		require.NotNil(t, target, "the payload type must still be hoisted")
@@ -288,7 +288,7 @@ func TestPayloadExamples(t *testing.T) {
 		)
 		require.NoError(t, res.Err)
 
-		target := res.Doc.Components.Schemas[schema.Name(reflect.TypeOf(OrderPlaced{}))]
+		target := res.Doc.Components.Schemas[schema.Name(reflect.TypeFor[OrderPlaced]())]
 		require.NotNil(t, target)
 		assert.Equal(t, []any{"same"}, target.Examples, "an identical repeat is idempotent")
 	})
@@ -322,7 +322,7 @@ func TestPayloadExamples(t *testing.T) {
 		)
 		require.NoError(t, res.Err)
 
-		target := res.Doc.Components.Schemas[schema.Name(reflect.TypeOf(OrderPlaced{}))]
+		target := res.Doc.Components.Schemas[schema.Name(reflect.TypeFor[OrderPlaced]())]
 		require.NotNil(t, target)
 		assert.Empty(t, target.Examples)
 	})

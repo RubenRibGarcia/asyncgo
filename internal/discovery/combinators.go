@@ -89,9 +89,9 @@ func resolveCombinatorName(name, declaringPkg string) combinatorRef {
 // directive is absent.
 func combinatorNamesInTag(tag, key string) ([]string, bool) {
 	prefix := key + "="
-	for _, part := range strings.Fields(tag) {
-		if strings.HasPrefix(part, prefix) {
-			raw := strings.TrimPrefix(part, prefix)
+	for part := range strings.FieldsSeq(tag) {
+		if after, ok := strings.CutPrefix(part, prefix); ok {
+			raw := after
 			if raw == "" {
 				return nil, false
 			}
