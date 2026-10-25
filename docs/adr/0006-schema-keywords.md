@@ -38,7 +38,8 @@ The decisive constraints:
   unreachable for a user writing a catalog from Go types.
 - Deterministic output: one hoisted `components.schemas` entry per payload type is
   shared across channels, so nothing may depend on item order.
-- No breaking change to the existing public API.
+- No *incidental* breaking change: the 23 fields are additive, and the only
+  break is the deliberate pre-1.0 `example` removal (D2).
 
 ## Considered Options
 
@@ -46,6 +47,8 @@ The decisive constraints:
   settable from `asyncapi` struct tags, and add a Message-DSL builder for the
   Draft-07 `examples` array.
 - **Model only.** Add the fields and stop there — no tag directives, no DSL.
+- **Remove the singular `Example` rather than keep it deprecated** as an alias
+  for `examples` (breaking).
 - **`dependencies` as `map[string]any`** (faithful union, untyped).
 - **`dependencies` as a named union type with custom codecs** (faithful union,
   typed).
@@ -54,11 +57,15 @@ The decisive constraints:
 ## Decision Outcome
 
 Chosen option: "Model plus derivation", with `dependencies` as
-`map[string]*Schema`.
+`map[string]*Schema` and the singular `Example` removed rather than deprecated
+(D2).
 
 - **Model only** was rejected because it leaves every new keyword unreachable from
   the library's differentiating feature — deriving a catalog from real Go types —
   and would have closed the coverage gap on paper only.
+- **Keeping `Example` as a deprecated alias for `examples`** was rejected: it
+  perpetuates the spelling this change exists to delete, and pre-1.0 is when the
+  break is cheapest. The removal is a breaking change, accepted deliberately.
 - **`map[string]any` for `dependencies`** was rejected after measurement, not
   assumption: a schema-valued entry stored in an `any` decodes to a map and
   re-encodes with sorted keys, so `type: object` and `properties:` swap order
@@ -84,10 +91,11 @@ Chosen option: "Model plus derivation", with `dependencies` as
   Format invariant is still enforced *inside* `if`/`contains`/
   `patternProperties`/`dependencies` rather than silently stopping at the new
   keywords.
-- Bad, because removing `Schema.Example` (singular) and its `asyncapi:"example=…"`
-  directive is a breaking change to the public API. It was taken deliberately
-  while the library is pre-1.0, and it removes the last Schema-keyword deviation
+- Good, because removing `Schema.Example` (singular) and its
+  `asyncapi:"example=…"` directive removes the last Schema-keyword deviation
   in §7.
+- Bad, because that removal is a breaking change to the public API. It was taken
+  deliberately while the library is pre-1.0.
 - Bad, because `applyTag` ignores an unrecognised directive, so a stale
   `example=` tag is now dropped in silence rather than mapped onto `examples=`.
   The alternative — keeping the deprecated spelling as an alias — was rejected

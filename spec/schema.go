@@ -2,8 +2,8 @@ package spec
 
 // Schema is an AsyncAPI 3.1.0 Schema Object: a superset of JSON Schema Draft
 // 07, plus the three AsyncAPI-specific keywords discriminator, externalDocs,
-// and deprecated. The keyword set below is the whole Draft-07 vocabulary a
-// document can use; docs/asyncapi-3.1.0-coverage.md §4.3 lists the few
+// and deprecated. Every Draft-07 keyword is modelled except contentEncoding and
+// contentMediaType (docs/asyncapi-3.1.0-coverage.md §8 B17); §4.3 lists the
 // authoring-only gaps that remain.
 //
 // The same struct models the AsyncAPI 3.1.0 Multi Format Schema Object through

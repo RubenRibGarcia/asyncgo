@@ -112,16 +112,18 @@ hoist `required` to the outer schema.
 `required`) is exactly the behavior we're *replacing* only when `allOf` is
 opt-in.
 
-### D5 — Discriminator: deferred
+### D5 — Discriminator emission: deferred
 
-Deferred to a follow-up. When needed, add `spec.Discriminator` and a
-`discriminator=` directive; nothing here blocks that.
+Deriving the keyword from a Go union is deferred to a follow-up. The keyword
+itself is modelled (`spec.Schema.Discriminator`) and tag-derivable
+(`discriminator=kind`) as of [schema-keywords](schema-keywords.md); what remains
+is emitting it from a union.
 
 ## Detailed design
 
 ### 1. Tag grammar (`schema/tags.go`)
 
-Existing directives are unchanged: `required`, `enum=a|b`, `example=...`,
+Existing directives are unchanged: `required`, `enum=a|b`, `examples=...`,
 `format=...`. New:
 
 | Directive | Form | Meaning |

@@ -14,7 +14,7 @@ touchpoints in your code.
 ### 1. The struct (data contract)
 
 Message payloads are derived from your Go structs via reflection. `json` tags
-drive field names; `asyncapi` tags carry `required`, `enum`, `example`, `format`,
+drive field names; `asyncapi` tags carry `required`, `enum`, `examples`, `format`,
 and the `allOf`/`oneOf`/`anyOf` composition directives. Field descriptions are
 read from the field's doc comment.
 
@@ -410,7 +410,7 @@ harness to materialize them (never executing your `main` package).
   Pointer.
 - **Optional by default** — a field is required only with `asyncapi:"required"`.
 - **Descriptions from comments** — a field's `description` is read from its doc
-  comment; `enum`, `example`, and `format` still come from the `asyncapi` tag.
+  comment; `enum`, `examples`, and `format` still come from the `asyncapi` tag.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
   inline types are inlined.
 - **Embedding** — embedded structs are flattened by default (matching

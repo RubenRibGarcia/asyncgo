@@ -242,9 +242,9 @@ func (m *Money) UnmarshalJSON(b []byte) error { /* ... */ }
 // Declare the schema for the customized wire format.
 func (Money) AsyncAPISchema() *spec.Schema {
     return &spec.Schema{
-        Type:    "string",
-        Pattern: `^\d+\.\d{2} [A-Z]{3}$`,
-        Example: "12.34 USD",
+        Type:     "string",
+        Pattern:  `^\d+\.\d{2} [A-Z]{3}$`,
+        Examples: []any{"12.34 USD"},
     }
 }
 
@@ -269,8 +269,9 @@ After:
 ```yaml
 github.com/acme/orders.Money:
   type: string
+  examples:
+  - 12.34 USD
   pattern: "^\d+\.\d{2} [A-Z]{3}$"
-  example: "12.34 USD"
 
 github.com/acme/orders.Order:
   type: object

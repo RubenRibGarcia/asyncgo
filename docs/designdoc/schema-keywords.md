@@ -9,7 +9,7 @@
 
 `spec.Schema` models only part of the JSON Schema Draft-07 vocabulary plus the
 three AsyncAPI-specific Schema keywords. Issue
-[#18](https://github.com/RubanRibGarcia/asyncgo/issues/18) / coverage item §8 B7
+[#18](https://github.com/RubenRibGarcia/asyncgo/issues/18) / coverage item §8 B7
 tracks the gap.
 
 This design adds the 23 missing keywords to the object model, makes the
@@ -38,10 +38,10 @@ The consequences that constrain everything below:
 
 | Helper | File | How it enumerates | Effect of adding fields |
 | --- | --- | --- | --- |
-| `jsonSchemaKeywords` | `doc.go:505` | **reflection** over every struct field not in `multiFormatFields` and not zero | self-covering — picks up all 23 with no edit |
-| `schemaChildren` | `doc.go:469` | **explicit** per-field list | **must be extended**, or validation stops recursing |
+| `jsonSchemaKeywords` | `doc.go:542` | **reflection** over every struct field not in `multiFormatFields` and not zero | self-covering — picks up all 23 with no edit |
+| `schemaChildren` | `doc.go:482` | **explicit** per-field list | **must be extended**, or validation stops recursing |
 
-`schemaChildren` feeds `schemaNodeErrors` (`doc.go:436`), which walks every
+`schemaChildren` feeds `schemaNodeErrors` (`doc.go:435`), which walks every
 schema reaching the document and reports Multi Format invariant violations at a
 path. If it is not extended, an invalid Multi Format node nested under `if`,
 `then`, `else`, `contains`, `propertyNames`, `patternProperties`,
@@ -50,12 +50,12 @@ correctness bug introduced by adding the fields, so the fix ships with them.
 
 ### The tag vocabulary today
 
-`schema/tags.go` parses the `asyncapi` struct tag. `applyTag` (`:21`) handles
+`schema/tags.go` parses the `asyncapi` struct tag. `applyTag` (`:39`) handles
 `key=value` directives (`enum=`, `examples=`, `format=`, `const=`,
-`discriminator=`, and the four numeric bounds); `hasFlag` (`:39`) handles bare
+`discriminator=`, and the four numeric bounds); `hasFlag` (`:93`) handles bare
 flags (`required`, `allOf`, `readOnly`, `writeOnly`, `uniqueItems`,
 `deprecated`). `oneOf=`/`anyOf=`/`allOf=` are
-recognized by `combinatorNames` (`:54`) and acted on by the **caller**
+recognized by `combinatorNames` (`:104`) and acted on by the **caller**
 (`fillFields` in `schema/derive.go`), not by `applyTag`.
 
 `applyTag` returns nothing — the whole `FromType` → `fillFields` → `applyTag`
@@ -87,7 +87,7 @@ deviation. D2 removes it and migrates that fixture to `Examples`.
 
 **Goals**
 
-1. All 23 keywords in the "Keyword inventory" table exist on `spec.Schema` with
+1. All 23 keywords in the detailed design (§1) exist on `spec.Schema` with
    exact `json`/`yaml` wire names, and survive a JSON **and** YAML round-trip.
 2. The mechanically derivable subset is settable from `asyncapi` struct tags.
 3. A Message DSL builder attaches Draft-07 `examples` to a payload schema,
@@ -193,10 +193,6 @@ zero-value problem, where zero is semantically distinct.
 presence wrapper for `Const` alone would be a wart. The general fix belongs with
 B8 for both at once (O4). Documented, not hidden.
 
-**Rationale**: Consistency with the two existing any-valued fields, and a
-one-off presence wrapper for `Const` alone would be a wart. The general fix
-belongs with B8 for all three at once (O4). Documented, not hidden.
-
 ### D6 — Derivable set and directive spelling
 
 Derivable from a Go struct tag, all on `*Schema`-valued properties:
@@ -261,7 +257,7 @@ type) frictionless while refusing to guess.
 
 ### D8 — `schemaChildren` is extended to every schema-valued keyword
 
-Add to `schemaChildren` (`doc.go:469`), with nil checks, in deterministic order:
+Add to `schemaChildren` (`doc.go:482`), with nil checks, in deterministic order:
 `patternProperties` (sorted keys), `additionalItems`, `contains`,
 `propertyNames`, `dependencies`, `if`, `then`, `else`.
 
@@ -389,7 +385,7 @@ for _, n := range []struct {
 
 ### 3. `schema/tags.go` — directives
 
-Extend the doc comment (`:9`) and `applyTag` (`:21`). Flags go through
+Extend the doc comment (`:10`) and `applyTag` (`:39`). Flags go through
 `hasFlag`; scalars reuse the existing `strings.HasPrefix` + `TrimPrefix` shape.
 `minItems=`/`maxItems=`/`minProperties=`/`maxProperties=` parse with
 `strconv.ParseUint(v, 10, 64)` and **ignore** a parse error (D6).

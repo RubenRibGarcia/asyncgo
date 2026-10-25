@@ -60,7 +60,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Components Object | 🟡 **12/19** | 🟡 | `schemas`, `messages`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; `spec.Schema` and `spec.Message` carry a `$ref` field instead of a union type |
 | **Multi Format Schema Object** | ✅ | ✅ | — |
-| Schema Object | ✅ Draft-07 + AsyncAPI keywords | 🟡 | all 23 keywords modeled; the structural ones (`if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `additionalItems`, `$id`, `$schema`, `$comment`, `externalDocs`) are authoring-only, and `additionalItems` is inert — see [§4](#4-schema-derivation) |
+| Schema Object | 🟡 Draft-07 + AsyncAPI keywords | 🟡 | all 23 keywords are modelled, but `contentEncoding`/`contentMediaType` are still missing ([§8 B17](#b17)); the structural ones (`if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `additionalItems`, `$id`, `$schema`, `$comment`, `externalDocs`) are authoring-only, and `additionalItems` is inert — see [§4](#4-schema-derivation) |
 | Security Scheme Object | ✅ 9/9 | ✅ | — |
 | OAuth Flows Object | ✅ 4/4 | ✅ | — |
 | OAuth Flow Object | ✅ 4/4 | ✅ | — |
