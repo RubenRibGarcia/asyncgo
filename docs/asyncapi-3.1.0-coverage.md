@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `583d762` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` · 2026-10-25 — `§1`/`§3` binding rows and `§8 B12` implemented (typed bindings for all protocols, `spec.ProtocolKeys`, two binding fixtures) |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -64,12 +64,12 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Security Scheme Object | ✅ 9/9 | ✅ | — |
 | OAuth Flows Object | ✅ 4/4 | ✅ | — |
 | OAuth Flow Object | ✅ 4/4 | ✅ | — |
-| Server Bindings Object | ✅ map | 🟡 | 4 of 20 protocols ([§3](#3-bindings-protocols)) |
+| Server Bindings Object | ✅ map | ✅ | 20 of 20 protocols modelled; 18 are in the published 3.1.0 schema ([§3](#3-bindings-protocols)) |
 | Parameters Object | ✅ | ❌ | 🟠 — modeled, no builder |
 | Parameter Object | 🟡 **wrong shape** | ❌ | models `schema`, which 3.1.0 removed; missing `enum`, `default`, `examples` |
-| Channel Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
-| Operation Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
-| Message Bindings Object | ✅ map | 🟡 | 4 of 20 protocols |
+| Channel Bindings Object | ✅ map | ✅ | 18 of 20 (mqtt5 and ros2 define no channel binding) |
+| Operation Bindings Object | ✅ map | ✅ | 18 of 20 (mqtt5 and pulsar define no operation binding) |
+| Message Bindings Object | ✅ map | ✅ | 17 of 20 (mqtt5, pulsar, and ros2 define no message binding) |
 | Correlation ID Object | ✅ 2/2 | ✅ | — |
 | Replies / Reply Addresses (components) | ✅ | ✅ | — |
 
@@ -113,48 +113,71 @@ and `components.correlationIds` / `components.operationTraits` /
 
 ## 3. Bindings protocols
 
-3.1.0 defines 20 protocol keys. The library ships typed structs for 4.
+3.1.0 defines 20 protocol keys. The library ships a typed struct for every
+binding object each protocol defines, and `spec.ProtocolKeys` lists all 20.
 
-| Protocol | Server | Channel | Operation | Message | Notes |
-| --- | :--: | :--: | :--: | :--: | --- |
-| `kafka` | ✅ | ✅ | ✅ | 🟡 | message binding missing `schemaIdPayloadEncoding`, `schemaLookupStrategy`; `groupId`/`clientId`/`key` are Union types |
-| `amqp` (0-9-1) | ✅ | ✅ | ✅ | ✅ | — |
-| `nats` | ✅ | ✅ | ✅ | ✅ | — |
-| `mqtt` | ✅ | ✅ | ✅ | ✅ | — |
-| `http` | ❌ | ❌ | ❌ | ❌ | `spec.ProtocolHTTP` constant exists, but no binding structs |
-| `ws` | ❌ | ❌ | ❌ | ❌ | |
-| `amqp1` | ❌ | ❌ | ❌ | ❌ | distinct protocol from `amqp` |
-| `mqtt5` | ❌ | ❌ | ❌ | ❌ | distinct protocol from `mqtt` |
-| `anypointmq` | ❌ | ❌ | ❌ | ❌ | |
-| `jms` | ❌ | ❌ | ❌ | ❌ | |
-| `sns` | ❌ | ❌ | ❌ | ❌ | |
-| `solace` | ❌ | ❌ | ❌ | ❌ | |
-| `sqs` | ❌ | ❌ | ❌ | ❌ | |
-| `stomp` | ❌ | ❌ | ❌ | ❌ | |
-| `redis` | ❌ | ❌ | ❌ | ❌ | |
-| `mercure` | ❌ | ❌ | ❌ | ❌ | |
-| `ibmmq` | ❌ | ❌ | ❌ | ❌ | |
-| `googlepubsub` | ❌ | ❌ | ❌ | ❌ | |
-| `pulsar` | ❌ | ❌ | ❌ | ❌ | |
-| `ros2` | ❌ | ❌ | ❌ | ❌ | |
+Legend: **✅** typed struct with fields · **⬜** reserved object, modelled as a
+`spec.ReservedBinding` alias (`bindingVersion` only) · **—** the protocol is not
+modelled at that level because the 3.1.0 bindings-object schemas do not define
+the key there, so there is no helper.
+
+| Protocol | `bindingVersion` | Server | Channel | Operation | Message | Notes |
+| --- | --- | :--: | :--: | :--: | :--: | --- |
+| `kafka` | 0.5.0 | ✅ | ✅ | ✅ | ✅ | `groupId`/`clientId` are Schema Objects; message `key` is Schema \| Reference |
+| `amqp` | 0.3.0 | ⬜ | ✅ | ✅ | ✅ | 0.3.0 defines no `replyTo`; the field was removed ([B12](#b12)) |
+| `nats` | 0.1.0 | ⬜ | ⬜ | ✅ | ⬜ | — |
+| `mqtt` | 0.2.0 | ✅ | ⬜ | ✅ | ✅ | `sessionExpiryInterval`, `maximumPacketSize`, `messageExpiryInterval`, `correlationData`, `responseTopic` are unions → `any` |
+| `http` | 0.3.0 | ⬜ | ⬜ | ✅ | ✅ | `query` and `headers` are Schema Objects |
+| `ws` | 0.1.0 | ⬜ | ✅ | ⬜ | ⬜ | — |
+| `amqp1` | 0.1.0 | ⬜ | ⬜ | ⬜ | ⬜ | — |
+| `mqtt5` | 0.2.0 | ✅ | — | — | — | deprecated upstream; **not in the published 3.1.0 binding schemas** |
+| `anypointmq` | 0.0.1 | ⬜ | ✅ | ⬜ | ✅ | — |
+| `jms` | 0.0.1 | ✅ | ✅ | ⬜ | ✅ | server `properties` is a list of name/value pairs |
+| `sns` | 0.1.0 | ⬜ | ✅ | ✅ | ⬜ | the 3.1.0 schemas pin 0.1.0; a 0.2.0 binding exists upstream |
+| `solace` | 0.4.0 | ✅ | ⬜ | ✅ | ⬜ | `destinations` is untyped upstream; modelled as `[]spec.SolaceDestination` |
+| `sqs` | 0.2.0 | ⬜ | ✅ | ✅ | ⬜ | the 3.1.0 schemas pin 0.2.0; a 0.3.0 binding exists upstream |
+| `stomp` | — | ⬜ | ⬜ | ⬜ | ⬜ | no published schema: the objects are unconstrained |
+| `redis` | — | ⬜ | ⬜ | ⬜ | ⬜ | no published schema: the objects are unconstrained |
+| `mercure` | 0.1.0 | ⬜ | ⬜ | ⬜ | ⬜ | **not in the published 3.1.0 binding schemas** |
+| `ibmmq` | 0.1.0 | ✅ | ✅ | ⬜ | ✅ | message `headers` is only permitted when `type` is `binary` |
+| `googlepubsub` | 0.2.0 | ⬜ | ✅ | ⬜ | ✅ | `schemaSettings` is required on the channel |
+| `pulsar` | 0.1.0 | ✅ | ✅ | — | — | 3.1.0 defines no operation/message binding object |
+| `ros2` | 0.1.0 | ✅ | — | ✅ | — | 3.1.0 defines no channel/message binding object |
+
+Two facts explain most of the table. First, the binding objects are keyed maps,
+so a protocol is only modelled at a level the 3.1.0 `*BindingsObject` schema
+lists; `pulsar` (operation, message) and `ros2` (channel, message) are absent
+there, and `mqtt5`/`mercure` are absent from all four objects. Second, the schema
+field sets are the ones the pinned `asyncapi validate` enforces, so they — not
+the prose READMEs — decided every field and type; `docs/designdoc/typed-bindings.md`
+records how they were extracted.
 
 The untyped escape hatch
 (`Server/Channel/Operation/Message.Binding(proto string, v any)`, backed by
-`spec.*Bindings = map[string]any`) means all 20 *can* be emitted if the user
-hand-writes a struct. It is not discoverable, not type-checked, and not
-documented.
+`spec.*Bindings = map[string]any`) is retained on all six builders for protocols
+added to the specification later.
 
-> **Zero-value hazard.** Every binding field carries `omitempty`, so meaningful
+> **Zero-value hazard.** Binding fields still carry `omitempty`, so meaningful
 > zero values are silently dropped: `MQTTOperationBinding{QoS: 0}` (a valid QoS),
 > `AMQPOperationBinding{Mandatory: false}`, `KafkaChannelBinding{Partitions: 0}`,
 > and every `bool` flag set to `false`. See [B8](#b8--binding-zero-values-are-dropped).
+> Fields the binding schema *requires* (`sqs.queue.name`, `sqs.queue.fifoQueue`,
+> `sns.channel.name`, `sns.operation.consumers`, `pulsar.channel.namespace`,
+> `ros2.operation.node`/`role`, …) deliberately do not carry `omitempty`, because
+> omitting them would emit an invalid document.
 >
-> **Kafka Union fields.** `KafkaOperationBinding.GroupID`/`ClientID` are
-> Schema Object | Reference Object | boolean, and `KafkaMessageBinding.Key` is
-> Schema Object | Reference Object. They are modeled as `any` (the same
-> reference-side convention as `Message.CorrelationID`), so a boolean or a
-> schema value is expressible. The earlier `string` shape was AsyncAPI 2.x and
-> emitted documents the 3.1.0 schema rejects; #14 fixed it.
+> **Kafka types.** `KafkaOperationBinding.GroupID`/`ClientID` are Schema Objects
+> in 0.5.0, and `KafkaMessageBinding.Key` is Schema Object | Reference Object
+> (still `any` so the reference side is expressible). The previous `any` shape for
+> `groupId`/`clientId` and the 2.x `string` shape before it both disagreed with
+> the 0.5.0 schema; [#14](https://github.com/RubenRibGarcia/asyncgo/issues/14)
+> and [#23](https://github.com/RubenRibGarcia/asyncgo/issues/23) fixed them.
+
+Two discovery fixtures cover the surface: `test/data/bindings` carries the 18
+protocol keys the published schemas accept and is validated by
+`asyncapi validate`; `test/data/bindings-unlisted` carries `mqtt5` and `mercure`,
+whose documents the schema rejects, so the integration test asserts the
+rejection instead.
 
 ## 4. Schema derivation
 
@@ -510,16 +533,22 @@ implementation effort.
 
 #### B12 — Typed bindings for the remaining protocols
 
-- **Gap** — 4 of 20 protocols have typed structs; `spec.ProtocolHTTP` exists with
-  no structs behind it. Everything else needs hand-written `any` values through
-  the untyped escape hatch.
+- **Implemented** — [#23](https://github.com/RubenRibGarcia/asyncgo/issues/23):
+  one protocol section in `spec/bindings.go` carrying every binding object the
+  3.1.0 schemas define, a typed DSL helper per (protocol, level) on the matching
+  core and trait builders, `spec.ProtocolKeys`, and two discovery fixtures
+  (`test/data/bindings`, `test/data/bindings-unlisted`). Reserving the object
+  shape to `spec.ReservedBinding` keeps the unconstrained objects one type. Three
+  corrections came out of it: `AMQPOperationBinding.ReplyTo` was removed (0.3.0
+  has no such field), Kafka `groupId`/`clientId` became `*Schema` (0.5.0 types
+  them as Schema Objects), and the MQTT expiry/size fields became `any` (they are
+  `scalar | Schema | Reference`).
+- **Gap** — 4 of 20 protocols had typed structs; everything else needed
+  hand-written `any` values through the untyped escape hatch.
 - **Spec** — Server/Channel/Operation/Message Bindings Objects.
-- **Area** — `spec (object model, codecs, bindings)`, `docs`
-- **Acceptance** — all 20 protocols typed (`kafka`, `amqp`, `nats`, `mqtt`,
-  `http`, `ws`, `amqp1`, `mqtt5`, `anypointmq`, `jms`, `sns`, `solace`, `sqs`,
-  `stomp`, `redis`, `mercure`, `ibmmq`, `googlepubsub`, `pulsar`, `ros2`),
-  covering every binding object each protocol defines; the escape hatch retained
-  for protocols added to the specification later.
+- **Area** — `spec (object model, codecs, bindings)`, `dsl`, `docs`
+- **Acceptance** — every protocol binding object the 3.1.0 schemas define is
+  modelled and reachable from the DSL, and the escape hatch is retained.
 
 <a id="b13"></a>
 

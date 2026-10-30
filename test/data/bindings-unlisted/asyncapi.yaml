@@ -1,0 +1,75 @@
+asyncapi: 3.1.0
+info:
+  title: Unlisted bindings
+  version: 1.0.0
+  description: mqtt5 and mercure, which the 3.1.0 binding schemas omit
+servers:
+  mercure:
+    host: hub.example.com
+    protocol: mercure
+    bindings:
+      mercure:
+        bindingVersion: 0.1.0
+  mqtt5:
+    host: broker.mqtt:1883
+    protocol: mqtt5
+    bindings:
+      mqtt5:
+        bindingVersion: 0.2.0
+        sessionExpiryInterval: 30
+defaultContentType: application/json
+channels:
+  orders-mercure:
+    address: orders-mercure
+    messages:
+      MercureEvent:
+        $ref: "#/components/messages/MercureEvent"
+    servers:
+    - $ref: "#/servers/mercure"
+    bindings:
+      mercure:
+        bindingVersion: 0.1.0
+  orders-mqtt5:
+    address: orders-mqtt5
+    messages:
+      MQTT5Event:
+        $ref: "#/components/messages/MQTT5Event"
+    servers:
+    - $ref: "#/servers/mqtt5"
+operations:
+  orders-mercure.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-mercure"
+    bindings:
+      mercure:
+        bindingVersion: 0.1.0
+    messages:
+    - $ref: "#/channels/orders-mercure/messages/MercureEvent"
+  orders-mqtt5.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-mqtt5"
+    messages:
+    - $ref: "#/channels/orders-mqtt5/messages/MQTT5Event"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/bindings-unlisted.Event:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+      - id
+  messages:
+    MQTT5Event:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings-unlisted.Event"
+      name: MQTT5Event
+    MercureEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings-unlisted.Event"
+      name: MercureEvent
+      bindings:
+        mercure:
+          bindingVersion: 0.1.0
