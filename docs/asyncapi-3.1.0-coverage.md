@@ -534,7 +534,7 @@ implementation effort.
 #### B12 — Typed bindings for the remaining protocols
 
 - **Implemented** — [#23](https://github.com/RubenRibGarcia/asyncgo/issues/23):
-  one `spec/binding_<protocol>.go` per protocol carrying every binding object the
+  one protocol section in `spec/bindings.go` carrying every binding object the
   3.1.0 schemas define, a typed DSL helper per (protocol, level) on the matching
   core and trait builders, `spec.ProtocolKeys`, and two discovery fixtures
   (`test/data/bindings`, `test/data/bindings-unlisted`). Reserving the object

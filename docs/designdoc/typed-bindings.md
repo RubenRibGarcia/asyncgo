@@ -63,14 +63,20 @@ Facts that follow from the schemas and that a README-only design would get wrong
 
 ## Design decisions
 
-### D1 — One file per protocol, in both packages
+### D1 — One file per package, one section per protocol
 
-`spec/bindings.go` keeps the four map types, the protocol constants, and `ProtocolKeys`. Each protocol gets
-`spec/binding_<proto>.go` for its structs and `bindings_<proto>.go` in the root package for its DSL helpers.
-`bindings.go` keeps the six `setBinding` helpers and the six generic `Binding` methods.
+`spec/bindings.go` holds everything binding-related for the model: the protocol constants, `ProtocolKeys`, the
+four map types, `ReservedBinding` with its aliases, and then one `// --- <protocol> bindings` section per
+protocol with the structs that protocol defines. `bindings.go` in the root package mirrors it: the six
+`setBinding` helpers, the six generic `Binding` methods, and one section per protocol with its DSL helpers.
+Protocol sections are ordered alphabetically in both files.
 
-**Rationale**: a protocol is a reviewable unit, and 20 protocols in one file would make every protocol PR
-conflict on the same lines.
+**Rationale**: a protocol is a contiguous block, not an independent unit — every protocol PR is a few additions
+at most. Forty stub files (structs and helpers) buy a per-protocol diff show at the cost of a 40-entry
+directory, a package clause and import block each, and no way to see the API surface in one place. A single
+file keeps the section order obvious and makes the whole binding surface reviewable in one scroll. The cost —
+two protocol PRs conflicting in the same file — is accepted: the sections sit apart, so git resolves the hunks
+routinely.
 
 ### D2 — `any` only where the schema is a union, `omitempty` only where the field is optional
 
@@ -141,9 +147,11 @@ const (
 var ProtocolKeys = []string{ProtocolKafka, /* … */ ProtocolROS2}
 ```
 
-### `spec/binding_sqs.go` (shape of every protocol file)
+### `spec/bindings.go` — one protocol section (shape of every protocol section)
 
 ```go
+// --- SQS bindings (binding version 0.3.0) -----------------------------------
+
 // SQSChannelBinding describes SQS-specific channel information.
 type SQSChannelBinding struct {
     Queue          *SQSQueue `json:"queue"                       yaml:"queue"`
@@ -152,9 +160,11 @@ type SQSChannelBinding struct {
 }
 ```
 
-### `bindings_sqs.go` (shape of every DSL file)
+### `bindings.go` — one protocol section (shape of every DSL section)
 
 ```go
+// --- SQS bindings ------------------------------------------------------------
+
 func (c *channel) SQS(b spec.SQSChannelBinding) *channel {
     return c.setBinding(spec.ProtocolSQS, &b)
 }
