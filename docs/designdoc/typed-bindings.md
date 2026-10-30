@@ -6,6 +6,9 @@
 - **Scope**: `spec/`, root DSL package, `test/data/bindings*`, `test/integration`, `docs/`
 - **Issue**: [#23](https://github.com/RubenRibGarcia/asyncgo/issues/23) (coverage backlog B12)
 
+> **Amended 2026-10-30** — D1's per-protocol files were collapsed into one `bindings.go` per package, one
+> section per protocol. See [Amendment](#amendment).
+
 ## Summary
 
 Only `kafka`, `amqp`, `nats`, and `mqtt` have typed binding structs; the other protocol keys must be
@@ -64,6 +67,9 @@ Facts that follow from the schemas and that a README-only design would get wrong
 ## Design decisions
 
 ### D1 — One file per package, one section per protocol
+
+> **Reversed 2026-10-30** — the implementation first shipped one file per protocol; the sections below record
+> the decision as taken, the [Amendment](#amendment) records the reversal.
 
 `spec/bindings.go` holds everything binding-related for the model: the protocol constants, `ProtocolKeys`, the
 four map types, `ReservedBinding` with its aliases, and then one `// --- <protocol> bindings` section per
@@ -209,3 +215,27 @@ func (c *channel) SQS(b spec.SQSChannelBinding) *channel {
 - B8 (`omitempty` drops optional zero values) — untouched, still tracked.
 - `bindingVersion` enums per protocol are not validated by the library; the CLI catches them.
 - The ADR (0007) is written once this design is accepted.
+
+## Amendment
+
+### 2026-10-30 — D1 reversed: the per-protocol files collapsed into one file per package
+
+D1 planned one file per protocol in both packages (`spec/binding_<proto>.go` and `bindings_<proto>.go`), and
+Stages 1, 3 and 4 shipped it that way: 17 struct files plus `spec/binding_reserved.go`, and 17 helper files.
+It has been collapsed. `spec/bindings.go` holds the protocol constants, `ProtocolKeys`, the four map types,
+`ReservedBinding` and its 38 aliases, then one `// --- <protocol> bindings` section per protocol; `bindings.go`
+in the root package holds the six `setBinding` helpers, the six generic `Binding` methods, then one section per
+protocol with its DSL helpers. Sections are ordered alphabetically in both files, and the 34 per-protocol
+files are gone.
+
+The original rationale — "a protocol is a reviewable unit, and 20 protocols in one file would make every
+protocol PR conflict on the same lines" — did not survive review. A protocol turns out to be a few additions
+at most, so the per-protocol shape cost 34 files that each carried a package clause, an import block and a
+four-line section header, and left no single place where the binding surface could be read. Two protocol PRs
+conflicting on adjacent hunks of one file is the cheaper price, and git resolves those routinely.
+
+Consequences: D1 above and Stages 1, 3 and 4 describe the layout as originally decided and are left as
+written; the `spec`/`dsl` bullets of this document's detailed design show the shape of a single section, in
+whichever file it lives. The public API is unchanged — the merged files declare exactly the same 122 `spec`
+and 120 root declarations as the files they replace, so no test or fixture changed. `bindings_test.go` and
+`spec/bindings_test.go` remain one file per package, as planned.
