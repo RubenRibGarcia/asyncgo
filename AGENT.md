@@ -30,7 +30,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 ┌───────────────────────▼─────────────────────────────────┐
 │               asyncgo (fluent DSL, root pkg)            │
 │  Spec, Info, Server, Channel, Operation, MessageOf,     │
-│  Kafka/AMQP/NATS/MQTT binding helpers.                  │
+│  typed binding helpers for all 20 protocols.            │
 └───────┬─────────────────────────────────┬───────────────┘
         │ builds                         │ references structs
 ┌───────▼───────────────┐   ┌─────────────▼───────────────┐
@@ -88,7 +88,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 
 | Area | Symbols |
 | ---- | ------- |
-| DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Replies`, `Reply`, `ReplyAddresses`, `ReplyAddress`, `OperationTraits`, `OperationTrait`, `MessageTraits`, `MessageTrait`, `CorrelationIDs`, `CorrelationID`, `Channels`, `Channel`, `Operation`, `MessageOf`, `MessageFrom`, `Schemas`, `Schema`, `Kafka`/`AMQP`/`NATS`/`MQTT`/`Binding` helpers |
+| DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Replies`, `Reply`, `ReplyAddresses`, `ReplyAddress`, `OperationTraits`, `OperationTrait`, `MessageTraits`, `MessageTrait`, `CorrelationIDs`, `CorrelationID`, `Channels`, `Channel`, `Operation`, `MessageOf`, `MessageFrom`, `Schemas`, `Schema`, one typed binding helper per protocol (20) plus `Binding` |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `SecurityScheme`, `OAuthFlows`, `OAuthFlow`, `Channel`, `Operation`, `OperationTrait`, `OperationReply`, `OperationReplyAddress`, `Message`, `MessageTrait`, `CorrelationID`, `Schema`, `MultiFormat`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
 | CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]` |
@@ -112,7 +112,7 @@ asyncgo/
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat, derived — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat, derived, bindings, bindings-unlisted — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
