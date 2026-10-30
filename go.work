@@ -13,6 +13,8 @@ use (
 	./test/data/traits
 	./test/data/multiformat
 	./test/data/derived
+	./test/data/bindings
+	./test/data/bindings-unlisted
 	./test/integration
 	./tools
 )

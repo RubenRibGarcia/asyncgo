@@ -46,6 +46,8 @@ var fixtures = []string{
 	"traits",
 	"multiformat",
 	"derived",
+	"bindings",
+	"bindings-unlisted",
 }
 
 // cliUnsupported lists the fixtures the pinned AsyncAPI CLI cannot validate, with
@@ -61,6 +63,8 @@ var fixtures = []string{
 // lingering.
 var cliUnsupported = map[string]string{
 	"multiformat": "the fixture carries a Protobuf payload, which asyncapi/cli cannot parse",
+	"bindings-unlisted": "the fixture carries the mqtt5 and mercure binding keys, which the " +
+		"published AsyncAPI 3.1.0 binding JSON Schemas omit, so the validator rejects them",
 }
 
 // TestAsyncGoGenerate regenerates each test fixture's document, asserts it

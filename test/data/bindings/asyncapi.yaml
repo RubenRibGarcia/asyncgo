@@ -1,0 +1,741 @@
+asyncapi: 3.1.0
+info:
+  title: Bindings
+  version: 1.0.0
+  description: Every protocol binding object AsyncAPI 3.1.0 defines
+servers:
+  amqp:
+    host: broker.amqp:5672
+    protocol: amqp
+    bindings:
+      amqp:
+        bindingVersion: 0.3.0
+  amqp1:
+    host: broker.amqp1:5672
+    protocol: amqp1
+    bindings:
+      amqp1:
+        bindingVersion: 0.1.0
+  anypointmq:
+    host: mq.example.com
+    protocol: anypointmq
+    bindings:
+      anypointmq:
+        bindingVersion: 0.0.1
+  googlepubsub:
+    host: pubsub.googleapis.com
+    protocol: googlepubsub
+    bindings:
+      googlepubsub:
+        bindingVersion: 0.2.0
+  http:
+    host: api.example.com
+    protocol: http
+    bindings:
+      http:
+        bindingVersion: 0.3.0
+  ibmmq:
+    host: broker.ibmmq:1414
+    protocol: ibmmq
+    bindings:
+      ibmmq:
+        bindingVersion: 0.1.0
+        ccdtQueueManagerName: QM1
+        cipherSpec: ANY_TLS12
+        groupId: orders
+        heartBeatInterval: 300
+        multiEndpointServer: true
+  jms:
+    host: broker.jms:61616
+    protocol: jms
+    bindings:
+      jms:
+        bindingVersion: 0.0.1
+        clientID: orders-service
+        jmsConnectionFactory: ConnectionFactory
+        properties:
+        - name: provider
+          value: ActiveMQ
+  kafka:
+    host: broker.kafka:9092
+    protocol: kafka
+    bindings:
+      kafka:
+        bindingVersion: 0.5.0
+        schemaRegistryUrl: https://registry.example.com
+        schemaRegistryVendor: confluent
+  mqtt:
+    host: broker.mqtt:1883
+    protocol: mqtt
+    bindings:
+      mqtt:
+        bindingVersion: 0.2.0
+        cleanSession: true
+        clientId: orders-service
+        keepAlive: 60
+        lastWill:
+          message: offline
+          qos: 1
+          retain: true
+          topic: orders/last-will
+        maximumPacketSize: 1024
+        sessionExpiryInterval: 120
+  nats:
+    host: broker.nats:4222
+    protocol: nats
+    bindings:
+      nats:
+        bindingVersion: 0.1.0
+  pulsar:
+    host: broker.pulsar:6650
+    protocol: pulsar
+    bindings:
+      pulsar:
+        bindingVersion: 0.1.0
+        tenant: orders
+  redis:
+    host: broker.redis:6379
+    protocol: redis
+    bindings:
+      redis:
+        bindingVersion: 0.1.0
+  ros2:
+    host: ros2.example.com
+    protocol: ros2
+    bindings:
+      ros2:
+        bindingVersion: 0.1.0
+        domainId: 7
+        rmwImplementation: rmw_fastrtps_cpp
+  sns:
+    host: sns.eu-west-1.amazonaws.com
+    protocol: sns
+    bindings:
+      sns:
+        bindingVersion: 0.1.0
+  solace:
+    host: broker.solace:55555
+    protocol: solace
+    bindings:
+      solace:
+        bindingVersion: 0.4.0
+        clientName: orders-service
+        msgVpn: orders-vpn
+  sqs:
+    host: sqs.eu-west-1.amazonaws.com
+    protocol: sqs
+    bindings:
+      sqs:
+        bindingVersion: 0.2.0
+  stomp:
+    host: broker.stomp:61613
+    protocol: stomp
+    bindings:
+      stomp:
+        bindingVersion: 0.1.0
+  ws:
+    host: api.example.com/socket
+    protocol: ws
+    bindings:
+      ws:
+        bindingVersion: 0.1.0
+defaultContentType: application/json
+channels:
+  orders-amqp:
+    address: orders-amqp
+    messages:
+      AMQPEvent:
+        $ref: "#/components/messages/AMQPEvent"
+    servers:
+    - $ref: "#/servers/amqp"
+    bindings:
+      amqp:
+        bindingVersion: 0.3.0
+        exchange:
+          durable: true
+          name: orders
+          type: topic
+          vhost: /
+        is: routingKey
+  orders-amqp1:
+    address: orders-amqp1
+    messages:
+      AMQP1Event:
+        $ref: "#/components/messages/AMQP1Event"
+    servers:
+    - $ref: "#/servers/amqp1"
+    bindings:
+      amqp1:
+        bindingVersion: 0.1.0
+  orders-anypointmq:
+    address: orders-anypointmq
+    messages:
+      AnypointMQEvent:
+        $ref: "#/components/messages/AnypointMQEvent"
+    servers:
+    - $ref: "#/servers/anypointmq"
+    bindings:
+      anypointmq:
+        bindingVersion: 0.0.1
+        destination: orders
+        destinationType: queue
+  orders-googlepubsub:
+    address: orders-googlepubsub
+    messages:
+      GooglePubSubEvent:
+        $ref: "#/components/messages/GooglePubSubEvent"
+    servers:
+    - $ref: "#/servers/googlepubsub"
+    bindings:
+      googlepubsub:
+        bindingVersion: 0.2.0
+        labels:
+          env: test
+        messageRetentionDuration: 86400s
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+          - europe-west1
+        schemaSettings:
+          encoding: JSON
+          name: projects/orders/schemas/orders
+  orders-http:
+    address: orders-http
+    messages:
+      HTTPEvent:
+        $ref: "#/components/messages/HTTPEvent"
+    servers:
+    - $ref: "#/servers/http"
+    bindings:
+      http:
+        bindingVersion: 0.3.0
+  orders-ibmmq:
+    address: orders-ibmmq
+    messages:
+      IBMMQEvent:
+        $ref: "#/components/messages/IBMMQEvent"
+    servers:
+    - $ref: "#/servers/ibmmq"
+    bindings:
+      ibmmq:
+        bindingVersion: 0.1.0
+        destinationType: queue
+        maxMsgLength: 1048576
+        queue:
+          objectName: ORDERS.QUEUE
+  orders-jms:
+    address: orders-jms
+    messages:
+      JMSEvent:
+        $ref: "#/components/messages/JMSEvent"
+    servers:
+    - $ref: "#/servers/jms"
+    bindings:
+      jms:
+        bindingVersion: 0.0.1
+        destination: orders
+        destinationType: queue
+  orders-kafka:
+    address: orders-kafka
+    messages:
+      KafkaEvent:
+        $ref: "#/components/messages/KafkaEvent"
+    servers:
+    - $ref: "#/servers/kafka"
+    bindings:
+      kafka:
+        bindingVersion: 0.5.0
+        partitions: 3
+        replicas: 1
+        topic: orders
+        topicConfiguration:
+          cleanup.policy:
+          - delete
+          max.message.bytes: 1048576
+          retention.ms: 604800000
+  orders-mqtt:
+    address: orders-mqtt
+    messages:
+      MQTTEvent:
+        $ref: "#/components/messages/MQTTEvent"
+    servers:
+    - $ref: "#/servers/mqtt"
+    bindings:
+      mqtt:
+        bindingVersion: 0.2.0
+  orders-nats:
+    address: orders-nats
+    messages:
+      NATSEvent:
+        $ref: "#/components/messages/NATSEvent"
+    servers:
+    - $ref: "#/servers/nats"
+    bindings:
+      nats:
+        bindingVersion: 0.1.0
+  orders-pulsar:
+    address: orders-pulsar
+    messages:
+      PulsarEvent:
+        $ref: "#/components/messages/PulsarEvent"
+    servers:
+    - $ref: "#/servers/pulsar"
+    bindings:
+      pulsar:
+        bindingVersion: 0.1.0
+        geo-replication:
+        - eu-west-1
+        namespace: orders
+        persistence: persistent
+        retention:
+          size: 1000
+          time: 60
+        ttl: 3600
+  orders-redis:
+    address: orders-redis
+    messages:
+      RedisEvent:
+        $ref: "#/components/messages/RedisEvent"
+    servers:
+    - $ref: "#/servers/redis"
+    bindings:
+      redis:
+        bindingVersion: 0.1.0
+  orders-ros2:
+    address: orders-ros2
+    messages:
+      ROS2Event:
+        $ref: "#/components/messages/ROS2Event"
+    servers:
+    - $ref: "#/servers/ros2"
+  orders-sns:
+    address: orders-sns
+    messages:
+      SNSEvent:
+        $ref: "#/components/messages/SNSEvent"
+    servers:
+    - $ref: "#/servers/sns"
+    bindings:
+      sns:
+        bindingVersion: 0.1.0
+        name: orders
+        ordering:
+          type: standard
+        tags:
+          env: test
+  orders-solace:
+    address: orders-solace
+    messages:
+      SolaceEvent:
+        $ref: "#/components/messages/SolaceEvent"
+    servers:
+    - $ref: "#/servers/solace"
+    bindings:
+      solace:
+        bindingVersion: 0.4.0
+  orders-sqs:
+    address: orders-sqs
+    messages:
+      SQSEvent:
+        $ref: "#/components/messages/SQSEvent"
+    servers:
+    - $ref: "#/servers/sqs"
+    bindings:
+      sqs:
+        bindingVersion: 0.2.0
+        queue:
+          fifoQueue: false
+          name: orders
+          visibilityTimeout: 30
+  orders-stomp:
+    address: orders-stomp
+    messages:
+      StompEvent:
+        $ref: "#/components/messages/StompEvent"
+    servers:
+    - $ref: "#/servers/stomp"
+    bindings:
+      stomp:
+        bindingVersion: 0.1.0
+  orders-ws:
+    address: orders-ws
+    messages:
+      WSEvent:
+        $ref: "#/components/messages/WSEvent"
+    servers:
+    - $ref: "#/servers/ws"
+    bindings:
+      ws:
+        bindingVersion: 0.1.0
+        headers:
+          type: object
+        method: GET
+        query:
+          type: object
+operations:
+  orders-amqp.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-amqp"
+    bindings:
+      amqp:
+        ack: true
+        bcc:
+        - archive
+        bindingVersion: 0.3.0
+        cc:
+        - audit
+        deliveryMode: 2
+        expiration: 60000
+        mandatory: true
+        priority: 1
+        timestamp: true
+        userId: orders-service
+    messages:
+    - $ref: "#/channels/orders-amqp/messages/AMQPEvent"
+  orders-amqp1.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-amqp1"
+    bindings:
+      amqp1:
+        bindingVersion: 0.1.0
+    messages:
+    - $ref: "#/channels/orders-amqp1/messages/AMQP1Event"
+  orders-anypointmq.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-anypointmq"
+    bindings:
+      anypointmq:
+        bindingVersion: 0.0.1
+    messages:
+    - $ref: "#/channels/orders-anypointmq/messages/AnypointMQEvent"
+  orders-googlepubsub.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-googlepubsub"
+    bindings:
+      googlepubsub:
+        bindingVersion: 0.2.0
+    messages:
+    - $ref: "#/channels/orders-googlepubsub/messages/GooglePubSubEvent"
+  orders-http.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-http"
+    bindings:
+      http:
+        bindingVersion: 0.3.0
+        method: POST
+        query:
+          type: object
+    messages:
+    - $ref: "#/channels/orders-http/messages/HTTPEvent"
+  orders-ibmmq.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-ibmmq"
+    bindings:
+      ibmmq:
+        bindingVersion: 0.1.0
+    messages:
+    - $ref: "#/channels/orders-ibmmq/messages/IBMMQEvent"
+  orders-jms.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-jms"
+    bindings:
+      jms:
+        bindingVersion: 0.0.1
+    messages:
+    - $ref: "#/channels/orders-jms/messages/JMSEvent"
+  orders-kafka.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-kafka"
+    bindings:
+      kafka:
+        bindingVersion: 0.5.0
+        clientId:
+          type: string
+        groupId:
+          type: string
+    messages:
+    - $ref: "#/channels/orders-kafka/messages/KafkaEvent"
+  orders-mqtt.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-mqtt"
+    bindings:
+      mqtt:
+        bindingVersion: 0.2.0
+        messageExpiryInterval: 60
+        qos: 1
+        retain: true
+    messages:
+    - $ref: "#/channels/orders-mqtt/messages/MQTTEvent"
+  orders-nats.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-nats"
+    bindings:
+      nats:
+        bindingVersion: 0.1.0
+        queue: workers
+    messages:
+    - $ref: "#/channels/orders-nats/messages/NATSEvent"
+  orders-pulsar.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-pulsar"
+    messages:
+    - $ref: "#/channels/orders-pulsar/messages/PulsarEvent"
+  orders-redis.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-redis"
+    bindings:
+      redis:
+        bindingVersion: 0.1.0
+    messages:
+    - $ref: "#/channels/orders-redis/messages/RedisEvent"
+  orders-ros2.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-ros2"
+    bindings:
+      ros2:
+        bindingVersion: 0.1.0
+        node: /orders
+        qosPolicies:
+          durability: volatile
+          reliability: best_effort
+        role: subscriber
+    messages:
+    - $ref: "#/channels/orders-ros2/messages/ROS2Event"
+  orders-sns.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-sns"
+    bindings:
+      sns:
+        bindingVersion: 0.1.0
+        consumers:
+        - endpoint:
+            arn: arn:aws:sqs:eu-west-1:123456789012:orders
+          protocol: sqs
+          rawMessageDelivery: true
+        deliveryPolicy:
+          maxDelayTarget: 20
+          minDelayTarget: 20
+          numRetries: 3
+        topic:
+          name: orders
+    messages:
+    - $ref: "#/channels/orders-sns/messages/SNSEvent"
+  orders-solace.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-solace"
+    bindings:
+      solace:
+        bindingVersion: 0.4.0
+        destinations:
+        - destinationType: queue
+          queue:
+            name: orders
+            topicSubscriptions:
+            - orders/*
+        dmqEligible: true
+        priority: 100
+        timeToLive: 5000
+    messages:
+    - $ref: "#/channels/orders-solace/messages/SolaceEvent"
+  orders-sqs.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-sqs"
+    bindings:
+      sqs:
+        bindingVersion: 0.2.0
+        queues:
+        - fifoQueue: false
+          name: orders
+    messages:
+    - $ref: "#/channels/orders-sqs/messages/SQSEvent"
+  orders-stomp.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-stomp"
+    bindings:
+      stomp:
+        bindingVersion: 0.1.0
+    messages:
+    - $ref: "#/channels/orders-stomp/messages/StompEvent"
+  orders-ws.send:
+    action: send
+    channel:
+      $ref: "#/channels/orders-ws"
+    bindings:
+      ws:
+        bindingVersion: 0.1.0
+    messages:
+    - $ref: "#/channels/orders-ws/messages/WSEvent"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/bindings.Event:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+      - id
+  messages:
+    AMQP1Event:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: AMQP1Event
+      bindings:
+        amqp1:
+          bindingVersion: 0.1.0
+    AMQPEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: AMQPEvent
+      bindings:
+        amqp:
+          bindingVersion: 0.3.0
+          contentEncoding: gzip
+          messageType: order
+    AnypointMQEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: AnypointMQEvent
+      bindings:
+        anypointmq:
+          bindingVersion: 0.0.1
+          headers:
+            type: object
+    GooglePubSubEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: GooglePubSubEvent
+      bindings:
+        googlepubsub:
+          attributes:
+            source: orders
+          bindingVersion: 0.2.0
+          orderingKey: customer
+          schema:
+            name: projects/orders/schemas/orders
+    HTTPEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: HTTPEvent
+      bindings:
+        http:
+          bindingVersion: 0.3.0
+          headers:
+            type: object
+          statusCode: 201
+    IBMMQEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: IBMMQEvent
+      bindings:
+        ibmmq:
+          bindingVersion: 0.1.0
+          description: IBM MQ message
+          expiry: 60
+          headers: JMSDestination
+          type: binary
+    JMSEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: JMSEvent
+      bindings:
+        jms:
+          bindingVersion: 0.0.1
+          headers:
+            type: object
+    KafkaEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: KafkaEvent
+      bindings:
+        kafka:
+          bindingVersion: 0.5.0
+          key:
+            type: string
+          schemaIdLocation: payload
+          schemaIdPayloadEncoding: "4"
+          schemaLookupStrategy: TopicNameStrategy
+    MQTTEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: MQTTEvent
+      bindings:
+        mqtt:
+          bindingVersion: 0.2.0
+          contentType: application/json
+          correlationData:
+            type: string
+          payloadFormatIndicator: 1
+          responseTopic: orders/reply
+    NATSEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: NATSEvent
+      bindings:
+        nats:
+          bindingVersion: 0.1.0
+    PulsarEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: PulsarEvent
+    ROS2Event:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: ROS2Event
+    RedisEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: RedisEvent
+      bindings:
+        redis:
+          bindingVersion: 0.1.0
+    SNSEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: SNSEvent
+      bindings:
+        sns:
+          bindingVersion: 0.1.0
+    SQSEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: SQSEvent
+      bindings:
+        sqs:
+          bindingVersion: 0.2.0
+    SolaceEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: SolaceEvent
+      bindings:
+        solace:
+          bindingVersion: 0.4.0
+    StompEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: StompEvent
+      bindings:
+        stomp:
+          bindingVersion: 0.1.0
+    WSEvent:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+      name: WSEvent
+      bindings:
+        ws:
+          bindingVersion: 0.1.0
