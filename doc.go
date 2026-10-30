@@ -904,7 +904,7 @@ func (t *operationTrait) Security(schemes ...*securityScheme) *operationTrait {
 }
 
 // Bindings replaces the trait's protocol bindings wholesale. Prefer the typed
-// Kafka/AMQP/NATS/MQTT helpers (see bindings.go) to set a single protocol.
+// protocol helpers (see bindings_<protocol>.go) to set a single protocol.
 func (t *operationTrait) Bindings(bindings spec.OperationBindings) *operationTrait {
 	t.t.Bindings = bindings
 	return t
@@ -1001,7 +1001,7 @@ func (t *messageTrait) Example(name string, payload any) *messageTrait {
 }
 
 // Bindings replaces the trait's protocol bindings wholesale. Prefer the typed
-// Kafka/AMQP/NATS/MQTT helpers (see bindings.go) to set a single protocol.
+// protocol helpers (see bindings_<protocol>.go) to set a single protocol.
 func (t *messageTrait) Bindings(bindings spec.MessageBindings) *messageTrait {
 	t.t.Bindings = bindings
 	return t
