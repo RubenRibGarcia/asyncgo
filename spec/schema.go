@@ -2,8 +2,7 @@ package spec
 
 // Schema is an AsyncAPI 3.1.0 Schema Object: a superset of JSON Schema Draft
 // 07, plus the three AsyncAPI-specific keywords discriminator, externalDocs,
-// and deprecated. Every Draft-07 keyword is modelled except contentEncoding and
-// contentMediaType (docs/asyncapi-3.1.0-coverage.md §8 B17); §4.3 lists the
+// and deprecated. Every Draft-07 keyword is modelled; §4.3 lists the
 // authoring-only gaps that remain.
 //
 // The same struct models the AsyncAPI 3.1.0 Multi Format Schema Object through
@@ -29,13 +28,22 @@ type Schema struct {
 	SchemaURI string `json:"$schema,omitempty" yaml:"$schema,omitempty"`
 
 	// Annotations.
-	Type         string        `json:"type,omitempty"         yaml:"type,omitempty"`
-	Title        string        `json:"title,omitempty"        yaml:"title,omitempty"`
-	Description  string        `json:"description,omitempty"  yaml:"description,omitempty"`
-	Format       string        `json:"format,omitempty"       yaml:"format,omitempty"`
-	Comment      string        `json:"$comment,omitempty"     yaml:"$comment,omitempty"`
-	ExternalDocs *ExternalDocs `json:"externalDocs,omitempty" yaml:"externalDocs,omitempty"`
-	Deprecated   bool          `json:"deprecated,omitempty"   yaml:"deprecated,omitempty"`
+	Type        string `json:"type,omitempty"        yaml:"type,omitempty"`
+	Title       string `json:"title,omitempty"       yaml:"title,omitempty"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Format      string `json:"format,omitempty"      yaml:"format,omitempty"`
+	Comment     string `json:"$comment,omitempty"    yaml:"$comment,omitempty"`
+
+	// ContentEncoding and ContentMediaType are the Draft-07 content annotations.
+	// For a []byte field the derivation sets ContentEncoding to "base64"
+	// alongside Format "byte", because encoding/json marshals []byte as base64
+	// while AsyncAPI's own format table defines byte as base64-encoded
+	// characters. ContentMediaType is never derived: a Go type carries no media
+	// type, so only the author can supply one.
+	ContentEncoding  string        `json:"contentEncoding,omitempty"  yaml:"contentEncoding,omitempty"`
+	ContentMediaType string        `json:"contentMediaType,omitempty" yaml:"contentMediaType,omitempty"`
+	ExternalDocs     *ExternalDocs `json:"externalDocs,omitempty"     yaml:"externalDocs,omitempty"`
+	Deprecated       bool          `json:"deprecated,omitempty"       yaml:"deprecated,omitempty"`
 
 	Properties           map[string]*Schema `json:"properties,omitempty"           yaml:"properties,omitempty"`
 	Required             []string           `json:"required,omitempty"             yaml:"required,omitempty"`

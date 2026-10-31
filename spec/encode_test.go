@@ -1167,9 +1167,25 @@ func TestEncodeSchemaKeywords(t *testing.T) {
 				assert.Equal(t, "kind", s.Discriminator)
 			},
 		},
+		{
+			name: "should_round_trip_content_encoding",
+			wire: "contentEncoding",
+			set:  func(s *Schema) { s.ContentEncoding = "base64" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "base64", s.ContentEncoding)
+			},
+		},
+		{
+			name: "should_round_trip_content_media_type",
+			wire: "contentMediaType",
+			set:  func(s *Schema) { s.ContentMediaType = "image/png" },
+			verify: func(t *testing.T, s *Schema) {
+				assert.Equal(t, "image/png", s.ContentMediaType)
+			},
+		},
 	}
 
-	require.Len(t, tt, 23, "every modeled Schema keyword needs a case")
+	require.Len(t, tt, 25, "every modeled Schema keyword needs a case")
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1254,7 +1270,9 @@ func TestSchemaFieldsMatchSpec(t *testing.T) {
 	assert.Equal(t, []string{
 		"schemaFormat", "schema",
 		"$ref", "$id", "$schema",
-		"type", "title", "description", "format", "$comment", "externalDocs", "deprecated",
+		"type", "title", "description", "format", "$comment",
+		"contentEncoding", "contentMediaType",
+		"externalDocs", "deprecated",
 		"properties", "required", "items", "additionalProperties", "additionalItems",
 		"patternProperties", "propertyNames", "dependencies", "contains",
 		"enum", "const", "examples", "default",

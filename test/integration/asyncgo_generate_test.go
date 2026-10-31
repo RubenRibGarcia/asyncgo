@@ -48,6 +48,7 @@ var fixtures = []string{
 	"derived",
 	"bindings",
 	"bindings-unlisted",
+	"bytes",
 }
 
 // cliUnsupported lists the fixtures the pinned AsyncAPI CLI cannot validate, with

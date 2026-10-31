@@ -160,10 +160,11 @@ func TestFromTypeCollections(t *testing.T) {
 func TestFromTypeSpecials(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	tests := []struct {
-		name       string
-		typ        reflect.Type
-		wantType   string
-		wantFormat string
+		name                string
+		typ                 reflect.Type
+		wantType            string
+		wantFormat          string
+		wantContentEncoding string
 	}{
 		{
 			name:       "should_return_date_time_for_time",
@@ -172,10 +173,11 @@ func TestFromTypeSpecials(t *testing.T) {
 			wantFormat: "date-time",
 		},
 		{
-			name:       "should_return_byte_string_for_byte_slice",
-			typ:        reflect.TypeFor[[]byte](),
-			wantType:   "string",
-			wantFormat: "byte",
+			name:                "should_return_byte_string_for_byte_slice",
+			typ:                 reflect.TypeFor[[]byte](),
+			wantType:            "string",
+			wantFormat:          "byte",
+			wantContentEncoding: "base64",
 		},
 		{
 			name:     "should_return_unconstrained_for_interface",
@@ -188,6 +190,8 @@ func TestFromTypeSpecials(t *testing.T) {
 			s := FromType(tc.typ, defs)
 			assert.Equal(t, tc.wantType, s.Type)
 			assert.Equal(t, tc.wantFormat, s.Format)
+			assert.Equal(t, tc.wantContentEncoding, s.ContentEncoding)
+			assert.Empty(t, s.ContentMediaType, "a Go type carries no media type")
 		})
 	}
 }

@@ -69,7 +69,11 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	case timeType:
 		return &spec.Schema{Type: "string", Format: "date-time"}
 	case byteSliceType:
-		return &spec.Schema{Type: "string", Format: "byte"}
+		// encoding/json marshals []byte as base64, so the Draft-07 content
+		// annotation says so. Format "byte" stays: AsyncAPI's own Data Type
+		// Formats table defines byte as base64-encoded characters, and it is
+		// an annotation, so emitting both asserts nothing contradictory.
+		return &spec.Schema{Type: "string", Format: "byte", ContentEncoding: "base64"}
 	case rawMessageType:
 		return &spec.Schema{}
 	}
