@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Created**: 2026-08-29
-- **Status updated**: 2026-08-29
+- **Status updated**: 2026-10-31
 - **Scope**: `spec/`, `schema/`
 - **Raw notes**: `docs/scratch/custom-schema-providers-brainstorm.md`
 
@@ -13,7 +13,12 @@ reflection-derived derivation — so that a type with a custom
 `MarshalJSON`/`UnmarshalJSON` (or `encoding.TextMarshaler`, or any other wire
 customization) can still produce a correct AsyncAPI Schema Object. A new
 `spec.SchemaProvider` interface is detected via reflection in `schema.FromType`;
-no static/discovery pass, registry, or harness change is required.
+no static/discovery pass, registry, or harness change is required. A named
+non-struct (`type OrderID string`, a named slice or map) is hoisted through the
+same interface, so a scalar or collection can carry a reusable constraint
+instead of being inlined at every use site ([#27]).
+
+[#27]: https://github.com/RubenRibGarcia/asyncgo/issues/27
 
 ## Background
 
@@ -47,7 +52,7 @@ question is the surface through which it is declared.
 | Reflection can detect interface implementation (`reflect.Type.Implements`). | A method-based hook is **pure reflection** — same category as `allOf`-from-embedding, *not* `oneOf`-from-tag (which needed the `Register`/`Finalize` registry). No discovery pass. |
 | `FromType` dereferences pointers before dispatch. | Pointer-receiver methods are lost unless probed explicitly via `reflect.PointerTo(t)`, mirroring `encoding/json`'s value-then-addressable rule. |
 | `FromType` works on a `reflect.Type`, not a value. | The hook can only be invoked on a **zero value**, so the method must describe the *type*, not an instance. |
-| Named structs all route through `hoistStruct`. | A single interception point scopes the feature to named structs for free and preserves FQN hoisting. |
+| Named structs all route through `hoistStruct`. | A single interception point scopes the feature to named structs for free and preserves FQN hoisting. Non-struct kinds need their own interception at the top of `FromType` (D7). |
 | The harness avoids executing user code beyond package `init`. | Calling the method is the first user-code execution beyond `init` and must be an explicit, accepted trade-off. |
 
 ### The two-pass split (unchanged)
@@ -60,8 +65,9 @@ name→type resolution or doc-comment injection is involved.
 
 **Goals**
 
-1. A named struct type can declare a `*spec.Schema` that replaces reflection
-   derivation, hoisted under its fully-qualified name (`pkgPath.TypeName`).
+1. A named type — struct or non-struct — can declare a `*spec.Schema` that
+   replaces reflection derivation, hoisted under its fully-qualified name
+   (`pkgPath.TypeName`).
 2. The hook is detected on both value and pointer receivers.
 3. Existing output is unchanged for types that do not implement the interface.
 4. No discovery, registry, or harness changes: the feature composes with the
@@ -70,8 +76,6 @@ name→type resolution or doc-comment injection is involved.
 
 **Non-goals (v1)**
 
-- Named non-struct types (`type UserID string`, `type Duration time.Duration`),
-  named slices, and named maps. Structs only.
 - Auto-hoisting of `$ref`s referenced *inside* a returned custom schema.
 - Validation of the returned schema, or panic recovery around the method call.
   The contract is documented, not enforced.
@@ -86,7 +90,7 @@ name→type resolution or doc-comment injection is involved.
 ```go
 package spec
 
-// SchemaProvider is implemented by a named struct type that customizes its
+// SchemaProvider is implemented by a named type that customizes its
 // wire representation (e.g. via MarshalJSON). AsyncAPISchema returns the
 // schema asyncgo emits in place of reflection-derived derivation.
 type SchemaProvider interface {
@@ -122,6 +126,12 @@ automatically, since only named structs reach `hoistStruct`.
 **Rationale**: intercepting at the top of `FromType` would return the custom
 schema *unhoisted*, breaking `$ref` resolution and diverging from how every
 other named struct behaves.
+
+**Promotion for non-structs ([#27])**: a non-struct has no `hoistStruct` to
+intercept, so its provider check sits at the top of `FromType`, guarded to kinds
+other than struct and interface. It hoists before returning, so D3's invariant —
+never hand back an unhoisted custom schema — still holds, and the struct path
+keeps its placement unchanged.
 
 ### D4 — `nil` falls back to reflection; empty schema is unconstrained
 
@@ -218,12 +228,44 @@ Notes:
   provider cannot loop.
 - `inlineStruct` is untouched: anonymous structs cannot implement the interface.
 
-### 3. `schema/registry.go` — no change, composes for free
+A non-struct has no `hoistStruct`, so its check sits at the top of `FromType`:
+
+```go
+if isNamed(t) && t.Kind() != reflect.Struct && t.Kind() != reflect.Interface {
+    if _, hoisted := defs[Name(t)]; hoisted {
+        return spec.Ref(Ref(t))
+    }
+    if p, ok := asSchemaProvider(t); ok {
+        if custom := p.AsyncAPISchema(); custom != nil {
+            defs[Name(t)] = custom
+            return spec.Ref(Ref(t))
+        }
+    }
+}
+```
+
+- `reflect.Interface` is excluded: an interface whose method set includes
+  `AsyncAPISchema` satisfies the provider type, but its zero value is a nil
+  interface, so `reflect.New(t).Elem().Interface().(spec.SchemaProvider)` would
+  panic. The guard keeps such a type deriving `{}` as today.
+- A `nil` return from a non-struct provider keeps the current output: the call
+  falls through to the kind switch and the schema stays **inline**, with no
+  `$ref` and no `components.schemas` entry.
+- Only named non-structs are intercepted, so a plain `type OrderID string` — the
+  common case — is unchanged. Implementing the interface is the opt-in.
+
+### 3. `schema/registry.go` — no behavior change, composes for free
 
 `Finalize` calls `FromType` on every registered type, which routes through
-`hoistStruct`, so a combinator-referenced (`oneOf=`/`anyOf=`/`allOf=`) custom
-type is hoisted with its custom schema. No discovery or harness modification is
-needed.
+`hoistStruct` (structs) or the top-of-`FromType` check (non-struct providers), so
+a combinator-referenced (`oneOf=`/`anyOf=`/`allOf=`) custom type is hoisted with
+its custom schema. No discovery or registry modification is needed.
+
+The generated harness (`internal/discovery/materialize.go`) registers each
+combinator-referenced type as `new(pkg.T)` rather than `pkg.T{}`: a composite
+literal is only valid for struct, array, slice and map types, so a directive
+naming a non-struct would otherwise emit code that does not compile. `Register`
+already dereferences pointers, so `new(T)` registers `T` itself.
 
 ## Example (before / after)
 
@@ -313,8 +355,14 @@ github.com/acme/orders.Order:
 - **Panic in the method** — surfaces as a harness/generation failure with a
   stack trace (the harness already panics on unrecoverable errors). Documented,
   not recovered, in v1.
-- **Anonymous structs / named non-structs** — out of scope (non-goals); they
-  continue to derive as today.
+- **Anonymous structs** — out of scope: Go cannot define methods on an unnamed
+  type, so they always derive inline.
+- **Named non-struct without a provider** — unchanged: `type OrderID string`
+  still derives inline as `{type: string}`, with no `$ref` and no
+  `components.schemas` entry. Implementing the interface is the opt-in.
+- **Interface kind with a provider method set** — detection is skipped, so
+  `type P interface { AsyncAPISchema() *Schema }` derives `{}` as today instead
+  of panicking on the nil zero value.
 
 ## Rollout plan
 
@@ -324,9 +372,11 @@ github.com/acme/orders.Order:
    `asSchemaProvider`, and the `hoistStruct` change, plus unit tests.
 3. **Stage 2 — document** (`docs`): a README section on custom types and a
    `godoc` note on the interface contract.
-4. **Stage 3 — deferred**: named scalar/collection providers, auto-hoisting of
-   `$ref`s inside returned schemas, validation/recovery, field-level `type=`
-   tag override.
+4. **Stage 3 — deferred**: auto-hoisting of `$ref`s inside returned schemas,
+   validation/recovery, field-level `type=` tag override.
+5. **Stage 4 — named non-struct providers** (`feat(schema)`, [#27]): the
+   `FromType` non-struct interception, plus harness registration via `new(T)` so
+   a combinator directive can name a non-struct member.
 
 ## Testing plan
 
@@ -340,14 +390,21 @@ github.com/acme/orders.Order:
   - `should_fall_back_to_reflection_when_not_provider`
   - `should_hoist_empty_schema_as_unconstrained`
   - `should_honor_provider_via_finalize`
+- **Stage 4** ([#27]):
+  - `should_hoist_named_string_provider`
+  - `should_hoist_named_slice_provider` / `should_hoist_named_map_provider`
+  - `should_detect_pointer_receiver_on_named_non_struct`
+  - `should_fall_back_to_inline_on_nil_provider`
+  - `should_leave_named_non_struct_inline_without_provider`
+  - `should_not_panic_on_interface_with_provider_method_set`
+  - `should_hoist_once_and_ref_from_every_use_site`
+  - `should_hoist_registered_non_struct_provider` (via `Finalize`)
+  - `should_resolve_combinator_ref_to_non_struct_provider`
+  - `internal/discovery`: harness source contains `new(pkg.T)`, never `pkg.T{}`
 - **Race**: `go test ./... -race` per AGENT.md.
 
 ## Open / deferred
 
-- Named non-struct providers (`type UserID string`, `type Duration time.Duration`)
-  — they hit the same derivation gap (a custom-marshaled `Duration` derives as
-  `integer`, not its wire string) but raise the hoist-vs-inline question for
-  non-struct kinds.
 - Auto-hoisting of `$ref`s referenced inside a returned custom schema.
 - Schema validation and panic recovery around the method call.
 - Separate marshal/unmarshal hooks, if a real asymmetry ever materializes.

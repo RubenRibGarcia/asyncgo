@@ -37,11 +37,17 @@ components:
       examples:
       - 12.34 USD
       pattern: "^\\d+\\.\\d{2} [A-Z]{3}$"
+    github.com/RubenRibGarcia/asyncgo/test/data/provider.OrderID:
+      type: string
+      examples:
+      - ord_000123
+      minLength: 10
+      pattern: ^ord_[0-9]{6}$
     github.com/RubenRibGarcia/asyncgo/test/data/provider.OrderPlaced:
       type: object
       properties:
         order_id:
-          type: string
+          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.OrderID"
         price:
           $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.Money"
       required:

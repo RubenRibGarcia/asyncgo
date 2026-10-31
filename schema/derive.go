@@ -19,9 +19,10 @@
 //     Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
 //     cannot see comments.
-//   - A named struct type implementing spec.SchemaProvider overrides
-//     derivation: its AsyncAPISchema() result is hoisted under the type's
-//     fully-qualified name as-is.
+//   - A named type (struct or non-struct) implementing spec.SchemaProvider
+//     overrides derivation: its AsyncAPISchema() result is hoisted under the
+//     type's fully-qualified name as-is. Non-struct kinds are hoisted only when
+//     they carry a provider, so a plain `type ID string` stays inline.
 package schema
 
 import (
@@ -57,12 +58,32 @@ func RefByName(fqn string) string {
 	return "#/components/schemas/" + jsonpointer.Escape(fqn)
 }
 
-// FromType derives a JSON Schema for t. Named struct types are hoisted into
-// defs (keyed by their fully-qualified name) and returned as a $ref; all other
-// types are inlined.
+// FromType derives a JSON Schema for t. Named struct types, and named
+// non-struct types implementing spec.SchemaProvider, are hoisted into defs
+// (keyed by their fully-qualified name) and returned as a $ref; all other types
+// are inlined.
 func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
+	}
+
+	// A named non-struct provider opts into the same hoisting named structs get,
+	// so a scalar or collection can carry a reusable constraint. Struct
+	// providers are intercepted in hoistStruct instead. Interface kinds are
+	// skipped because their zero value is a nil interface, and asSchemaProvider
+	// asserts that zero value to spec.SchemaProvider.
+	if isNamed(t) && t.Kind() != reflect.Struct && t.Kind() != reflect.Interface {
+		if _, hoisted := defs[Name(t)]; hoisted {
+			return spec.Ref(Ref(t))
+		}
+		if p, ok := asSchemaProvider(t); ok {
+			if custom := p.AsyncAPISchema(); custom != nil {
+				defs[Name(t)] = custom
+				return spec.Ref(Ref(t))
+			}
+			// A nil schema means "derive as usual": for a non-struct that is an
+			// inline kind-based schema, so there is nothing to hoist.
+		}
 	}
 
 	switch t {
@@ -95,7 +116,7 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	case reflect.Map:
 		return &spec.Schema{Type: "object", AdditionalProperties: FromType(t.Elem(), defs)}
 	case reflect.Struct:
-		if t.Name() != "" && t.PkgPath() != "" {
+		if isNamed(t) {
 			return hoistStruct(t, defs)
 		}
 		return inlineStruct(t, defs)
@@ -105,11 +126,13 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	}
 }
 
-// hoistStruct registers t in defs (once) and returns a $ref to it. The schema
-// is pre-registered before filling so recursive types terminate.
+// isNamed reports whether t is a defined type with a stable fully-qualified
+// name (anonymous types have neither, and cannot be hoisted).
+func isNamed(t reflect.Type) bool { return t.Name() != "" && t.PkgPath() != "" }
+
 // asSchemaProvider detects a SchemaProvider on t or *t, mirroring
-// encoding/json's value-then-addressable rule. t must be a struct type
-// (pointers are dereferenced before this is called).
+// encoding/json's value-then-addressable rule. Pointers are dereferenced before
+// this is called, so t is never a pointer, but it may be of any kind.
 func asSchemaProvider(t reflect.Type) (spec.SchemaProvider, bool) {
 	if t.Implements(schemaProviderType) {
 		return reflect.New(t).Elem().Interface().(spec.SchemaProvider), true
@@ -120,6 +143,8 @@ func asSchemaProvider(t reflect.Type) (spec.SchemaProvider, bool) {
 	return nil, false
 }
 
+// hoistStruct registers t in defs (once) and returns a $ref to it. The schema
+// is pre-registered before filling so recursive types terminate.
 func hoistStruct(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	name := Name(t)
 	if _, ok := defs[name]; ok {

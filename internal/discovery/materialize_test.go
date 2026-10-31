@@ -47,9 +47,10 @@ func TestHarness(t *testing.T) {
 		assert.Contains(t, src, `pkg2 "example.com/c"`)
 		assert.Contains(t, src, `pkg3 "example.com/d"`)
 
-		// Refs are grouped by import path and rendered in order.
-		assert.Contains(t, src, "pkg2.T1{}, pkg2.T2{}")
-		assert.Contains(t, src, "pkg3.U1{}")
+		// Refs are grouped by import path and rendered in order. new(T) is used
+		// rather than T{} so a non-struct type (a named string, say) compiles.
+		assert.Contains(t, src, "new(pkg2.T1), new(pkg2.T2)")
+		assert.Contains(t, src, "new(pkg3.U1)")
 
 		// Catalog values are referenced by their import alias.
 		assert.Contains(t, src, "pkg0.Cat.ValidationErrors()")

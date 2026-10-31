@@ -145,7 +145,11 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	}
 
 	// Group Register call types by import path, preserving the sorted refs
-	// order so the harness output is deterministic.
+	// order so the harness output is deterministic. Each type is registered as
+	// new(T) rather than T{}: a composite literal is only valid for struct,
+	// array, slice and map types, so a combinator directive naming a non-struct
+	// type (e.g. a named string with a SchemaProvider) would not compile.
+	// schema.Register dereferences pointers, so new(T) registers T itself.
 	type regGroup struct {
 		path, alias string
 		types       []string
@@ -191,7 +195,7 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 		for _, g := range regGroups {
 			b.WriteString("\t\t")
 			for _, tn := range g.types {
-				fmt.Fprintf(&b, "%s.%s{}, ", g.alias, tn)
+				fmt.Fprintf(&b, "new(%s.%s), ", g.alias, tn)
 			}
 			b.WriteString("\n")
 		}
