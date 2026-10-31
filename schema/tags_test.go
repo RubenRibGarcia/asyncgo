@@ -49,6 +49,27 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
+			name: "should_apply_content_encoding",
+			tag:  "contentEncoding=base64url",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "base64url", s.ContentEncoding)
+			},
+		},
+		{
+			name: "should_apply_content_media_type",
+			tag:  "contentMediaType=image/png",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, "image/png", s.ContentMediaType)
+			},
+		},
+		{
+			name: "should_ignore_empty_content_media_type",
+			tag:  "contentMediaType=",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Empty(t, s.ContentMediaType)
+			},
+		},
+		{
 			name: "should_ignore_unknown_directives",
 			tag:  "unknown=xyz",
 			verify: func(t *testing.T, s *spec.Schema) {

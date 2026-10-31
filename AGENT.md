@@ -112,7 +112,7 @@ asyncgo/
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat, derived, bindings, bindings-unlisted — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
@@ -182,7 +182,7 @@ The version is the git tag — never stored in source.
 - **Testing**: `make test` must pass. The `test/integration` test is end-to-end
   and asserts three independent things for each `test/data/` fixture (`simple`,
   `allof`, `oneof`, `anyof`, `provider`, `security`, `reply`, `traits`,
-  `multiformat`, `derived`):
+  `multiformat`, `derived`, `bindings`, `bindings-unlisted`, `bytes`):
 
   1. **Golden** — the generator output reproduces the committed `asyncapi.yaml`
      exactly.

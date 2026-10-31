@@ -15,8 +15,8 @@ touchpoints in your code.
 
 Message payloads are derived from your Go structs via reflection. `json` tags
 drive field names; `asyncapi` tags carry `required`, `enum`, `examples`, `format`,
-and the `allOf`/`oneOf`/`anyOf` composition directives. Field descriptions are
-read from the field's doc comment.
+`contentEncoding`, `contentMediaType`, and the `allOf`/`oneOf`/`anyOf` composition
+directives. Field descriptions are read from the field's doc comment.
 
 ```go
 type OrderPlaced struct {
@@ -462,7 +462,12 @@ harness to materialize them (never executing your `main` package).
 - **Whitespace-separated directives** — `asyncapi:"required examples=1,000"`
   separates directives with spaces, so a value may itself contain a comma.
 - **Descriptions from comments** — a field's `description` is read from its doc
-  comment; `enum`, `examples`, and `format` still come from the `asyncapi` tag.
+  comment; `enum`, `examples`, `format`, `contentEncoding`, and `contentMediaType`
+  still come from the `asyncapi` tag.
+- **Binary fields** — a `[]byte` field derives to `type: string` with
+  `format: byte` and `contentEncoding: base64`, matching how `encoding/json`
+  marshals it. The media type is never derived: a Go type carries none, so set it
+  with `asyncapi:"contentMediaType=image/png"` when it is known.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
   inline types are inlined.
 - **Embedding** — embedded structs are flattened by default (matching

@@ -915,6 +915,24 @@ func TestValidationErrors(t *testing.T) {
 			want: "schema.Avro: multi format schema must not carry JSON Schema keyword(s): type",
 		},
 		{
+			// The content keywords are Draft-07, so a Multi Format body carrying one
+			// is rejected like any other JSON Schema keyword. jsonSchemaKeywords
+			// reflects over the struct and picks them up without an edit; this case
+			// pins that it still does.
+			name: "should_reject_content_encoding_on_a_multi_format_schema",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Avro", &spec.Schema{
+						SchemaFormat:    "application/vnd.apache.avro;version=1.9.0",
+						Schema:          map[string]any{"type": "record"},
+						ContentEncoding: "base64",
+					})),
+				)
+			},
+			want: "schema.Avro: multi format schema must not carry JSON Schema keyword(s): contentEncoding",
+		},
+		{
 			name: "should_reject_declared_name_colliding_with_hoisted_schema",
 			spec: func() *SpecResult {
 				fqn := schema.Name(reflect.TypeFor[OrderPlaced]())

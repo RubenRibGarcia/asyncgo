@@ -9,23 +9,26 @@ import (
 
 // applyTag applies the asyncapi struct tag to the schema. Supported directives:
 //
-//	required         (handled by the caller; ignored here)
-//	enum=a|b|c       enumerated string values
-//	examples=...     append one Draft-07 examples entry; repeatable
-//	format=...       JSON Schema format (e.g. "date-time", "uuid", "email")
-//	const=...        constant value
-//	discriminator=.. polymorphism property name
-//	minItems=N       array length bounds
+//	required             (handled by the caller; ignored here)
+//	enum=a|b|c           enumerated string values
+//	examples=...         append one Draft-07 examples entry; repeatable
+//	format=...           JSON Schema format (e.g. "date-time", "uuid", "email")
+//	contentEncoding=...  Draft-07 content encoding (e.g. "base64"); overriding it
+//	                     on a []byte field leaves the derived format=byte alone
+//	contentMediaType=... Draft-07 media type (e.g. "image/png"); never derived
+//	const=...            constant value
+//	discriminator=..     polymorphism property name
+//	minItems=N           array length bounds
 //	maxItems=N
-//	minProperties=N  object size bounds
+//	minProperties=N      object size bounds
 //	maxProperties=N
-//	readOnly         bare flags setting the matching boolean keyword
+//	readOnly             bare flags setting the matching boolean keyword
 //	writeOnly
 //	uniqueItems
 //	deprecated
-//	oneOf=A|B        (handled by the caller via combinatorNames; ignored here)
-//	anyOf=A|B        (handled by the caller via combinatorNames; ignored here)
-//	allOf=A|B        (handled by the caller via combinatorNames; ignored here)
+//	oneOf=A|B            (handled by the caller via combinatorNames; ignored here)
+//	anyOf=A|B            (handled by the caller via combinatorNames; ignored here)
+//	allOf=A|B            (handled by the caller via combinatorNames; ignored here)
 //
 // A malformed value — a non-numeric bound, an empty examples= — is ignored
 // rather than reported: the FromType/fillFields/applyTag chain returns no error,
@@ -64,6 +67,14 @@ func applyTag(s *spec.Schema, tag string) {
 			}
 		case strings.HasPrefix(part, "format="):
 			s.Format = strings.TrimPrefix(part, "format=")
+		case strings.HasPrefix(part, "contentEncoding="):
+			if v := strings.TrimPrefix(part, "contentEncoding="); v != "" {
+				s.ContentEncoding = v
+			}
+		case strings.HasPrefix(part, "contentMediaType="):
+			if v := strings.TrimPrefix(part, "contentMediaType="); v != "" {
+				s.ContentMediaType = v
+			}
 		case strings.HasPrefix(part, "const="):
 			if v := strings.TrimPrefix(part, "const="); v != "" {
 				s.Const = v

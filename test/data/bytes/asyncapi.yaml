@@ -1,0 +1,46 @@
+asyncapi: 3.1.0
+info:
+  title: Binary Payloads
+  version: 1.0.0
+  description: A payload whose byte slices derive to base64-encoded strings
+channels:
+  attachment-uploaded:
+    address: attachment-uploaded
+    messages:
+      github.com/RubenRibGarcia/asyncgo/test/data/bytes.Attachment:
+        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bytes.Attachment"
+    description: Emitted when an attachment is uploaded
+operations:
+  attachment-uploaded.send:
+    action: send
+    channel:
+      $ref: "#/channels/attachment-uploaded"
+    messages:
+    - $ref: "#/channels/attachment-uploaded/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bytes.Attachment"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/bytes.Attachment:
+      type: object
+      properties:
+        body:
+          type: string
+          description: Body is the raw file content, derived as base64.
+          format: byte
+          contentEncoding: base64
+        name:
+          type: string
+          description: Name is the attachment's file name.
+        thumbnail:
+          type: string
+          description: Thumbnail is a preview image, whose media type the Go type cannot carry.
+          format: byte
+          contentEncoding: base64
+          contentMediaType: image/png
+      required:
+      - name
+      - body
+  messages:
+    github.com/RubenRibGarcia/asyncgo/test/data/bytes.Attachment:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bytes.Attachment"
+      name: Attachment

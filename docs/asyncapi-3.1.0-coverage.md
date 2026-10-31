@@ -60,7 +60,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Components Object | 🟡 **12/19** | 🟡 | `schemas`, `messages`, `securitySchemes`, `replies`, `replyAddresses`, `correlationIds`, `operationTraits` and `messageTraits` are written; no builder for the rest ([§2](#2-components-object)) |
 | Reference Object | ✅ (`$ref` only) | 🟡 | correct shape for 3.1.0; `spec.Schema` and `spec.Message` carry a `$ref` field instead of a union type |
 | **Multi Format Schema Object** | ✅ | ✅ | — |
-| Schema Object | 🟡 Draft-07 + AsyncAPI keywords | 🟡 | all 23 keywords are modelled, but `contentEncoding`/`contentMediaType` are still missing ([§8 B17](#b17)); the structural ones (`if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `additionalItems`, `$id`, `$schema`, `$comment`, `externalDocs`) are authoring-only, and `additionalItems` is inert — see [§4](#4-schema-derivation) |
+| Schema Object | ✅ Draft-07 + AsyncAPI keywords | ✅ | all 25 keywords are modelled; the structural ones (`if`/`then`/`else`, `contains`, `propertyNames`, `patternProperties`, `dependencies`, `additionalItems`, `$id`, `$schema`, `$comment`, `externalDocs`) are authoring-only, and `additionalItems` is inert — see [§4](#4-schema-derivation) |
 | Security Scheme Object | ✅ 9/9 | ✅ | — |
 | OAuth Flows Object | ✅ 4/4 | ✅ | — |
 | OAuth Flow Object | ✅ 4/4 | ✅ | — |
@@ -198,7 +198,7 @@ library's differentiating feature and the area with the deepest coverage.
 | anonymous struct | inlined `object` | ✅ |
 | pointer | dereferenced | ✅ |
 | `time.Time` | `{type: string, format: date-time}` | ✅ hardcoded, not overridable |
-| `[]byte` | `{type: string, format: byte}` | ⚠️ see [B17](#b17--byte-encoding-format) |
+| `[]byte` | `{type: string, format: byte, contentEncoding: base64}` | ✅ see [B17](#b17--byte-encoding-format) |
 | `json.RawMessage` | `{}` | ✅ |
 | `interface`, `chan`, `func`, `complex`, `uintptr` | `{}` | ✅ |
 | recursive type | terminates (pre-registered) | ✅ |
@@ -616,15 +616,25 @@ implementation effort.
 
 #### B17 — `[]byte` encoding format
 
+- **Implemented** — [#28](https://github.com/RubenRibGarcia/asyncgo/issues/28):
+  `[]byte` derives to `{type: string, format: byte, contentEncoding: base64}` and
+  `spec.Schema` models `contentEncoding` plus `contentMediaType`, both settable
+  from `asyncapi` struct tags. The `test/data/bytes` fixture pins the derivation
+  end to end. The gap below overstated the defect: `byte` is not a JSON Schema
+  format, but it *is* an AsyncAPI-defined one (§Data Type Formats defines `byte`
+  as base64-encoded characters), so `format: byte` is kept and
+  `contentEncoding: base64` is added alongside it rather than substituted. Both
+  are Draft-07 annotations, so emitting both asserts nothing contradictory, and
+  the merged schema no longer depends on a consumer knowing AsyncAPI's format
+  table. `contentMediaType` is tag-only: a Go type carries no media type.
 - **Gap** — `[]byte` derives to `{type: string, format: byte}`. `byte` is not a
   defined JSON Schema format; `encoding/json` marshals `[]byte` as base64, which
-  Draft-07 spells `contentEncoding: base64` (optionally `contentMediaType`).
-  `contentEncoding` is not in `spec.Schema` today.
+  Draft-07 spells `contentEncoding: base64` (optionally with `contentMediaType`).
+  `contentEncoding` was not in `spec.Schema`.
 - **Spec** — Schema Object (`contentEncoding`, `contentMediaType`).
 - **Area** — `schema (struct -> JSON Schema)`, `spec (object model, codecs, bindings)`
-- **Acceptance** — `[]byte` derives to `contentEncoding: base64`; golden fixture.
-  Low risk, but verify against the AsyncAPI docs examples before changing, since
-  `format: byte` appears in some AsyncAPI-adjacent material.
+- **Acceptance** — met as a superset: `[]byte` derives to `contentEncoding: base64`
+  and keeps `format: byte`; `test/data/bytes` is the golden fixture.
 
 ## 9. Re-verifying
 
