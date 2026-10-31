@@ -204,7 +204,8 @@ library's differentiating feature and the area with the deepest coverage.
 | recursive type | terminates (pre-registered) | ✅ |
 | embedded struct | flattened, matching `encoding/json` | ✅ |
 | embedded struct, `asyncapi:"allOf"` | `allOf: [$ref, own]` | ✅ |
-| named non-struct (`type ID string`) | inlined; not hoisted, no provider hook | 🟡 |
+| named non-struct with `SchemaProvider` (`type ID string`) | hoisted under its FQN, referenced via `$ref` | ✅ see [B16](#b16--named-non-struct-types) |
+| named non-struct without a provider (`type ID string`) | inlined; not hoisted | 🟡 stays inline by design — implementing `SchemaProvider` is the opt-in |
 
 ### 4.2 Field rules
 
@@ -224,7 +225,7 @@ library's differentiating feature and the area with the deepest coverage.
 | malformed directive value (`minItems=abc`, `examples=`) | — | ❌ silently ignored; the derivation chain has no error channel ([§8 B7](#b7)) |
 | `asyncapi:"format=…"` | `format` | ✅ |
 | `asyncapi:"oneOf=A\|B"` / `anyOf` / `allOf` | `$ref` list, members auto-hoisted | ✅ |
-| `spec.SchemaProvider` | full schema override, hoisted as-is | ✅ struct types only |
+| `spec.SchemaProvider` | full schema override, hoisted as-is | ✅ any named type — struct or non-struct |
 
 ### 4.3 Not expressible
 
@@ -601,6 +602,21 @@ implementation effort.
 
 #### B16 — Named non-struct types
 
+- **Implemented** — [#27](https://github.com/RubenRibGarcia/asyncgo/issues/27):
+  a named non-struct implementing `spec.SchemaProvider` is hoisted under its
+  fully-qualified name and referenced via `$ref` from every use site, on both
+  value and pointer receivers, closing the gap that `asSchemaProvider` was only
+  consulted from `hoistStruct`. The provider check now also runs at the top of
+  `FromType` for named non-struct kinds; `reflect.Interface` is excluded because
+  its zero value is a nil interface, so `type P interface { AsyncAPISchema()
+  *Schema }` keeps deriving `{}` instead of panicking. A `nil` return keeps the
+  previous inline schema, and a named non-struct *without* a provider still
+  inlines — implementing the interface is the opt-in, so no existing document
+  changes. The harness now registers combinator-referenced types as `new(pkg.T)`
+  instead of `pkg.T{}`, because a composite literal is invalid for a non-struct,
+  which makes a non-struct provider usable as a `oneOf`/`anyOf`/`allOf` member.
+  The `test/data/provider` fixture pins both kinds end to end (`Money` struct,
+  `OrderID` named string).
 - **Gap** — `type OrderID string` is inlined at every use site rather than
   hoisted, so it cannot carry a reusable constraint. `asSchemaProvider` checks
   only struct types, so a named scalar or collection cannot override derivation

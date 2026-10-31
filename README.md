@@ -469,13 +469,17 @@ harness to materialize them (never executing your `main` package).
   marshals it. The media type is never derived: a Go type carries none, so set it
   with `asyncapi:"contentMediaType=image/png"` when it is known.
 - **Always hoist** named struct types into `components.schemas`; only anonymous
-  inline types are inlined.
+  inline types are inlined. A named non-struct is inlined too, unless it
+  implements `spec.SchemaProvider` (see **Custom types**).
 - **Embedding** — embedded structs are flattened by default (matching
   `encoding/json`); tag one with `asyncapi:"allOf"` to compose it instead.
 - **Union fields** — `asyncapi:"oneOf=A|B"`, `anyOf=A|B`, or `allOf=A|B` on a
   field emits `$ref`s to the named types, which are hoisted automatically.
-- **Custom types** — a named struct implementing `spec.SchemaProvider` overrides
-  derivation: its `AsyncAPISchema()` result is hoisted as-is.
+- **Custom types** — a named type implementing `spec.SchemaProvider` overrides
+  derivation: its `AsyncAPISchema()` result is hoisted under the type's
+  fully-qualified name as-is, and referenced via `$ref` from every use site. This
+  works for structs and for named non-structs alike — see **Custom schema
+  providers**.
 
 ## Schema composition
 
@@ -583,9 +587,45 @@ is the same keyword at the message level: when the payload is a `$ref` it writes
 the examples onto the referenced `components.schemas` entry, the only place JSON
 Schema applies them.
 
+Any named type can declare a provider, not only a struct. A named scalar or
+collection has no fields to reflect, so the point is the reusable constraint: the
+schema is declared once and every use site becomes a `$ref` instead of repeating
+an inline `{type: string}`.
+
+```go
+type OrderID string
+
+func (OrderID) AsyncAPISchema() *spec.Schema {
+ return &spec.Schema{Type: "string", Pattern: `^ord_[0-9]{6}$`}
+}
+
+type OrderPlaced struct {
+ OrderID OrderID `json:"order_id" asyncapi:"required"`
+}
+```
+
+```yaml
+# components.schemas (abridged):
+#   ...OrderID:
+#     type: string
+#     pattern: ^ord_[0-9]{6}$
+#   ...OrderPlaced:
+#     type: object
+#     properties:
+#       order_id:
+#         $ref: "#/components/schemas/github.com~1acme~1orders.OrderID"
+#     required:
+#     - order_id
+```
+
+A named type *without* a provider keeps deriving inline, so implementing the
+interface is the opt-in and existing documents do not change.
+
 `AsyncAPISchema` is invoked on a zero value, so it must describe the *type*
 (not an instance): be pure, deterministic, and panic-free. Return `nil` to fall
 back to reflection-derived derivation, or `&spec.Schema{}` for an explicitly
 unconstrained schema. Detection honors both value and pointer receivers, and a
 custom type referenced from a `oneOf`/`anyOf`/`allOf` field is hoisted
-automatically.
+automatically — including a non-struct member, which the generated harness
+registers as `new(T)` because a composite literal is only valid for struct,
+array, slice and map types.

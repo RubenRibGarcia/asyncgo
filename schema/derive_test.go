@@ -683,6 +683,235 @@ func TestSchemaProviderFinalize(t *testing.T) {
 	})
 }
 
+// Named non-struct providers (coverage doc §B16): a named scalar or collection
+// implementing spec.SchemaProvider is hoisted under its fully-qualified name
+// exactly like a named struct, so its constraint is reusable from every use site.
+
+// OrderID is a named string provider: the wire value is a constrained string.
+type OrderID string
+
+func (OrderID) AsyncAPISchema() *spec.Schema {
+	minLen := uint64(10)
+	return &spec.Schema{
+		Type:      "string",
+		Pattern:   `^ord_[0-9]{6}$`,
+		MinLength: &minLen,
+		Examples:  []any{"ord_000123"},
+	}
+}
+
+// Tick is a named integer whose wire form is a duration string. The provider is
+// on the pointer receiver, so detection must probe reflect.PointerTo.
+type Tick int64
+
+func (*Tick) AsyncAPISchema() *spec.Schema {
+	return &spec.Schema{Type: "string", Format: "duration"}
+}
+
+// Tags is a named slice provider.
+type Tags []string
+
+func (Tags) AsyncAPISchema() *spec.Schema {
+	return &spec.Schema{
+		Type:        "array",
+		Items:       &spec.Schema{Type: "string"},
+		UniqueItems: true,
+	}
+}
+
+// Labels is a named map provider.
+type Labels map[string]string
+
+func (Labels) AsyncAPISchema() *spec.Schema {
+	return &spec.Schema{
+		Type:                 "object",
+		AdditionalProperties: &spec.Schema{Type: "string"},
+	}
+}
+
+// NilStringProvider returns nil, so a non-struct must still derive inline.
+type NilStringProvider string
+
+func (NilStringProvider) AsyncAPISchema() *spec.Schema { return nil }
+
+// PlainID is a named non-struct control that does not implement the provider.
+type PlainID string
+
+// Providerish is an interface whose method set includes AsyncAPISchema. Its zero
+// value is a nil interface, so the provider probe must skip the kind rather than
+// assert nil and panic.
+type Providerish interface {
+	AsyncAPISchema() *spec.Schema
+}
+
+// NamedProviderHolder reaches the same non-struct provider twice, so the hoist
+// must happen once and every use site must be a $ref.
+type NamedProviderHolder struct {
+	Primary   OrderID `json:"primary"   asyncapi:"required"`
+	Secondary OrderID `json:"secondary"`
+}
+
+func TestFromTypeHoistsNamedNonStructProviders(t *testing.T) {
+	tests := []struct {
+		name   string
+		typ    reflect.Type
+		verify func(*testing.T, *spec.Schema, map[string]*spec.Schema)
+	}{
+		{
+			name: "should_hoist_named_string_provider",
+			typ:  reflect.TypeFor[OrderID](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				require.NotEmpty(t, s.Ref)
+				assert.Equal(t, Ref(reflect.TypeFor[OrderID]()), s.Ref)
+
+				custom := defs[Name(reflect.TypeFor[OrderID]())]
+				require.NotNil(t, custom)
+				assert.Equal(t, "string", custom.Type)
+				assert.Equal(t, `^ord_[0-9]{6}$`, custom.Pattern)
+				require.NotNil(t, custom.MinLength)
+				assert.Equal(t, uint64(10), *custom.MinLength)
+			},
+		},
+		{
+			name: "should_hoist_named_slice_provider",
+			typ:  reflect.TypeFor[Tags](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				assert.Equal(t, Ref(reflect.TypeFor[Tags]()), s.Ref)
+
+				custom := defs[Name(reflect.TypeFor[Tags]())]
+				require.NotNil(t, custom)
+				assert.Equal(t, "array", custom.Type)
+				assert.True(t, custom.UniqueItems)
+				require.NotNil(t, custom.Items)
+				assert.Equal(t, "string", custom.Items.Type)
+			},
+		},
+		{
+			name: "should_hoist_named_map_provider",
+			typ:  reflect.TypeFor[Labels](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				assert.Equal(t, Ref(reflect.TypeFor[Labels]()), s.Ref)
+
+				custom := defs[Name(reflect.TypeFor[Labels]())]
+				require.NotNil(t, custom)
+				require.NotNil(t, custom.AdditionalProperties)
+				assert.Equal(t, "string", custom.AdditionalProperties.Type)
+			},
+		},
+		{
+			name: "should_detect_pointer_receiver_on_named_non_struct",
+			typ:  reflect.TypeFor[Tick](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				assert.Equal(t, Ref(reflect.TypeFor[Tick]()), s.Ref)
+
+				custom := defs[Name(reflect.TypeFor[Tick]())]
+				require.NotNil(t, custom)
+				assert.Equal(t, "string", custom.Type)
+				assert.Equal(t, "duration", custom.Format)
+			},
+		},
+		{
+			name: "should_fall_back_to_inline_on_nil_provider",
+			typ:  reflect.TypeFor[NilStringProvider](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				assert.Empty(t, s.Ref)
+				assert.Equal(t, "string", s.Type)
+				assert.NotContains(t, defs, Name(reflect.TypeFor[NilStringProvider]()))
+			},
+		},
+		{
+			name: "should_leave_named_non_struct_inline_without_provider",
+			typ:  reflect.TypeFor[PlainID](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				assert.Empty(t, s.Ref)
+				assert.Equal(t, "string", s.Type)
+				assert.NotContains(t, defs, Name(reflect.TypeFor[PlainID]()))
+			},
+		},
+		{
+			name: "should_not_panic_on_interface_with_provider_method_set",
+			typ:  reflect.TypeFor[Providerish](),
+			verify: func(t *testing.T, s *spec.Schema, defs map[string]*spec.Schema) {
+				t.Helper()
+				assert.Empty(t, s.Type)
+				assert.Empty(t, s.Ref)
+				assert.NotContains(t, defs, Name(reflect.TypeFor[Providerish]()))
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defs := map[string]*spec.Schema{}
+			s := FromType(tc.typ, defs)
+			tc.verify(t, s, defs)
+		})
+	}
+}
+
+func TestFromTypeReferencesNamedNonStructProviderFromField(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+	s := FromType(reflect.TypeFor[NamedProviderHolder](), defs)
+
+	assert.Equal(t, Ref(reflect.TypeFor[NamedProviderHolder]()), s.Ref)
+
+	// Hoisted once, however many use sites reach it.
+	assert.Len(t, defs, 2)
+	require.Contains(t, defs, Name(reflect.TypeFor[OrderID]()))
+	assert.Equal(t, "string", defs[Name(reflect.TypeFor[OrderID]())].Type)
+
+	obj := defs[Name(reflect.TypeFor[NamedProviderHolder]())]
+	require.NotNil(t, obj)
+	require.Contains(t, obj.Properties, "primary")
+	require.Contains(t, obj.Properties, "secondary")
+	assert.Equal(t, Ref(reflect.TypeFor[OrderID]()), obj.Properties["primary"].Ref)
+	assert.Equal(t, Ref(reflect.TypeFor[OrderID]()), obj.Properties["secondary"].Ref)
+	assert.Equal(t, []string{"primary"}, obj.Required)
+}
+
+// NamedProviderUnion names a non-struct provider from a combinator directive, so
+// the harness must register a type a composite literal cannot express.
+type NamedProviderUnion struct {
+	ID any `json:"id" asyncapi:"oneOf=github.com/RubenRibGarcia/asyncgo/schema.OrderID"`
+}
+
+func TestSchemaProviderNonStructFinalize(t *testing.T) {
+	t.Run("should_hoist_registered_non_struct_provider", func(t *testing.T) {
+		Register(OrderID(""))
+		doc := spec.New()
+		Finalize(doc)
+
+		require.NotNil(t, doc.Components)
+		custom := doc.Components.Schemas[Name(reflect.TypeFor[OrderID]())]
+		require.NotNil(t, custom)
+		assert.Equal(t, "string", custom.Type)
+		assert.Equal(t, `^ord_[0-9]{6}$`, custom.Pattern)
+	})
+
+	t.Run("should_resolve_combinator_ref_to_non_struct_provider", func(t *testing.T) {
+		Register(NamedProviderUnion{}, OrderID(""))
+		doc := spec.New()
+		Finalize(doc)
+
+		require.NotNil(t, doc.Components)
+		holder := doc.Components.Schemas[Name(reflect.TypeFor[NamedProviderUnion]())]
+		require.NotNil(t, holder)
+
+		oneOf := holder.Properties["id"].OneOf
+		require.Len(t, oneOf, 1)
+		assert.Equal(t, Ref(reflect.TypeFor[OrderID]()), oneOf[0].Ref)
+
+		// The $ref resolves: the member schema exists in components.
+		assert.NotNil(t, doc.Components.Schemas[Name(reflect.TypeFor[OrderID]())])
+	})
+}
+
 // keywordTagged covers the Schema keywords that are derivable from a struct tag
 // (docs/designdoc/schema-keywords.md, D6). The keywords that need a schema or an
 // object — if/then/else, contains, propertyNames, patternProperties,
