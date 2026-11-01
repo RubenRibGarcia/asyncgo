@@ -91,6 +91,7 @@ func TestNoArgsShowsHelp(t *testing.T) {
 	assert.Contains(t, stdout, "Usage:")
 	assert.Contains(t, stdout, "generate")
 	assert.Contains(t, stdout, "check")
+	assert.Contains(t, stdout, "validate")
 }
 
 func TestUnknownCommand(t *testing.T) {
@@ -466,6 +467,113 @@ func TestCheckReadError(t *testing.T) {
 	_, _, err := execute(t, BuildInfo{}, "check", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reading ")
+}
+
+func TestValidate(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+
+	out, _, err := execute(t, BuildInfo{}, "validate", dir)
+	require.NoError(t, err)
+	assert.Contains(t, out, "produces a valid AsyncAPI 3.1.0 document")
+
+	// validate reads in memory: it must never write an artifact.
+	require.NoFileExists(t, filepath.Join(dir, "asyncapi.yaml"))
+	require.NoFileExists(t, filepath.Join(dir, "asyncapi.json"))
+}
+
+func TestValidateSchemaViolation(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+	writeCatalog(t, dir, schemaViolationCatalog)
+
+	_, _, err := execute(t, BuildInfo{}, "validate", dir)
+	require.Error(t, err)
+
+	// The schema key is the payload type's fully-qualified name, which contains
+	// "/" and is therefore escaped in the pointer.
+	assert.Contains(t, err.Error(), "document is not valid AsyncAPI 3.1.0")
+	assert.Contains(t, err.Error(), "/components/schemas/github.com~1")
+	assert.Contains(t, err.Error(), ".Bogus/type")
+	require.NoFileExists(t, filepath.Join(dir, "asyncapi.yaml"))
+}
+
+func TestValidateCatalogErrors(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copyFixture(t, "invalid")
+
+	_, _, err := execute(t, BuildInfo{}, "validate", dir)
+	require.Error(t, err)
+
+	// A catalog that breaks a DSL rule is reported by the DSL, not by the schema.
+	assert.Contains(t, err.Error(), "invalid AsyncAPI catalog(s): 1")
+	assert.Contains(t, err.Error(), "server.prod.host: is required")
+	assert.NotContains(t, err.Error(), "not valid AsyncAPI 3.1.0")
+}
+
+func TestValidateNoCatalogs(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "spec"))
+	require.NoError(t, err)
+
+	_, _, err = execute(t, BuildInfo{}, "validate", dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no AsyncAPI catalogs")
+}
+
+func TestValidateIgnoreMissingBindings(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copyFixture(t, "bindings-unlisted")
+
+	_, _, err := execute(t, BuildInfo{}, "validate", dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "/bindings")
+	assert.Contains(t, err.Error(), "mqtt5")
+
+	out, _, err := execute(t, BuildInfo{}, "validate", dir, "--ignore-missing-bindings")
+	require.NoError(t, err)
+	assert.Contains(t, out, "produces a valid AsyncAPI 3.1.0 document")
+}
+
+func TestValidateUndiscoverableDir(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+
+	_, _, err := execute(t, BuildInfo{}, "validate", missing)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "validating:")
+}
+
+// schemaViolationCatalog is a catalog whose payload declares a schema draft-07
+// rejects: "bogus" is not one of the JSON Schema type names.
+const schemaViolationCatalog = `package simple
+
+import (
+	"github.com/RubenRibGarcia/asyncgo"
+	"github.com/RubenRibGarcia/asyncgo/spec"
+)
+
+// Bogus declares an invalid JSON Schema.
+type Bogus struct{ X string }
+
+// AsyncAPISchema implements spec.SchemaProvider.
+func (Bogus) AsyncAPISchema() *spec.Schema { return &spec.Schema{Type: "bogus"} }
+
+// Catalog is the AsyncAPI description used to generate asyncapi.yaml.
+var Catalog = asyncgo.Spec(
+	asyncgo.Info("Orders Service", "1.0.0"),
+
+	asyncgo.Channels(
+		asyncgo.Channel("order-placed").
+			Send(asyncgo.Operation().
+				Message(asyncgo.MessageOf(Bogus{}).Name("Bogus"))),
+	),
+)
+`
+
+// writeCatalog replaces the fixture's catalog.go with source, keeping the copied
+// module (go.mod, go.sum, replace directive) intact.
+func writeCatalog(t *testing.T, dir, source string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "catalog.go"), []byte(source), 0o644))
 }
 
 // copySimpleFixture copies the simple test fixture into a fresh temp directory.

@@ -33,7 +33,7 @@ func newRootCmd(bi BuildInfo) *cobra.Command {
 		Version:      formatVersion(bi),
 	}
 	root.SetVersionTemplate("asyncgo {{.Version}}\n")
-	root.AddCommand(newGenerateCmd(), newCheckCmd(), newVersionCmd(bi))
+	root.AddCommand(newGenerateCmd(), newCheckCmd(), newValidateCmd(), newVersionCmd(bi))
 	return root
 }
 
