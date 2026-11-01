@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
+	"github.com/RubenRibGarcia/asyncgo/internal/validation"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
@@ -68,15 +69,32 @@ var cliUnsupported = map[string]string{
 		"published AsyncAPI 3.1.0 binding JSON Schemas omit, so the validator rejects them",
 }
 
+// schemaUnsupported lists the fixtures the in-process schema validation rejects
+// only because the published schema omits their protocol bindings. It is the
+// in-process counterpart of cliUnsupported, kept separate because the two
+// validators disagree: the CLI cannot parse Protobuf, which the schema accepts,
+// and the schema omits mqtt5/mercure, which the CLI also rejects.
+//
+// validateSchemaUnlessUnsupported skips only the strict assertion for these
+// fixtures and asserts that the exclusion is still needed — a document that
+// becomes valid without the flag fails the test instead of lingering.
+var schemaUnsupported = map[string]string{
+	"bindings-unlisted": "the published AsyncAPI 3.1.0 binding JSON Schemas omit mqtt5 and mercure",
+}
+
 // TestAsyncGoGenerate regenerates each test fixture's document, asserts it
 // matches the committed asyncapi.yaml, asserts the JSON encoding denotes the
-// same document, and validates both encodings with the real `asyncapi validate`
+// same document, validates it against the vendored AsyncAPI 3.1.0 schema
+// in-process, and validates both encodings with the real `asyncapi validate`
 // command from the AsyncAPI CLI running in a container.
 //
-// The golden comparison catches drift against the committed artifacts; the CLI
-// validation catches a document that is internally consistent but not valid
-// AsyncAPI — a failure mode the golden comparison cannot see, since a document
-// regenerated wrongly is compared against the wrongly regenerated artifact.
+// The golden comparison catches drift against the committed artifacts; the
+// schema and CLI validation catch a document that is internally consistent but
+// not valid AsyncAPI — a failure mode the golden comparison cannot see, since a
+// document regenerated wrongly is compared against the wrongly regenerated
+// artifact. The two validators are independent: the in-process one reports JSON
+// Pointers and runs offline, the CLI one proves a real toolchain accepts the
+// document.
 // When the generator output changes, regenerate with:
 //
 //	go run ./cmd/asyncgo generate ./test/data/<name>
@@ -88,6 +106,8 @@ func TestAsyncGoGenerate(t *testing.T) {
 
 			doc, _, err := discovery.Build(dir)
 			require.NoError(t, err)
+
+			validateSchemaUnlessUnsupported(t, name, doc)
 
 			got, err := doc.YAML()
 			require.NoError(t, err)
@@ -137,6 +157,45 @@ func TestAsyncGoGenerate(t *testing.T) {
 // artifact — by handing it to `asyncapi validate` in a container and asserting it
 // is accepted. The document name selects the parser, since the CLI reads the
 // format from the extension.
+// validateSchemaUnlessUnsupported validates the freshly generated document
+// against the vendored AsyncAPI 3.1.0 schema, in-process and offline.
+//
+// For a fixture the published schema cannot accept, it instead asserts that the
+// document is still rejected without --ignore-missing-bindings and accepted with
+// it, so the entry in schemaUnsupported fails the test once it is obsolete rather
+// than lingering unnoticed.
+func validateSchemaUnlessUnsupported(t *testing.T, name string, doc *spec.AsyncAPI) {
+	t.Helper()
+
+	reason, skip := schemaUnsupported[name]
+	if !skip {
+		assert.NoError(
+			t,
+			validation.Validate(doc, validation.Options{}),
+			"generated document is not valid AsyncAPI 3.1.0",
+		)
+		return
+	}
+
+	t.Logf("skipping strict schema validation for %s: %s", name, reason)
+
+	strict := validation.Validate(doc, validation.Options{})
+	require.Error(
+		t,
+		strict,
+		"asyncgo validate now accepts fixture %q without --ignore-missing-bindings; remove it from schemaUnsupported",
+		name,
+	)
+	assert.Contains(t, strict.Error(), "/bindings")
+
+	assert.NoError(
+		t,
+		validation.Validate(doc, validation.Options{IgnoreMissingBindings: true}),
+		"fixture %q must be valid once the omitted bindings are ignored",
+		name,
+	)
+}
+
 func validateDocument(t *testing.T, doc []byte, documentName string) {
 	t.Helper()
 
