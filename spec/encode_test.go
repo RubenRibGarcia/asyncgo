@@ -496,6 +496,83 @@ func TestEncodeReplyOmitsZeroFields(t *testing.T) {
 	assert.NotContains(t, string(out), "reply:")
 }
 
+// TestEncodeChannelParameters pins the Channel Parameters Object to the 3.1.0
+// Parameter shape: five string-valued fields, no 2.x `schema`, declaration order
+// preserved on the wire, and a zero-value parameter that emits no keys at all.
+func TestEncodeChannelParameters(t *testing.T) {
+	doc := New()
+	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+	doc.Channels = map[string]*Channel{
+		"users.{userId}": {
+			Address: "users.{userId}",
+			Parameters: map[string]*Parameter{
+				"userId": {
+					Enum:        []string{"u_1", "u_2"},
+					Default:     "u_1",
+					Description: "Id of the user.",
+					Examples:    []string{"u_1"},
+					Location:    "$message.payload#/userId",
+				},
+			},
+		},
+		// A parameter declaring nothing must not gain empty enum/examples keys:
+		// every field is omitempty, so the object collapses to {}.
+		"plain": {
+			Address:    "plain",
+			Parameters: map[string]*Parameter{"id": {}},
+		},
+	}
+
+	yamlOut, err := doc.YAML()
+	require.NoError(t, err)
+
+	// schema is a 2.x field that 3.1.0 removed; its reappearance would emit a
+	// parameter the specification does not define.
+	assert.NotContains(t, string(yamlOut), "schema:")
+
+	// Key order follows struct declaration order, which is the 3.1.0 fixed-field
+	// order. It matters because the committed fixtures are compared byte for
+	// byte.
+	userID := string(yamlOut)[strings.Index(string(yamlOut), "userId:"):]
+	previous := -1
+	for _, key := range []string{"enum:", "default:", "description:", "examples:", "location:"} {
+		at := strings.Index(userID, key)
+		require.NotEqualf(t, -1, at, "parameter must emit %q", key)
+		assert.Greaterf(t, at, previous, "%q must follow the previous field", key)
+		previous = at
+	}
+
+	var decoded AsyncAPI
+	require.NoError(t, yaml.Unmarshal(yamlOut, &decoded))
+	assert.Equal(t, &Parameter{
+		Enum:        []string{"u_1", "u_2"},
+		Default:     "u_1",
+		Description: "Id of the user.",
+		Examples:    []string{"u_1"},
+		Location:    "$message.payload#/userId",
+	}, decoded.Channels["users.{userId}"].Parameters["userId"])
+	assert.Equal(t, &Parameter{}, decoded.Channels["plain"].Parameters["id"])
+
+	jsonOut, err := doc.JSON()
+	require.NoError(t, err)
+	assert.Contains(
+		t,
+		string(jsonOut),
+		`"parameters":{"userId":{"enum":["u_1","u_2"],"default":"u_1",`+
+			`"description":"Id of the user.","examples":["u_1"],`+
+			`"location":"$message.payload#/userId"}}`,
+	)
+	assert.Contains(t, string(jsonOut), `"parameters":{"id":{}}`)
+
+	t.Run("should_decode_yaml_and_json_to_the_same_document", func(t *testing.T) {
+		var fromYAML, fromJSON AsyncAPI
+		require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
+		require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
+
+		assert.Equal(t, canonicalJSON(t, &fromYAML), canonicalJSON(t, &fromJSON))
+	})
+}
+
 // canonicalJSON renders v as JSON so two documents can be compared without
 // depending on which decoder produced their any-valued fields. Map keys are
 // sorted, so this comparison ignores key order inside an any-valued map: a
@@ -780,6 +857,15 @@ func TestStructFieldsMatchSpec(t *testing.T) {
 		"defaultContentType", "channels", "operations", "components",
 	}, specFields(t, AsyncAPI{}))
 	assert.Equal(t, []string{"name", "url"}, specFields(t, License{}))
+}
+
+// TestParameterFieldsMatchSpec pins Parameter to the 3.1.0 Parameter Object in
+// declaration order. `schema` is the 2.x shape 3.1.0 removed, so its return would
+// fail here before it reached the wire.
+func TestParameterFieldsMatchSpec(t *testing.T) {
+	assert.Equal(t, []string{
+		"enum", "default", "description", "examples", "location",
+	}, specFields(t, Parameter{}))
 }
 
 // multiFormatDoc returns a document whose only component is a Multi Format

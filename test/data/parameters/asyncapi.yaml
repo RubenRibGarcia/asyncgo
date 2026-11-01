@@ -1,0 +1,44 @@
+asyncapi: 3.1.0
+info:
+  title: Parameterized Users Service
+  version: 1.0.0
+  description: Per-user events addressed through a channel parameter
+channels:
+  users.{userId}:
+    address: users.{userId}
+    messages:
+      UserUpdated:
+        $ref: "#/components/messages/UserUpdated"
+    description: Per-user event stream
+    parameters:
+      userId:
+        enum:
+        - u_1
+        - u_2
+        default: u_1
+        description: Id of the user.
+        examples:
+        - u_1
+        - u_2
+        location: "$message.payload#/userId"
+operations:
+  users.{userId}.send:
+    action: send
+    channel:
+      $ref: "#/channels/users.{userId}"
+    messages:
+    - $ref: "#/channels/users.{userId}/messages/UserUpdated"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/parameters.UserUpdated:
+      type: object
+      properties:
+        userId:
+          type: string
+      required:
+      - userId
+  messages:
+    UserUpdated:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1parameters.UserUpdated"
+      name: UserUpdated

@@ -235,11 +235,16 @@ type MessageExample struct {
 	Payload any            `json:"payload,omitempty" yaml:"payload,omitempty"`
 }
 
-// Parameter describes a channel parameter.
+// Parameter describes a parameter included in a channel address. AsyncAPI 3.1.0
+// dropped the 2.x `schema`: a parameter is a string substitution into the
+// address, so the set of values it admits is expressed by Enum and Examples
+// rather than by a JSON Schema.
 type Parameter struct {
-	Description string  `json:"description,omitempty" yaml:"description,omitempty"`
-	Schema      *Schema `json:"schema,omitempty"      yaml:"schema,omitempty"`
-	Location    string  `json:"location,omitempty"    yaml:"location,omitempty"`
+	Enum        []string `json:"enum,omitempty"        yaml:"enum,omitempty"`
+	Default     string   `json:"default,omitempty"     yaml:"default,omitempty"`
+	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
+	Examples    []string `json:"examples,omitempty"    yaml:"examples,omitempty"`
+	Location    string   `json:"location,omitempty"    yaml:"location,omitempty"`
 }
 
 // CorrelationID identifies a message by a correlation value.

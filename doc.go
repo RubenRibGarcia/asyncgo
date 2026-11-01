@@ -1413,9 +1413,11 @@ func (c *channel) Servers(s ...*server) *channel {
 }
 
 // Parameter declares a channel parameter, which the address references as
-// {name}. Every Channel Address Expression in the address must have a
-// corresponding parameter, and every declared parameter must appear in the
-// address.
+// {name}. A parameter is a string substitution into the address, so the values
+// it admits are declared through spec.Parameter's Enum, Default, and Examples —
+// not through a schema, which 3.1.0 removed from the Parameter Object. Every
+// Channel Address Expression in the address must have a corresponding
+// parameter, and every declared parameter must appear in the address.
 func (c *channel) Parameter(name string, p spec.Parameter) *channel {
 	if c.s.Parameters == nil {
 		c.s.Parameters = map[string]*spec.Parameter{}

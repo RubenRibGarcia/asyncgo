@@ -42,6 +42,7 @@ var fixtures = []string{
 	"anyof",
 	"provider",
 	"security",
+	"parameters",
 	"reply",
 	"traits",
 	"multiformat",

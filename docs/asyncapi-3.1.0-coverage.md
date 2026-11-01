@@ -45,7 +45,7 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | Server Object | 🟡 9/12 | 🟡 | no `pathname`, `title`, `summary` |
 | Server Variable Object | ✅ 4/4 | ✅ | — |
 | Channels Object | ✅ | ✅ | — |
-| Channel Object | 🟡 9/10 | 🟡 | no `summary`; `parameters` is 🟠; `address` cannot be `null` |
+| Channel Object | 🟡 9/10 | ✅ | no `summary`; `address` cannot be `null` |
 | Messages Object | ✅ | ✅ | channel `messages` entries are `$ref`s to `components.messages`; the key is the authored name, or the payload type's fully-qualified name when unpinned; a key carrying different content is a validation error |
 | Operations Object | ✅ | 🟡 | key is auto-derived `${address}.${action}`; a second `Send`/`Receive` on one channel overwrites |
 | Operation Object | ✅ 12/12 | ✅ | — |
@@ -65,8 +65,8 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 | OAuth Flows Object | ✅ 4/4 | ✅ | — |
 | OAuth Flow Object | ✅ 4/4 | ✅ | — |
 | Server Bindings Object | ✅ map | ✅ | 20 of 20 protocols modelled; 18 are in the published 3.1.0 schema ([§3](#3-bindings-protocols)) |
-| Parameters Object | ✅ | ❌ | 🟠 — modeled, no builder |
-| Parameter Object | 🟡 **wrong shape** | ❌ | models `schema`, which 3.1.0 removed; missing `enum`, `default`, `examples` |
+| Parameters Object | ✅ | ✅ | — |
+| Parameter Object | ✅ 5/5 | ✅ | — |
 | Channel Bindings Object | ✅ map | ✅ | 18 of 20 (mqtt5 and ros2 define no channel binding) |
 | Operation Bindings Object | ✅ map | ✅ | 18 of 20 (mqtt5 and pulsar define no operation binding) |
 | Message Bindings Object | ✅ map | ✅ | 17 of 20 (mqtt5, pulsar, and ros2 define no message binding) |
@@ -102,7 +102,12 @@ that is only in `spec/*.go` is not reachable by a user writing a catalog.
 The four modeled-but-unpopulated maps (`servers`, `channels`, `operations`,
 `parameters`) exist only so `Merge()` can union them across catalogs
 (`internal/discovery/merge.go`); nothing in the DSL or the generator ever writes
-them. `components.schemas` is filled by `builder.components()` (`doc.go`) and
+them. That is true of `components.parameters` even after
+[B6](#b6--correct-and-expose-the-parameter-object):
+`Channel.Parameter(...)` writes the parameter under the channel that uses it,
+which is where a Channel Address Expression resolves it, and no builder hoists
+it into components. `components.schemas` is filled by `builder.components()`
+(`doc.go`) and
 `schema.Finalize` (`schema/registry.go`), `components.messages` by the message
 hoisting in `channel.apply` (`doc.go`), `components.securitySchemes` by the
 `SecuritySchemes(...)` item's `apply` (`doc.go`), `components.replies` /
@@ -282,13 +287,15 @@ post-pass, and surface as a per-catalog `discovery.CatalogErrors` report.
 
 ## 7. Spec deviations
 
-Fields the model carries that AsyncAPI 3.1.0 does not define. Harmless today
-because no builder sets them, but they would emit non-conformant output if
-populated.
+Fields the model carries that AsyncAPI 3.1.0 does not define.
 
-| Field | Reality |
-| --- | --- |
-| `Parameter.Schema` | 3.1.0 `Parameter` is `enum`, `default`, `description`, `examples`, `location` (this is a 2.x shape). |
+**None.** The last one, `Parameter.Schema`, was removed by
+[#17](https://github.com/RubenRibGarcia/asyncgo/issues/17): 3.1.0's Parameter
+Object is `enum`, `default`, `description`, `examples`, `location`, and `schema`
+was the 2.x shape. It was deleted rather than deprecated — a breaking change to
+a pre-1.0 surface, kept loud by `TestParameterFieldsMatchSpec` and
+`TestEncodeChannelParameters`, which assert both the field set and that no
+`schema` key can reach the wire.
 
 `Schema.Example` was a second deviation until [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18): 3.1.0's Schema Object defines only the Draft-07 `examples` array, never a singular `example`. The field and its `asyncapi:"example=…"` directive were removed rather than deprecated, which was a breaking change to a pre-1.0 surface — see [ADR 0006](adr/0006-schema-keywords.md). Because `applyTag` ignores an unrecognised directive, a stale `example=` tag is now silently dropped; making that loud is tracked as follow-up work in the design doc (O2).
 
@@ -432,10 +439,22 @@ implementation effort.
 
 #### B6 — Correct and expose the Parameter Object
 
-- **Gap** — `spec.Parameter` models `schema`, which 3.1.0 removed, and omits
-  `enum`, `default`, `examples`. `Channel.Parameters` has no builder, so channel
-  parameters can never be emitted even though address expressions are the
-  documented way to describe dynamic channels.
+- **Implemented** — [#17](https://github.com/RubenRibGarcia/asyncgo/issues/17):
+  `spec.Parameter` is the 3.1.0 shape — `enum`, `default`, `description`,
+  `examples`, `location`, all string-valued, no `schema` — and the builder half
+  landed earlier in [#22](https://github.com/RubenRibGarcia/asyncgo/issues/22)
+  (`(*channel).Parameter` plus the address-expression cross-check). The
+  `test/data/parameters` fixture commits a golden with
+  `address: users.{userId}`, one parameter exercising all five fields, so the
+  object is now proven end to end rather than merely modeled. Removal of the 2.x
+  `schema` field is a breaking change to a pre-1.0 surface, taken deliberately
+  for the same reason as `Schema.Example` in [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18).
+- **Gap** — none for the Parameter Object itself. `components.parameters` stays
+  modeled-but-unpopulated (see [§2](#2-components-object)), and a parameter's
+  `$ref` form is still unexpressible: `Channel.parameters` is
+  `map[string]*Parameter`, not the 3.1.0
+  `Parameter Object | Reference Object` union. Both belong to the Components
+  builders ([B5](#b5--complete-the-components-object), [B13](#b13--builders-for-modeled-but-unreachable-objects)).
 - **Spec** — Parameter Object (`enum`, `default`, `description`, `examples`,
   `location`), Parameters Object, `Channel.address` expressions.
 - **Area** — `spec (object model, codecs, bindings)`, `dsl (root package: doc.go, message.go, bindings.go)`
@@ -492,8 +511,9 @@ implementation effort.
   the three fields are gone from `spec`. `spec.AsyncAPI` now carries exactly the
   eight 3.1.0 root fields and `spec.License` exactly `name` + `url`, pinned by
   `TestStructFieldsMatchSpec` (field sets) and `TestEncodeOmitsNonSpecFields`
-  (wire format). `Parameter.Schema` is deliberately out of scope here and stays
-  with [B6](#b6--correct-and-expose-the-parameter-object).
+  (wire format). `Parameter.Schema` was deliberately out of scope here and stayed
+  with [B6](#b6--correct-and-expose-the-parameter-object), which removed it in
+  [#17](https://github.com/RubenRibGarcia/asyncgo/issues/17).
 - **Gap** — `AsyncAPI.Tags`, `AsyncAPI.ExternalDocs`, and `License.Identifier`
   are modeled but are not 3.1.0 fields.
 - **Spec** — AsyncAPI Object (8 fields), License Object (`name`, `url`).

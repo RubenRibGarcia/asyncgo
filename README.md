@@ -136,21 +136,38 @@ var Catalog = asyncgo.Spec(
 
 ### Channel parameters
 
-An address may carry a Channel Address Expression — `orders/{orderId}` — and
-each expression needs a matching declared parameter. Declare it on the channel:
+An address may carry a Channel Address Expression — `users.{userId}` — and
+each expression needs a matching declared parameter. A parameter is a string
+substitution into the address, so its allowed values come from `enum`,
+`default`, and `examples` — 3.1.0 has no `schema` on a parameter. Declare it on
+the channel:
 
 ```go
-asyncgo.Channel("orders/{orderId}").
- Parameter("orderId", spec.Parameter{Description: "The order id"})
+asyncgo.Channel("users.{userId}").
+ Parameter("userId", spec.Parameter{
+  Enum:        []string{"u_1", "u_2"},
+  Default:     "u_1",
+  Description: "Id of the user.",
+  Examples:    []string{"u_1", "u_2"},
+  Location:    "$message.payload#/userId",
+ })
 ```
 
 ```yaml
 # channels:
-#   orders/{orderId}:
-#     address: orders/{orderId}
+#   users.{userId}:
+#     address: users.{userId}
 #     parameters:
-#       orderId:
-#         description: The order id
+#       userId:
+#         enum:
+#           - u_1
+#           - u_2
+#         default: u_1
+#         description: Id of the user.
+#         examples:
+#           - u_1
+#           - u_2
+#         location: $message.payload#/userId
 ```
 
 Both directions are checked: an expression with no declared parameter, and a
