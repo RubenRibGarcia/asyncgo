@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -63,6 +64,7 @@ func Spec(items ...Item) *SpecResult {
 	errs = append(errs, b.validateSecurityRefs()...)
 	errs = append(errs, b.validateReplyRefs()...)
 	errs = append(errs, b.validateMessageRefs()...)
+	errs = append(errs, b.validateOperationMessages()...)
 	errs = append(errs, b.validateTraitRefs()...)
 	errs = append(errs, b.validateSchemaNodes()...)
 	if len(b.defs) > 0 {
@@ -80,6 +82,43 @@ func (b *builder) components() *spec.Components {
 		b.doc.Components.Schemas = map[string]*spec.Schema{}
 	}
 	return b.doc.Components
+}
+
+// componentKeyPattern is the key pattern the AsyncAPI 3.1.0 schema applies to
+// every components.* map, where it is expressed as patternProperties. A key that
+// does not match is therefore not rejected by a downstream validator — the
+// schema constrains keys this way rather than with additionalProperties: false
+// — so this check is the only place the constraint is enforced, the same
+// situation validateReplyRefs documents for the address/channel MUST.
+const componentKeyPatternSrc = `^[\w\d.\-_]+$`
+
+var componentKeyPattern = regexp.MustCompile(componentKeyPatternSrc)
+
+// validateKey reports a component key that does not match the specification's
+// pattern. kind names the component map ("schema", "securityScheme", ...) so
+// the message names the offending object. Keys derived from a Go type's fully
+// qualified name are never passed here: they carry the package path, whose
+// separators the pattern rejects, and that kept deviation is recorded under B11
+// in docs/asyncapi-3.1.0-coverage.md.
+func validateKey(kind, name string) error {
+	if componentKeyPattern.MatchString(name) {
+		return nil
+	}
+	return fmt.Errorf("%s.%s: name must match %s", kind, name, componentKeyPatternSrc)
+}
+
+// appendKeyError appends the key-pattern violation of an authored component
+// name, if any, so each component apply runs the check in one line. An empty
+// name is left to the caller's required-field check, so a single mistake is not
+// reported twice.
+func appendKeyError(errs []error, kind, name string) []error {
+	if name == "" {
+		return errs
+	}
+	if err := validateKey(kind, name); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
 }
 
 // validateServerRefs checks that every channel server reference points at a
@@ -290,6 +329,60 @@ func (b *builder) validateMessageRefs() []error {
 					address,
 					key,
 					name,
+				))
+			}
+		}
+	}
+
+	return errs
+}
+
+// validateOperationMessages checks that every message an operation references is
+// one the operation's channel actually carries: the specification requires
+// operation.messages to be a subset of channel.messages. It is a post-pass for
+// the same reason as validateServerRefs, and it enforces a MUST no downstream
+// validator can catch — the constraint relates two objects, which a JSON Schema
+// cannot express.
+func (b *builder) validateOperationMessages() []error {
+	const channelsPrefix = "#/channels/"
+
+	var errs []error
+	// Keys are walked in sorted order so the joined error message is stable:
+	// SpecResult.Err is compared by exact string in tests.
+	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
+		op := b.doc.Operations[key]
+		if op == nil || op.Channel == nil {
+			continue
+		}
+		address := jsonpointer.Unescape(strings.TrimPrefix(op.Channel.Ref, channelsPrefix))
+		ch := b.doc.Channels[address]
+		if ch == nil {
+			// Out of scope: channel.apply always points an operation at the
+			// channel it registers, so a dangling channel reference cannot arise
+			// from the DSL.
+			continue
+		}
+		prefix := channelsPrefix + jsonpointer.Escape(address) + "/messages/"
+		for _, msg := range op.Messages {
+			if msg == nil {
+				continue
+			}
+			if !strings.HasPrefix(msg.Ref, prefix) {
+				errs = append(errs, fmt.Errorf(
+					"operation.%s: message %q is not in channel %q",
+					key,
+					msg.Ref,
+					address,
+				))
+				continue
+			}
+			name := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
+			if _, ok := ch.Messages[name]; !ok {
+				errs = append(errs, fmt.Errorf(
+					"operation.%s: message %q is not in channel %q",
+					key,
+					msg.Ref,
+					address,
 				))
 			}
 		}
@@ -714,6 +807,7 @@ func (s *securityScheme) apply(b *builder) error {
 	if s.name == "" {
 		errs = append(errs, fmt.Errorf("securityScheme.name: is required"))
 	}
+	errs = appendKeyError(errs, "securityScheme", s.name)
 	if s.s.Type == "" {
 		errs = append(errs, fmt.Errorf("securityScheme.%s.type: is required", s.name))
 	}
@@ -916,6 +1010,7 @@ func (t *operationTrait) apply(b *builder) error {
 	if t.name == "" {
 		errs = append(errs, fmt.Errorf("operationTrait.name: is required"))
 	}
+	errs = appendKeyError(errs, "operationTrait", t.name)
 	c := b.components()
 	if c.OperationTraits == nil {
 		c.OperationTraits = map[string]*spec.OperationTrait{}
@@ -1014,6 +1109,7 @@ func (t *messageTrait) apply(b *builder) error {
 	if t.name == "" {
 		errs = append(errs, fmt.Errorf("messageTrait.name: is required"))
 	}
+	errs = appendKeyError(errs, "messageTrait", t.name)
 	switch {
 	case t.t.CorrelationID != nil && t.correlationIDFrom != nil:
 		errs = append(errs, fmt.Errorf(
@@ -1076,6 +1172,7 @@ func (d *schemaDecl) apply(b *builder) error {
 	if d.name == "" {
 		errs = append(errs, fmt.Errorf("schema.name: is required"))
 	}
+	errs = appendKeyError(errs, "schema", d.name)
 	if d.s == nil {
 		errs = append(errs, fmt.Errorf("schema.%s: is required", d.name))
 	}
@@ -1122,6 +1219,7 @@ func (c *correlationID) apply(b *builder) error {
 	if c.name == "" {
 		errs = append(errs, fmt.Errorf("correlationId.name: is required"))
 	}
+	errs = appendKeyError(errs, "correlationId", c.name)
 	if c.c.Location == "" {
 		errs = append(errs, fmt.Errorf("correlationId.%s.location: is required", c.name))
 	}
@@ -1172,6 +1270,7 @@ func (a *replyAddress) apply(b *builder) error {
 	if a.name == "" {
 		errs = append(errs, fmt.Errorf("replyAddress.name: is required"))
 	}
+	errs = appendKeyError(errs, "replyAddress", a.name)
 	if a.a.Location == "" {
 		errs = append(errs, fmt.Errorf("replyAddress.%s.location: is required", a.name))
 	}
@@ -1242,6 +1341,7 @@ func (r *reply) apply(b *builder) error {
 	if r.name == "" {
 		errs = append(errs, fmt.Errorf("reply.name: is required"))
 	}
+	errs = appendKeyError(errs, "reply", r.name)
 	c := b.components()
 	if c.Replies == nil {
 		c.Replies = map[string]*spec.OperationReply{}
@@ -1312,6 +1412,58 @@ func (c *channel) Servers(s ...*server) *channel {
 	return c
 }
 
+// Parameter declares a channel parameter, which the address references as
+// {name}. Every Channel Address Expression in the address must have a
+// corresponding parameter, and every declared parameter must appear in the
+// address.
+func (c *channel) Parameter(name string, p spec.Parameter) *channel {
+	if c.s.Parameters == nil {
+		c.s.Parameters = map[string]*spec.Parameter{}
+	}
+	c.s.Parameters[name] = &p
+	return c
+}
+
+// channelAddressExpression matches a Channel Address Expression, {name}, inside
+// a channel address.
+var channelAddressExpression = regexp.MustCompile(`\{([^{}]+)\}`)
+
+// validateParameters checks a channel's address expressions against the
+// parameters it declares. A channel with neither is silent, so an ordinary
+// address costs nothing.
+func (c *channel) validateParameters() []error {
+	if c.address == "" {
+		return nil
+	}
+
+	var errs []error
+	used := map[string]bool{}
+	for _, expr := range channelAddressExpression.FindAllStringSubmatch(c.address, -1) {
+		name := expr[1]
+		if _, ok := c.s.Parameters[name]; !ok {
+			errs = append(errs, fmt.Errorf(
+				"channel.%s: address expression {%s} has no declared parameter",
+				c.address,
+				name,
+			))
+			continue
+		}
+		used[name] = true
+	}
+	// Parameters are walked in sorted order so the joined error message is
+	// stable: SpecResult.Err is compared by exact string in tests.
+	for _, name := range slices.Sorted(maps.Keys(c.s.Parameters)) {
+		if !used[name] {
+			errs = append(errs, fmt.Errorf(
+				"channel.%s: parameter %q is not used in the address",
+				c.address,
+				name,
+			))
+		}
+	}
+	return errs
+}
+
 // Send attaches a send operation to the channel.
 func (c *channel) Send(op *operation) *channel {
 	op.action = spec.ActionSend
@@ -1331,6 +1483,7 @@ func (c *channel) apply(b *builder) error {
 	if c.address == "" {
 		errs = append(errs, fmt.Errorf("channel.address: is required"))
 	}
+	errs = append(errs, c.validateParameters()...)
 	if b.doc.Channels == nil {
 		b.doc.Channels = map[string]*spec.Channel{}
 	}
@@ -1366,6 +1519,10 @@ func (c *channel) apply(b *builder) error {
 				continue
 			}
 			key := messageKey(m)
+			// The key becomes the message's components.messages key, which the
+			// specification patterns. A key derived from the payload type's fully
+			// qualified name is exempt: appendKeyError skips an unauthored name.
+			errs = appendKeyError(errs, "message", m.name)
 			entry, err := hoistMessage(b, key, "channel."+c.address, sm)
 			if err != nil {
 				errs = append(errs, err)
@@ -1383,7 +1540,15 @@ func (c *channel) apply(b *builder) error {
 				),
 			})
 		}
-		b.doc.Operations[c.address+"."+op.action] = specOp
+		// An operation's map key is <channel>.<action>, so a second Send/Receive on
+		// the same channel would overwrite the first silently. The guard mirrors
+		// the sibling duplicate checks: report it and keep the first entry.
+		opKey := c.address + "." + op.action
+		if _, dup := b.doc.Operations[opKey]; dup && c.address != "" {
+			errs = append(errs, fmt.Errorf("operation.%s: duplicate action", opKey))
+		} else {
+			b.doc.Operations[opKey] = specOp
+		}
 	}
 	return errors.Join(errs...)
 }

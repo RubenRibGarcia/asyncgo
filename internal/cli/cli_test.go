@@ -410,6 +410,20 @@ func TestGenerateValidationError(t *testing.T) {
 	assert.Contains(t, err.Error(), "test/data/invalid.Catalog:")
 	assert.Contains(t, err.Error(), "server.prod.host: is required")
 	assert.Contains(t, err.Error(), `channel.order-placed: references unknown server "staging"`)
+	assert.Contains(t, err.Error(), "securityScheme.oauth basic: name must match ^[\\w\\d.\\-_]+$")
+	assert.Contains(
+		t,
+		err.Error(),
+		"channel.orders/{orderId}: address expression {orderId} has no declared parameter",
+	)
+	assert.Contains(t, err.Error(), "operation.orders.send: duplicate action")
+	assert.Contains(t, err.Error(), "channel.orders-shipped: duplicate address")
+	assert.Contains(
+		t,
+		err.Error(),
+		`operation.orders-shipped.receive: message `+
+			`"#/channels/orders-shipped/messages/OrderShipped" is not in channel "orders-shipped"`,
+	)
 }
 
 func TestCheckOutOfDate(t *testing.T) {

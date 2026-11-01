@@ -29,7 +29,12 @@ func (e CatalogErrors) Error() string {
 	for _, c := range e {
 		fmt.Fprintf(&b, "\n%s.%s:\n", c.PkgPath, c.VarName)
 		for _, msg := range c.Errors {
-			fmt.Fprintf(&b, "  - %s\n", msg)
+			// A message may carry a multi-error: an Item that reports several
+			// violations joins them into one entry. Bullet every line, so each
+			// violation reads as its own item.
+			for _, line := range strings.Split(msg, "\n") {
+				fmt.Fprintf(&b, "  - %s\n", line)
+			}
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")

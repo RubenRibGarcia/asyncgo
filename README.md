@@ -85,11 +85,16 @@ The component key is the message's identity, and it is also the channel's
 message id. A name you set — `MessageFrom("Name", ...)` or
 `MessageOf(T{}).Name("Name")` — is that key; an unpinned `MessageOf` derives it
 from the payload type's fully-qualified name, so `Name(...)` is how you keep the
-key short. Two channels carrying the same message share one component, while the
-same key carrying different content is a catalog validation error. Operations
-and replies keep pointing at `#/channels/<id>/messages/<key>` rather than at
-`components.messages`: the specification requires their `messages` to be a
-subset of the messages defined in the referenced channel.
+key short. A key you set must match `^[\w\d\.\-_]+$` — the pattern the
+specification applies to every `components.*` map — while a key derived from the
+fully-qualified name is exempt: the package separators it carries cannot match
+that pattern. Two channels carrying the same message share one component, while
+the same key carrying different content is a catalog validation error.
+Operations and replies keep pointing at `#/channels/<id>/messages/<key>` rather
+than at `components.messages`: the specification requires their `messages` to be
+a subset of the messages defined in the referenced channel. An operation's key
+is `<channel>.<action>`, so a second `Send` on one channel is a catalog
+validation error rather than a silent overwrite.
 
 `Message.PayloadExamples(...)` attaches the Draft-07 `examples` array to the
 payload schema. Because a payload is a `$ref` and JSON Schema does not apply
@@ -128,6 +133,28 @@ var Catalog = asyncgo.Spec(
 #   servers:
 #     - $ref: '#/servers/prod'
 ```
+
+### Channel parameters
+
+An address may carry a Channel Address Expression — `orders/{orderId}` — and
+each expression needs a matching declared parameter. Declare it on the channel:
+
+```go
+asyncgo.Channel("orders/{orderId}").
+ Parameter("orderId", spec.Parameter{Description: "The order id"})
+```
+
+```yaml
+# channels:
+#   orders/{orderId}:
+#     address: orders/{orderId}
+#     parameters:
+#       orderId:
+#         description: The order id
+```
+
+Both directions are checked: an expression with no declared parameter, and a
+declared parameter the address never uses, are catalog validation errors.
 
 ### Protocol bindings
 

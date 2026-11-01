@@ -272,10 +272,10 @@ post-pass, and surface as a per-catalog `discovery.CatalogErrors` report.
 | duplicate channel address | ✅ |
 | channel `servers` `$ref` resolves to a declared server | ✅ post-pass in `builder.validateServerRefs` |
 | `MessageOf(nil)` guarded | ✅ |
-| key pattern `^[A-Za-z0-9_\-]+$` (server, channel, message, component keys) | ❌ |
-| `operation.messages` ⊆ channel `messages` | ❌ |
-| channel address expressions `{p}` ↔ declared `parameters` | ❌ |
-| operation map-key collision (a second `Send`/`Receive` on one channel overwrites) | ❌ |
+| key pattern `^[\w\d\.\-_]+$` on authored `components.*` keys | ✅ `builder.validateKey`; a key derived from a Go FQN is exempt |
+| `operation.messages` ⊆ channel `messages` | ✅ post-pass in `builder.validateOperationMessages` |
+| channel address expressions `{p}` ↔ declared `parameters` | ✅ `Channel.Parameter` plus `(*channel).validateParameters` |
+| operation map-key collision (a second `Send`/`Receive` on one channel overwrote) | ✅ reported; the first entry is kept |
 | message component-key collision (same key, different content) | ✅ `hoistMessage` rejects it; identical content is shared |
 | required-field presence per object, beyond the checks above | ❌ |
 | spec-conformance of the final document (schema validation) | ❌ |
@@ -519,10 +519,28 @@ implementation effort.
 
 #### B11 — Extend DSL validation
 
-- **Gap** — No checks for the `^[A-Za-z0-9_\-]+$` key pattern (servers, channels,
-  messages, component keys), `operation.messages ⊆ channel.messages`, address
-  expressions versus declared parameters, or operation/message map-key
-  collisions (which silently overwrite today).
+- **Implemented** — [#22](https://github.com/RubenRibGarcia/asyncgo/issues/22):
+  the key pattern on authored `components.*` keys (`builder.validateKey`), the
+  `operation.messages` subset post-pass (`builder.validateOperationMessages`),
+  `Channel.Parameter(...)` with the address-expression check in
+  `(*channel).validateParameters`, and the operation map-key collision, now an
+  error that keeps the first entry. Four corrections came out of it. The pattern
+  is `^[\w\d\.\-_]+$` — dots allowed — not the `^[A-Za-z0-9_\-]+$` first
+  recorded here. It lives in `patternProperties` on `components.*` maps only, so
+  `channels` keys (addresses), `servers` keys and `channel.messages` keys carry
+  none, and because it is `patternProperties` rather than
+  `additionalProperties: false`, a downstream validator accepts a violating key
+  — the DSL check is the only enforcement. Keys derived from a Go type's fully
+  qualified name therefore stay exempt: they keep the `pkgPath.TypeName` form
+  that the pattern rejects, and that deviation remains open. The subset rule has
+  one reachable shape — a duplicate channel address whose second declaration
+  uses a different action — which is what the fixture pins. Separately,
+  `CatalogErrors.Error()` now bullets every line of a joined message, so a
+  multi-violation item reads as several items.
+- **Gap** — No checks for the key pattern on the patterned fields,
+  `operation.messages ⊆ channel.messages`, address expressions versus declared
+  parameters, or operation/message map-key collisions (which silently
+  overwrote).
 - **Spec** — patterned-field constraints; `Operation.messages`;
   `Channel.parameters`.
 - **Area** — `dsl (root package: doc.go, message.go, bindings.go)`, `internal/discovery (catalog discovery + materialization)`

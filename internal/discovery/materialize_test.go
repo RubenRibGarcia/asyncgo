@@ -78,4 +78,22 @@ func TestCatalogErrorsError(t *testing.T) {
 			errs.Error(),
 		)
 	})
+
+	t.Run("should_bullet_every_line_of_a_joined_message", func(t *testing.T) {
+		errs := CatalogErrors{
+			{
+				PkgPath: "example.com/app",
+				VarName: "Catalog",
+				Errors: []string{
+					"channel.orders: duplicate address\noperation.orders.send: duplicate action",
+				},
+			},
+		}
+		assert.Equal(
+			t,
+			"invalid AsyncAPI catalog(s): 1\n\nexample.com/app.Catalog:\n"+
+				"  - channel.orders: duplicate address\n  - operation.orders.send: duplicate action",
+			errs.Error(),
+		)
+	})
 }
