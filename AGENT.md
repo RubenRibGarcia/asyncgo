@@ -323,7 +323,7 @@ All commits must follow the
 | ---------- | --------------------------------------------------------- |
 | `spec`     | `spec/` — object model, codecs, bindings                |
 | `schema`   | `schema/` — struct → JSON Schema reflection               |
-| `dsl`      | root package — fluent DSL (`doc.go`, `message.go`, `bindings.go`) |
+| `dsl`      | root package — fluent DSL (one file per builder, plus `doc.go` and `validation.go`) |
 | `cmd`      | `cmd/asyncgo/` CLI                                        |
 | `internal` | `internal/discovery/`, `internal/cli/`                    |
 | `test`     | `test/data/` fixtures and `test/integration/` tests       |
