@@ -16,8 +16,9 @@ or `asyncapi.json` with `generate --format json` — from two touchpoints:
 2. **A typed, declarative catalog** (topology) — channels, operations, servers,
    and bindings declared once through a fluent DSL.
 
-The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
-`main`, materializes them, and emits (or verifies) the committed artifact.
+The CLI (`asyncgo generate` / `asyncgo check` / `asyncgo validate`) discovers
+catalogs reachable from `main`, materializes them, and emits, verifies, or
+validates them against the AsyncAPI 3.1.0 schema.
 
 ## Architecture
 
@@ -46,7 +47,8 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 │  2. Generate a harness that imports catalog packages    │
 │     and prints them as YAML (runs init only)            │
 │  3. Merge catalogs       │
-│  4. Emit YAML (generate) or diff (check)                │
+│  4. Emit YAML (generate), diff (check), or validate     │
+│     against the vendored 3.1.0 JSON Schema (validate)   │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -91,7 +93,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 | DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Replies`, `Reply`, `ReplyAddresses`, `ReplyAddress`, `OperationTraits`, `OperationTrait`, `MessageTraits`, `MessageTrait`, `CorrelationIDs`, `CorrelationID`, `Channels`, `Channel`, `Operation`, `MessageOf`, `MessageFrom`, `Schemas`, `Schema`, one typed binding helper per protocol (20) plus `Binding` |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `SecurityScheme`, `OAuthFlows`, `OAuthFlow`, `Channel`, `Operation`, `OperationTrait`, `OperationReply`, `OperationReplyAddress`, `Message`, `MessageTrait`, `CorrelationID`, `Schema`, `MultiFormat`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
-| CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]` |
+| CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]`, `asyncgo validate [dir] [--ignore-missing-bindings]` |
 
 ## Directory Structure
 
@@ -110,8 +112,9 @@ asyncgo/
 │   ├── adr/                    #   Architecture Decision Records (MADR format)
 │   ├── designdoc/              #   design docs (proposal → review → ADR)
 │   └── templates/              #   adr/design-doc templates
-├── internal/cli/               # Cobra command tree: generate | check | version
+├── internal/cli/               # Cobra command tree: generate | check | validate | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
+├── internal/validation/        # AsyncAPI 3.1.0 JSON Schema validation (vendored schema)
 ├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
@@ -173,14 +176,18 @@ The version is the git tag — never stored in source.
 - **Dependencies**: `github.com/goccy/go-yaml` for YAML,
   `github.com/stretchr/testify` for test assertions,
   `golang.org/x/tools/go/packages` for discovery, `github.com/spf13/cobra`
-  for the CLI command tree, standard library for JSON. `test/integration` is its
+  for the CLI command tree, `github.com/santhosh-tekuri/jsonschema/v6` for
+  schema validation, standard library for JSON. The AsyncAPI 3.1.0 JSON Schema
+  is vendored under `internal/validation/` and embedded into the binary — never
+  fetched at run time (see `internal/validation/PROVENANCE.md`).
+  `test/integration` is its
   own module and owns `github.com/testcontainers/testcontainers-go`, used to run
   the AsyncAPI CLI in a container, so the library's `go.mod` stays free of
   test-only dependencies. Avoid heavy frameworks in the library itself — the
   CLI uses Cobra (see docs/adr/0003). No code generation — the DSL and model are
   hand-written.
 - **Testing**: `make test` must pass. The `test/integration` test is end-to-end
-  and asserts three independent things for each `test/data/` fixture (`simple`,
+  and asserts four independent things for each `test/data/` fixture (`simple`,
   `allof`, `oneof`, `anyof`, `provider`, `security`, `reply`, `traits`,
   `multiformat`, `derived`, `bindings`, `bindings-unlisted`, `bytes`):
 
@@ -191,14 +198,23 @@ The version is the git tag — never stored in source.
      `encoding/json`, because comparing the decoded documents directly is a
      false negative: decoding YAML yields `uint64(3)` where decoding JSON yields
      `float64(3)` for the same any-valued binding number.
-  3. **Spec validity** — the freshly generated document is accepted by the real
+  3. **Schema validity** — the freshly generated document is accepted by the
+     vendored AsyncAPI 3.1.0 JSON Schema, checked in-process and offline through
+     `internal/validation`. `bindings-unlisted` is the exception: the published
+     schema omits the mqtt5 and mercure bindings, so the test asserts it is
+     rejected strictly and accepted with `IgnoreMissingBindings`.
+  4. **Spec validity** — the freshly generated document is accepted by the real
      `asyncapi validate` from the AsyncAPI CLI, run in a container — for the YAML
      *and* the JSON encoding, since the CLI picks its parser from the extension.
 
-  All three matter: the golden check cannot see a document that is regenerated
-  *wrongly*, since it would match a wrongly committed artifact, whereas the CLI
-  check validates the document against the specification itself; and the codec
-  check is the only one that would catch YAML and JSON drifting apart. This makes
+  All four matter: the golden check cannot see a document that is regenerated
+  *wrongly*, since it would match a wrongly committed artifact; the in-process
+  schema check reports which node is invalid, with a JSON Pointer, and runs
+  offline; the CLI check proves a real toolchain accepts the document, and the
+  codec check is the only one that would catch YAML and JSON drifting apart.
+  The two validators disagree on two fixtures by design: the CLI cannot parse
+  `multiformat`'s Protobuf payload (the schema can), and the schema omits the
+  mqtt5/mercure bindings (`bindings-unlisted`). This makes
   Docker a hard requirement of `make test` — the test fails rather than skips
   without a daemon. The image is pinned (`asyncapi/cli:6.1.0`) so a new CLI
   release cannot break the build without a deliberate version bump.

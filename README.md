@@ -441,6 +441,9 @@ asyncgo generate . -o ./docs/spec.yaml --format json
 # fail CI when asyncapi.yaml is out of date (check verifies asyncapi.yaml only)
 asyncgo check .
 
+# validate the document the catalogs produce against the AsyncAPI 3.1.0 schema
+asyncgo validate .
+
 # print the asyncgo version (matches the git tag / release)
 asyncgo version
 
@@ -452,6 +455,36 @@ asyncgo completion bash
 
 The generator discovers catalogs **reachable from `main`**, then runs a small
 harness to materialize them (never executing your `main` package).
+
+`check` and `validate` answer different questions. `check` is a drift gate: it
+re-encodes the document and compares it byte for byte with the committed
+`asyncapi.yaml`, so a stale artifact fails, but an artifact that is stale *and*
+invalid is not distinguished. `validate` judges the document itself: it builds it
+in memory — no committed artifact needed, nothing is written — and checks it
+against the official AsyncAPI 3.1.0 JSON Schema, which is vendored into the
+binary and never fetched at run time. Every violation is reported with the JSON
+Pointer of the offending node, and the exit code is 1:
+
+```console
+$ asyncgo validate .
+asyncgo: document is not valid AsyncAPI 3.1.0:
+  /components/schemas/example.com~1orders.Bogus/type: value must be one of 'array', 'boolean', 'integer', 'null', 'number', 'object', 'string'
+```
+
+Because the component keys `asyncgo` emits are fully-qualified (`pkgPath.TypeName`,
+which contains `/`) and the published schema's key pattern forbids `/`, the
+validator relaxes those key patterns in memory before compiling: without it the
+schema would silently skip every component entry. See
+[ADR 0007](docs/adr/0007-vendored-schema-validation.md).
+
+The published 3.1.0 schema omits the mqtt5 and mercure bindings (they are
+specified in their own repositories), so a document using them fails on the
+binding key alone. Pass `--ignore-missing-bindings` to suppress exactly those two
+keys — nothing inside them, and no other protocol:
+
+```bash
+asyncgo validate . --ignore-missing-bindings
+```
 
 ## Schema derivation rules
 

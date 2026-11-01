@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `9f98483` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` · 2026-10-25 — `§1`/`§3` binding rows and `§8 B12` implemented (typed bindings for all protocols, `spec.ProtocolKeys`, two binding fixtures) · 2026-10-31 — `§1` Schema Object row, `§4.1` `[]byte` row, `§8 B17` implemented (`contentEncoding`/`contentMediaType`, `test/data/bytes`) |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` · 2026-10-25 — `§1`/`§3` binding rows and `§8 B12` implemented (typed bindings for all protocols, `spec.ProtocolKeys`, two binding fixtures) · 2026-10-31 — `§1` Schema Object row, `§4.1` `[]byte` row, `§8 B17` implemented (`contentEncoding`/`contentMediaType`, `test/data/bytes`) · 2026-11-01 — `§5`, `§6`, `§8 B14` implemented (`asyncgo validate` over a vendored, digest-pinned 3.1.0 schema) |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -255,7 +255,7 @@ library's differentiating feature and the area with the deepest coverage.
 | `asyncgo generate [dir] [-o file\|dir/] [--format yaml\|json]` | ✅ | `internal/cli/generate.go` |
 | `asyncgo check [dir]` byte-equality drift gate (YAML only) | ✅ | `internal/cli/check.go` |
 | `asyncgo version`, `--version`, shell completion | ✅ | `internal/cli/root.go`, Cobra |
-| Validate output against the official AsyncAPI 3.1.0 JSON Schema | 🟡 | `test/integration/asyncgo_generate_test.go` — test-time only: the pinned `asyncapi/cli` accepts both the YAML and JSON encodings of every fixture except `multiformat`, which carries a Protobuf payload the CLI cannot parse; that skip is an explicit, logged entry that also asserts the CLI still rejects the document; there is no `asyncgo validate` command |
+| Validate output against the official AsyncAPI 3.1.0 JSON Schema | ✅ | `internal/validation/asyncapi-3.1.0.json` (vendored, pinned SHA-256, `go:embed`) + `internal/cli/validate.go` — offline, reports a JSON Pointer per violation; component key patterns relaxed in memory (see [ADR 0007](adr/0007-vendored-schema-validation.md)); mqtt5/mercure bindings need `--ignore-missing-bindings`. The containerized `asyncapi/cli` assertion in `test/integration` stays as the independent real-toolchain check |
 | Bundle external / multi-file `$ref` | ❌ | — |
 | Serve / preview (e.g. AsyncAPI Studio) | ❌ | — |
 
@@ -278,7 +278,7 @@ post-pass, and surface as a per-catalog `discovery.CatalogErrors` report.
 | operation map-key collision (a second `Send`/`Receive` on one channel overwrites) | ❌ |
 | message component-key collision (same key, different content) | ✅ `hoistMessage` rejects it; identical content is shared |
 | required-field presence per object, beyond the checks above | ❌ |
-| spec-conformance of the final document (schema validation) | ❌ |
+| spec-conformance of the final document (schema validation) | ✅ `asyncgo validate` (`internal/validation`) — the published schema's component key patterns are relaxed in memory so `pkgPath.TypeName` keys are validated; mqtt5/mercure bindings need `--ignore-missing-bindings` |
 
 ## 7. Spec deviations
 
@@ -575,6 +575,22 @@ implementation effort.
 
 #### B14 — Conformance validation against the official schema
 
+- **Implemented** — [#25](https://github.com/RubenRibGarcia/asyncgo/issues/25):
+  `asyncgo validate [dir]` builds the document from the module's catalogs in
+  memory and checks it against the official AsyncAPI 3.1.0 JSON Schema, vendored
+  at `internal/validation/asyncapi-3.1.0.json` (pinned tag and SHA-256 in
+  `internal/validation/PROVENANCE.md`, embedded with `go:embed`, never fetched at
+  run time). Each violation is reported with the RFC 6901 JSON Pointer of the
+  offending node. One deliberate deviation: the published schema restricts every
+  `components.<field>` map with `patternProperties` `^[\w\d\.\-_]+$` and declares
+  no `additionalProperties`, so the `pkgPath.TypeName` keys this library emits —
+  which contain `/` — match nothing and would escape validation entirely;
+  `relaxComponentKeys` copies the pattern's value subschema into
+  `additionalProperties` in memory before compiling. The mqtt5 and mercure
+  bindings, absent from the published bundle, are reported unless
+  `--ignore-missing-bindings` is passed. The containerized `asyncapi validate`
+  assertion stays as the independent real-toolchain check, and the end-to-end
+  test now also validates every fixture in-process.
 - **Gap** — No user-facing way to validate a document. The repository's own
   end-to-end test runs the real `asyncapi validate` over every fixture (see
   [§5](#5-tooling-and-pipeline)), but `asyncgo check` only compares bytes
