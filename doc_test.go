@@ -947,6 +947,8 @@ func TestValidationErrors(t *testing.T) {
 				)
 			},
 			want: "schema." + schema.Name(reflect.TypeFor[OrderPlaced]()) +
+				": name must match ^[\\w\\d.\\-_]+$" +
+				"\nschema." + schema.Name(reflect.TypeFor[OrderPlaced]()) +
 				": collides with an auto-hoisted schema of the same name",
 		},
 		{
@@ -1012,6 +1014,169 @@ func TestValidationErrors(t *testing.T) {
 				)
 			},
 			want: "schema.Avro.then: multi format schema must not carry JSON Schema keyword(s): type",
+		},
+		{
+			name: "should_reject_a_schema_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Schemas(Schema("Order Placed", &spec.Schema{Type: "object"})),
+				)
+			},
+			want: "schema.Order Placed: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_a_security_scheme_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					SecuritySchemes(
+						SecurityScheme("oauth basic", spec.SecurityScheme{Type: "http"}),
+					),
+				)
+			},
+			want: "securityScheme.oauth basic: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_an_operation_trait_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					OperationTraits(OperationTrait("tenant trait")),
+				)
+			},
+			want: "operationTrait.tenant trait: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_a_message_trait_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					MessageTraits(MessageTrait("tenant trait")),
+				)
+			},
+			want: "messageTrait.tenant trait: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_a_correlation_id_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					CorrelationIDs(CorrelationID(
+						"tenant id",
+						spec.CorrelationID{Location: "$message.header#/id"},
+					)),
+				)
+			},
+			want: "correlationId.tenant id: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_a_reply_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Replies(Reply("tenant reply")),
+				)
+			},
+			want: "reply.tenant reply: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_a_reply_address_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					ReplyAddresses(
+						ReplyAddress("tenant addr").Location("$message.header#/replyTo"),
+					),
+				)
+			},
+			want: "replyAddress.tenant addr: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			name: "should_reject_a_message_name_outside_the_key_pattern",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("order-placed").Send(Operation().Message(
+						MessageOf(OrderPlaced{}).Name("Order Placed"),
+					))),
+				)
+			},
+			want: "message.Order Placed: name must match ^[\\w\\d.\\-_]+$",
+		},
+		{
+			// The key a message derives from its payload type is the type's fully
+			// qualified name, whose package separators the pattern would reject. It
+			// is exempt, so an unauthored message never trips the key check.
+			name: "should_allow_a_message_key_derived_from_the_payload_type_name",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("order-placed").Send(Operation().Message(
+						MessageOf(OrderPlaced{}),
+					))),
+				)
+			},
+			want: "",
+		},
+		{
+			name: "should_return_error_when_a_channel_repeats_an_action",
+			spec: func() *SpecResult {
+				op := func() *operation {
+					return Operation().Message(MessageOf(OrderPlaced{}).Name("OrderPlaced"))
+				}
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("order-placed").Send(op()).Send(op())),
+				)
+			},
+			want: "operation.order-placed.send: duplicate action",
+		},
+		{
+			// The one reachable shape: a duplicate channel address whose second
+			// declaration uses a different action. That operation is registered under
+			// its own key, but the message it carries was written into the duplicate
+			// channel that the first declaration displaced.
+			name: "should_return_error_when_an_operation_carries_a_message_the_channel_lacks",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(
+						Channel("order-placed").Send(Operation().Message(
+							MessageOf(OrderPlaced{}).Name("OrderPlaced"),
+						)),
+						Channel("order-placed").Receive(Operation().Message(
+							MessageOf(OrderPlaced{}).Name("OrderShipped"),
+						)),
+					),
+				)
+			},
+			want: "channel.order-placed: duplicate address\n" +
+				`operation.order-placed.receive: message "#/channels/order-placed/messages/OrderShipped" ` +
+				`is not in channel "order-placed"`,
+		},
+		{
+			name: "should_return_error_when_an_address_expression_has_no_parameter",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("orders/{orderId}")),
+				)
+			},
+			want: "channel.orders/{orderId}: address expression {orderId} has no declared parameter",
+		},
+		{
+			name: "should_return_error_when_a_parameter_is_not_used_in_the_address",
+			spec: func() *SpecResult {
+				return Spec(
+					Info("Orders", "1.0.0"),
+					Channels(Channel("orders").Parameter(
+						"orderId",
+						spec.Parameter{Description: "The order id"},
+					)),
+				)
+			},
+			want: `channel.orders: parameter "orderId" is not used in the address`,
 		},
 	}
 
@@ -1450,11 +1615,63 @@ func TestValidateMessageRefs(t *testing.T) {
 	assert.Empty(t, b.validateMessageRefs())
 }
 
+// TestValidateOperationMessages covers the post-pass that enforces
+// operation.messages ⊆ channel.messages. The generator builds a channel's
+// messages map and its operations' message refs in lockstep, so a violating
+// document has to be built by hand.
+func TestValidateOperationMessages(t *testing.T) {
+	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
+	b.doc.Channels = map[string]*spec.Channel{
+		"order-placed": {
+			Address: "order-placed",
+			Messages: map[string]*spec.Message{
+				"OrderPlaced": {Ref: "#/components/messages/OrderPlaced"},
+			},
+		},
+	}
+	b.doc.Operations = map[string]*spec.Operation{
+		"order-placed.send": {
+			Channel:  &spec.Reference{Ref: "#/channels/order-placed"},
+			Messages: []*spec.Reference{{Ref: "#/channels/order-placed/messages/OrderShipped"}},
+		},
+	}
+
+	errs := b.validateOperationMessages()
+	require.Len(t, errs, 1)
+	assert.EqualError(
+		t,
+		errs[0],
+		`operation.order-placed.send: message "#/channels/order-placed/messages/OrderShipped" `+
+			`is not in channel "order-placed"`,
+	)
+
+	b.doc.Channels["order-placed"].Messages["OrderShipped"] = &spec.Message{
+		Ref: "#/components/messages/OrderShipped",
+	}
+	assert.Empty(t, b.validateOperationMessages())
+
+	// A ref that names another channel's message fails on the prefix, before the
+	// key lookup.
+	b.doc.Operations["order-placed.send"].Messages = []*spec.Reference{
+		{Ref: "#/channels/order-shipped/messages/OrderPlaced"},
+	}
+	errs = b.validateOperationMessages()
+	require.Len(t, errs, 1)
+	assert.EqualError(
+		t,
+		errs[0],
+		`operation.order-placed.send: message "#/channels/order-shipped/messages/OrderPlaced" `+
+			`is not in channel "order-placed"`,
+	)
+}
+
 func TestReplyRefEscapesPointer(t *testing.T) {
 	r := Reply("tenant/reply~prod")
 
 	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
-	require.NoError(t, Replies(r).apply(b))
+	// The name breaks the components.* key pattern, so apply reports it. The
+	// reply is still registered, and its $ref must remain a valid JSON Pointer.
+	require.Error(t, Replies(r).apply(b))
 
 	assert.Equal(t, "#/components/replies/tenant~1reply~0prod", replyRef(r).Ref)
 	assert.Contains(t, b.doc.Components.Replies, "tenant/reply~prod")
@@ -1464,7 +1681,10 @@ func TestReplyAddressRefEscapesPointer(t *testing.T) {
 	a := ReplyAddress("tenant/addr~prod").Location("$message.header#/replyTo")
 
 	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
-	require.NoError(t, ReplyAddresses(a).apply(b))
+	// The name breaks the components.* key pattern, so apply reports it. The
+	// reply address is still registered, and its $ref must remain a valid JSON
+	// Pointer.
+	require.Error(t, ReplyAddresses(a).apply(b))
 
 	assert.Equal(t, "#/components/replyAddresses/tenant~1addr~0prod", replyAddressRef(a).Ref)
 	assert.Contains(t, b.doc.Components.ReplyAddresses, "tenant/addr~prod")
@@ -1675,7 +1895,9 @@ func TestOperationTraitRefEscapesPointer(t *testing.T) {
 	tr := OperationTrait("tenant/trait~prod")
 
 	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
-	require.NoError(t, OperationTraits(tr).apply(b))
+	// The name breaks the components.* key pattern, so apply reports it. The
+	// trait is still registered, and its $ref must remain a valid JSON Pointer.
+	require.Error(t, OperationTraits(tr).apply(b))
 
 	assert.Equal(t, "#/components/operationTraits/tenant~1trait~0prod", operationTraitRef(tr).Ref)
 	assert.Contains(t, b.doc.Components.OperationTraits, "tenant/trait~prod")
@@ -1685,7 +1907,9 @@ func TestMessageTraitRefEscapesPointer(t *testing.T) {
 	tr := MessageTrait("tenant/trait~prod")
 
 	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
-	require.NoError(t, MessageTraits(tr).apply(b))
+	// The name breaks the components.* key pattern, so apply reports it. The
+	// trait is still registered, and its $ref must remain a valid JSON Pointer.
+	require.Error(t, MessageTraits(tr).apply(b))
 
 	assert.Equal(t, "#/components/messageTraits/tenant~1trait~0prod", messageTraitRef(tr).Ref)
 	assert.Contains(t, b.doc.Components.MessageTraits, "tenant/trait~prod")
@@ -1695,7 +1919,10 @@ func TestCorrelationIDRefEscapesPointer(t *testing.T) {
 	c := CorrelationID("tenant/id~prod", spec.CorrelationID{Location: "$message.header#/id"})
 
 	b := &builder{doc: spec.New(), defs: map[string]*spec.Schema{}}
-	require.NoError(t, CorrelationIDs(c).apply(b))
+	// The name breaks the components.* key pattern, so apply reports it. The
+	// correlation id is still registered, and its $ref must remain a valid JSON
+	// Pointer.
+	require.Error(t, CorrelationIDs(c).apply(b))
 
 	assert.Equal(t, "#/components/correlationIds/tenant~1id~0prod", correlationIDRef(c).Ref)
 	assert.Contains(t, b.doc.Components.CorrelationIDs, "tenant/id~prod")
