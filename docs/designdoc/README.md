@@ -46,3 +46,4 @@ docs/designdoc/
 | [fluent-dsl-validation](fluent-dsl-validation.md) | Accepted | 2026-09-01 | 2026-09-03 | [0004](../adr/0004-fluent-dsl-validation.md) |
 | [multi-format-schemas](multi-format-schemas.md) | Accepted | 2026-10-05 | 2026-10-05 | [0005](../adr/0005-multi-format-schema-objects.md) |
 | [schema-keywords](schema-keywords.md) | Accepted | 2026-10-10 | 2026-10-10 | [0006](../adr/0006-schema-keywords.md) |
+| [schema-validation](schema-validation.md) | Accepted | 2026-11-01 | 2026-11-01 | [0007](../adr/0007-vendored-schema-validation.md) |

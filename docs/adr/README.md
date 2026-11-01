@@ -57,3 +57,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | [0004](0004-fluent-dsl-validation.md) | Fluent DSL validation with a SpecResult type | accepted | 2026-09-03 | 2026-09-03 |
 | [0005](0005-multi-format-schema-objects.md) | Extend the Schema Object type to support Multi Format Schema Objects | accepted | 2026-10-05 | 2026-10-05 |
 | [0006](0006-schema-keywords.md) | Model the full Draft-07 and AsyncAPI Schema keyword set | accepted | 2026-10-10 | 2026-10-10 |
+| [0007](0007-vendored-schema-validation.md) | Validate documents against a vendored AsyncAPI 3.1.0 JSON Schema | accepted | 2026-11-01 | 2026-11-01 |
