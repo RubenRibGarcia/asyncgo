@@ -55,7 +55,9 @@ Object`, and are therefore in scope here:
 | Components Object | `schemas` map values |
 
 3.1.0 removed `schema` from the Parameter Object, so parameters are **not** a
-multi-format location. That gap is tracked separately (coverage backlog B6).
+multi-format location. That gap was closed on the model side by
+[#17](https://github.com/RubenRibGarcia/asyncgo/issues/17), which made
+`spec.Parameter` the 3.1.0 shape (coverage backlog B6).
 
 ### Architecture facts that decide the shape
 
@@ -109,7 +111,8 @@ only option under which the eight existing goldens stay byte-identical.
 - Preserving key order inside the opaque body (see Edge cases).
 - Bundling external `$ref`s (`schema: {$ref: ./user.avsc}`); asyncgo does not
   bundle external documents today and this design does not add it.
-- `Parameter.schema` — 3.1.0 removed it (backlog B6).
+- `Parameter.schema` — 3.1.0 removed it; resolved by
+  [#17](https://github.com/RubenRibGarcia/asyncgo/issues/17), not here.
 
 ## Design decisions
 
@@ -479,7 +482,8 @@ components:
    B4 updates.
 6. **Stage 5 — deferred**: `schemaFormat` table validation and format constants,
    ordered body preservation, Avro-from-Go derivation, external `$ref` bundling,
-   `Parameter.schema` (B6).
+   `Parameter.schema` (B6, since resolved by
+   [#17](https://github.com/RubenRibGarcia/asyncgo/issues/17)).
 
 ## Testing plan
 
@@ -519,8 +523,9 @@ components:
 - **Avro/Protobuf generation from Go types** — the inverse direction; explicitly
   out of scope, and the reason `MessageFrom` exists.
 - **External `$ref` bundling** — `schema: {$ref: ./x.avsc}` and friends.
-- **`Parameter.schema`** — 3.1.0 removed it and the Parameter Object is otherwise
-  wrong-shaped; tracked as B6, not here.
+- **`Parameter.schema`** — 3.1.0 removed it and the Parameter Object was
+  otherwise wrong-shaped; both were fixed by
+  [#17](https://github.com/RubenRibGarcia/asyncgo/issues/17) (B6), not here.
 - **Coverage doc drift** — `docs/asyncapi-3.1.0-coverage.md` §1 currently marks
   the Multi Format Schema Object ❌/❌, §4.3 lists non-JSON-Schema formats as
   absent, and §8 B4 has no `Implemented` note; all three change in Stage 4.

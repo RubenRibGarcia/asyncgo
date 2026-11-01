@@ -1194,6 +1194,29 @@ func TestValidationErrors(t *testing.T) {
 	}
 }
 
+// TestChannelParameterEmitsParameter covers the success half of the address
+// expression rule: the two rejection paths live in the TestSpecValidation table,
+// so without this a parameter that validates could still fail to reach the
+// document.
+func TestChannelParameterEmitsParameter(t *testing.T) {
+	userId := spec.Parameter{
+		Enum:        []string{"u_1", "u_2"},
+		Default:     "u_1",
+		Description: "Id of the user.",
+		Examples:    []string{"u_1"},
+		Location:    "$message.payload#/userId",
+	}
+
+	res := Spec(
+		Info("Orders", "1.0.0"),
+		Channels(Channel("users.{userId}").Parameter("userId", userId)),
+	)
+
+	require.NoError(t, res.Err)
+	require.Contains(t, res.Doc.Channels, "users.{userId}")
+	assert.Equal(t, &userId, res.Doc.Channels["users.{userId}"].Parameters["userId"])
+}
+
 func TestDuplicateKeepsFirstEntry(t *testing.T) {
 	t.Run("should_keep_first_server_on_duplicate_name", func(t *testing.T) {
 		res := Spec(
