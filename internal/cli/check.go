@@ -2,11 +2,9 @@ package cli
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 
-	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/spf13/cobra"
 )
 
@@ -31,13 +29,9 @@ func newCheckCmd() *cobra.Command {
 				return fmt.Errorf("checking: %w", err)
 			}
 
-			doc, _, err := discovery.Build(cmd.Context(), dir)
+			doc, _, err := buildDoc(cmd, dir, "checking")
 			if err != nil {
-				var catErrs discovery.CatalogErrors
-				if errors.As(err, &catErrs) {
-					return catErrs
-				}
-				return fmt.Errorf("checking: %w", err)
+				return err
 			}
 			got, err := selected.encode(doc)
 			if err != nil {
