@@ -1,5 +1,7 @@
 package spec
 
+import "slices"
+
 // Protocol identifiers used as keys in the *Bindings maps.
 const (
 	ProtocolKafka        = "kafka"
@@ -24,13 +26,15 @@ const (
 	ProtocolROS2         = "ros2"
 )
 
-// ProtocolKeys lists every protocol key the model supports, in the order the
-// bindings coverage table presents them.
+// protocolKeys lists every protocol key the model supports, in the order the
+// bindings coverage table presents them. Protocols() exposes a copy: the slice is
+// package state, so handing it out directly would let a caller reorder or extend
+// the model's protocol set.
 //
 // mqtt5 and mercure are listed even though the published 3.1.0 binding JSON
 // Schemas omit them: the specification text defines both protocols, and a
 // document using either is rejected only because the schemas lag the prose.
-var ProtocolKeys = []string{
+var protocolKeys = []string{
 	ProtocolKafka,
 	ProtocolAMQP,
 	ProtocolNATS,
@@ -53,17 +57,36 @@ var ProtocolKeys = []string{
 	ProtocolROS2,
 }
 
+// Protocols returns every protocol key the model supports, in the order the
+// bindings coverage table presents them. The result is a copy: mutating it does
+// not change the model.
+func Protocols() []string { return slices.Clone(protocolKeys) }
+
 // The *Bindings types are protocol-keyed maps. Values are typed binding
 // structs (see the protocol sections below); using a map keeps the model
 // extensible to new protocols without changing the core object model.
+//
+// The map is the one place the model's YAML round-trip is not byte-stable. Every
+// other union is a concrete struct precisely so a decoded document re-encodes
+// unchanged (see Message), but a binding value decodes into map[string]any, which
+// re-encodes with sorted keys — where the same binding built as a typed struct
+// marshals in declaration order. The divergence is deliberate and bounded to that
+// first crossing: decode once and the document is stable, which is why the
+// committed fixtures are sorted. Bindings are pinned by
+// TestBindingRoundTripIsNotByteStable.
 type (
 	// ServerBindings holds protocol-specific server bindings, keyed by protocol.
+	// See the *Bindings note above: values are typed binding structs, but the map's
+	// round-trip is not byte-stable, and Validate() checks each modelled
+	// protocol's value type.
 	ServerBindings map[string]any
 	// ChannelBindings holds protocol-specific channel bindings, keyed by protocol.
 	ChannelBindings map[string]any
 	// OperationBindings holds protocol-specific operation bindings, keyed by protocol.
+	// A trait's bindings carry the same objects, so a trait validates with it too.
 	OperationBindings map[string]any
 	// MessageBindings holds protocol-specific message bindings, keyed by protocol.
+	// A trait's bindings carry the same objects, so a trait validates with it too.
 	MessageBindings map[string]any
 )
 
@@ -225,7 +248,7 @@ type (
 
 // AMQPChannelBinding describes AMQP-specific channel information.
 type AMQPChannelBinding struct {
-	Is             string        `json:"is,omitempty"             yaml:"is,omitempty"` // "queue" | "routingKey"
+	Is             string        `json:"is,omitempty"             yaml:"is,omitempty"` // AMQPChannelBindingIs*
 	Exchange       *AMQPExchange `json:"exchange,omitempty"       yaml:"exchange,omitempty"`
 	Queue          *AMQPQueue    `json:"queue,omitempty"          yaml:"queue,omitempty"`
 	BindingVersion string        `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
@@ -285,10 +308,10 @@ type AnypointMQChannelBinding struct {
 }
 
 // AnypointMQMessageBinding describes Anypoint MQ-specific message information.
-// Headers is Schema Object | Reference Object, so it is `any`.
+// Headers is Schema Object | Reference Object, which *Schema already expresses.
 type AnypointMQMessageBinding struct {
-	Headers        any    `json:"headers,omitempty"        yaml:"headers,omitempty"`
-	BindingVersion string `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
+	Headers        *Schema `json:"headers,omitempty"        yaml:"headers,omitempty"`
+	BindingVersion string  `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
 }
 
 // --- Google Cloud Pub/Sub bindings (binding version 0.2.0) -------------------
@@ -374,7 +397,7 @@ type IBMMQServerBinding struct {
 
 // IBMMQChannelBinding describes IBM MQ-specific channel information.
 type IBMMQChannelBinding struct {
-	DestinationType string      `json:"destinationType,omitempty" yaml:"destinationType,omitempty"` // "topic" | "queue"
+	DestinationType string      `json:"destinationType,omitempty" yaml:"destinationType,omitempty"` // IBMMQDestinationType*
 	Queue           *IBMMQQueue `json:"queue,omitempty"           yaml:"queue,omitempty"`
 	Topic           *IBMMQTopic `json:"topic,omitempty"           yaml:"topic,omitempty"`
 	MaxMsgLength    int         `json:"maxMsgLength,omitempty"    yaml:"maxMsgLength,omitempty"`
@@ -483,14 +506,13 @@ type KafkaOperationBinding struct {
 
 // KafkaMessageBinding describes Kafka-specific message information. Key is
 // Schema Object | Reference Object: a schema describing the message key, or a
-// reference to one. It is `any` because the union's reference side has to be
-// expressible.
+// reference to one. *Schema expresses both sides of that union.
 type KafkaMessageBinding struct {
-	Key                     any    `json:"key,omitempty"                     yaml:"key,omitempty"`
-	SchemaIDLocation        string `json:"schemaIdLocation,omitempty"        yaml:"schemaIdLocation,omitempty"`
-	SchemaIDPayloadEncoding string `json:"schemaIdPayloadEncoding,omitempty" yaml:"schemaIdPayloadEncoding,omitempty"`
-	SchemaLookupStrategy    string `json:"schemaLookupStrategy,omitempty"    yaml:"schemaLookupStrategy,omitempty"`
-	BindingVersion          string `json:"bindingVersion,omitempty"          yaml:"bindingVersion,omitempty"`
+	Key                     *Schema `json:"key,omitempty"                     yaml:"key,omitempty"`
+	SchemaIDLocation        string  `json:"schemaIdLocation,omitempty"        yaml:"schemaIdLocation,omitempty"`
+	SchemaIDPayloadEncoding string  `json:"schemaIdPayloadEncoding,omitempty" yaml:"schemaIdPayloadEncoding,omitempty"`
+	SchemaLookupStrategy    string  `json:"schemaLookupStrategy,omitempty"    yaml:"schemaLookupStrategy,omitempty"`
+	BindingVersion          string  `json:"bindingVersion,omitempty"          yaml:"bindingVersion,omitempty"`
 }
 
 // --- MQTT bindings (binding version 0.2.0) -----------------------------------
@@ -531,14 +553,15 @@ type MQTTOperationBinding struct {
 
 // MQTTMessageBinding describes MQTT-specific message information.
 //
-// CorrelationData is Schema Object | Reference Object, and ResponseTopic is
-// string | Schema Object | Reference Object, so both are `any`.
+// CorrelationData is Schema Object | Reference Object, which *Schema expresses.
+// ResponseTopic is string | Schema Object | Reference Object, which is why it
+// stays `any`: a bare string is not a schema.
 type MQTTMessageBinding struct {
-	PayloadFormatIndicator int    `json:"payloadFormatIndicator,omitempty" yaml:"payloadFormatIndicator,omitempty"`
-	CorrelationData        any    `json:"correlationData,omitempty"        yaml:"correlationData,omitempty"`
-	ContentType            string `json:"contentType,omitempty"            yaml:"contentType,omitempty"`
-	ResponseTopic          any    `json:"responseTopic,omitempty"          yaml:"responseTopic,omitempty"`
-	BindingVersion         string `json:"bindingVersion,omitempty"         yaml:"bindingVersion,omitempty"`
+	PayloadFormatIndicator int     `json:"payloadFormatIndicator,omitempty" yaml:"payloadFormatIndicator,omitempty"`
+	CorrelationData        *Schema `json:"correlationData,omitempty"        yaml:"correlationData,omitempty"`
+	ContentType            string  `json:"contentType,omitempty"            yaml:"contentType,omitempty"`
+	ResponseTopic          any     `json:"responseTopic,omitempty"          yaml:"responseTopic,omitempty"`
+	BindingVersion         string  `json:"bindingVersion,omitempty"         yaml:"bindingVersion,omitempty"`
 }
 
 // --- MQTT 5 bindings (binding version 0.2.0) ---------------------------------
@@ -583,7 +606,7 @@ type PulsarServerBinding struct {
 // and Persistence are required by the binding specification.
 type PulsarChannelBinding struct {
 	Namespace      string           `json:"namespace"                 yaml:"namespace"`
-	Persistence    string           `json:"persistence"               yaml:"persistence"` // "persistent" | "non-persistent"
+	Persistence    string           `json:"persistence"               yaml:"persistence"` // PulsarChannelBindingPersistence*
 	Compaction     int              `json:"compaction,omitempty"      yaml:"compaction,omitempty"`
 	GeoReplication []string         `json:"geo-replication,omitempty" yaml:"geo-replication,omitempty"`
 	Retention      *PulsarRetention `json:"retention,omitempty"       yaml:"retention,omitempty"`
@@ -832,10 +855,10 @@ type SQSStatement struct {
 // reserved bindings section. Only the channel object defines fields.
 
 // WSChannelBinding describes WebSockets-specific channel information. Query and
-// Headers are Schema Object | Reference Object, so they are `any`.
+// Headers are Schema Object | Reference Object, which *Schema expresses.
 type WSChannelBinding struct {
-	Method         string `json:"method,omitempty"         yaml:"method,omitempty"`
-	Query          any    `json:"query,omitempty"          yaml:"query,omitempty"`
-	Headers        any    `json:"headers,omitempty"        yaml:"headers,omitempty"`
-	BindingVersion string `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
+	Method         string  `json:"method,omitempty"         yaml:"method,omitempty"`
+	Query          *Schema `json:"query,omitempty"          yaml:"query,omitempty"`
+	Headers        *Schema `json:"headers,omitempty"        yaml:"headers,omitempty"`
+	BindingVersion string  `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
 }

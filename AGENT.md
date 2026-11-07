@@ -84,6 +84,13 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
    run can enumerate a harness that is being removed and fail with
    `error(s) loading packages`.
 
+6. **One documented internal→root edge** — `internal/discovery` imports the root
+   package for exactly one symbol: `reflect.TypeFor[asyncgo.SpecResult]()`, which
+   is how a catalog variable is recognised. It is deliberate rather than a layer
+   leak: a `SpecResult` living in `spec/` with a root alias would make catalog
+   recognition depend on an alias staying in step with the DSL's real return type.
+   Keep the edge, keep it here, and keep it the only one.
+
 ## Public API
 
 | Area | Symbols |

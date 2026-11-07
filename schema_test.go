@@ -54,6 +54,40 @@ func TestSchemasRegistersComponents(t *testing.T) {
 	)
 }
 
+// TestSchemaRegisterAnywayPinsPolicy covers the register-anyway policy documented
+// at appendKeyError: a component whose name or content failed validation is still
+// registered, so a $ref written against it resolves and the reported error is the
+// only thing left to fix. A nil schema is the single exception — "null" is not a
+// Schema Object, so there is nothing to register.
+func TestSchemaRegisterAnywayPinsPolicy(t *testing.T) {
+	t.Run("should_register_a_schema_whose_name_failed_validation", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			Schemas(Schema("Order Placed", &spec.Schema{Type: "object"})),
+		)
+
+		require.Error(t, res.Err)
+		require.NotNil(t, res.Doc.Components)
+		require.Contains(t, res.Doc.Components.Schemas, "Order Placed",
+			"the entry stays so a $ref to it still resolves")
+	})
+
+	t.Run("should_not_register_a_nil_schema", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			Schemas(Schema("OrderPlaced", nil)),
+		)
+
+		require.Error(t, res.Err)
+		assert.Contains(t, res.Err.Error(), "schema.OrderPlaced: is required")
+
+		if res.Doc.Components != nil {
+			assert.NotContains(t, res.Doc.Components.Schemas, "OrderPlaced",
+				"null is not a Schema Object, so nothing is registered")
+		}
+	})
+}
+
 func TestSchemaValidationErrors(t *testing.T) {
 	tests := []struct {
 		name string

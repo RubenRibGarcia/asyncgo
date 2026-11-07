@@ -154,6 +154,7 @@ func (c *channel) apply(b *builder) error {
 	} else {
 		b.doc.Channels[c.address] = ch
 	}
+	errs = appendBindingErrors(errs, "channel."+c.address, c.s.Bindings.Validate())
 
 	for _, op := range c.ops {
 		specOp := &spec.Operation{
@@ -201,6 +202,7 @@ func (c *channel) apply(b *builder) error {
 		// the same channel would overwrite the first silently. The guard mirrors
 		// the sibling duplicate checks: report it and keep the first entry.
 		opKey := c.address + "." + op.action
+		errs = appendBindingErrors(errs, "operation."+opKey, op.bindings.Validate())
 		if _, dup := b.doc.Operations[opKey]; dup && c.address != "" {
 			errs = append(errs, fmt.Errorf("operation.%s: duplicate action", opKey))
 		} else {

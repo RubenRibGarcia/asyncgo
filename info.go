@@ -11,7 +11,11 @@ type infoBuilder struct {
 	info spec.Info
 }
 
-// Info starts the info section with the required title and version.
+// Info starts the info section with the required title and version. A second
+// Info(...) in the same Spec(...) wins: it is applied after the first and assigns
+// the whole Info object. This is the one place the DSL is last-wins rather than
+// duplicate-is-an-error — a catalog contributes one info section, so the last one
+// written is the one the author meant.
 func Info(title, version string) *infoBuilder {
 	return &infoBuilder{info: spec.Info{Title: title, Version: version}}
 }

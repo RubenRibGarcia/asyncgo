@@ -193,6 +193,8 @@ type OperationReplyAddress struct {
 // separate union type follows Schema, and keeps the discovery harness's YAML
 // round-trip lossless — a node that is not a concrete struct decodes into a map
 // and is re-encoded with sorted keys, which would rewrite committed fixtures.
+// The *Bindings maps are the one deliberate exception to that invariant; see
+// ServerBindings.
 type Message struct {
 	Ref           string           `json:"$ref,omitempty"          yaml:"$ref,omitempty"`
 	Headers       *Schema          `json:"headers,omitempty"       yaml:"headers,omitempty"`

@@ -51,11 +51,27 @@ var (
 
 // Name returns the fully-qualified schema name for a named type:
 // "pkgPath.TypeName" (e.g. "github.com/acme/app/orders.OrderPlaced").
-func Name(t reflect.Type) string { return t.PkgPath() + "." + t.Name() }
+// Name returns the fully-qualified schema name for a named type:
+// "pkgPath.TypeName" (e.g. "github.com/acme/app/orders.OrderPlaced"). It
+// returns "" for an unnamed type: an anonymous struct, slice, map or interface
+// has no stable name, so it cannot key a component schema. That is the same
+// predicate isNamed enforces internally — only named types are ever hoisted.
+func Name(t reflect.Type) string {
+	if !isNamed(t) {
+		return ""
+	}
+	return t.PkgPath() + "." + t.Name()
+}
 
-// Ref returns the $ref for a hoisted named type.
+// Ref returns the $ref for a hoisted named type, or "" for an unnamed type.
+// An empty result means "this type cannot be referenced": an unnamed type is
+// always derived inline, so a non-empty $ref built from it would dangle.
 func Ref(t reflect.Type) string {
-	return "#/components/schemas/" + jsonpointer.Escape(Name(t))
+	name := Name(t)
+	if name == "" {
+		return ""
+	}
+	return "#/components/schemas/" + jsonpointer.Escape(name)
 }
 
 // RefByName returns the $ref for a hoisted schema identified by its

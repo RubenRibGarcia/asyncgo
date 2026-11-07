@@ -2,6 +2,12 @@
 // document. A catalog is a package-level variable of type *SpecResult built
 // with Spec(...); the asyncgo CLI discovers such variables reachable from main
 // and statically interprets them into an AsyncAPI document.
+//
+// Most setters take a pointer to another builder (a *reply, a *channel, a
+// *securityScheme, ...) and turn it into a JSON Reference immediately, so a nil
+// argument panics at the call site — it is not deferred into a validation error.
+// Declare the referenced item first and pass its builder; Operation.Reply(nil) is
+// the one exception, meaning "this operation has no reply".
 package asyncgo
 
 import (
@@ -107,6 +113,15 @@ func validateKey(kind, name string) error {
 // name, if any, so each component apply runs the check in one line. An empty
 // name is left to the caller's required-field check, so a single mistake is not
 // reported twice.
+//
+// It is also where the project's register-anyway policy is decided: when a
+// component's name or content fails validation, the component is still registered
+// (whenever it has content to register). The document is invalid either way, but
+// keeping the entry means every $ref written against it still resolves, so the
+// caller fixes the reported error instead of also chasing a dangling reference.
+// ref_test.go pins it: a reply whose name breaks the key pattern is registered
+// and its $ref stays a valid JSON Pointer. A nil value is the one exception —
+// null is not a valid component, so nothing is registered.
 func appendKeyError(errs []error, kind, name string) []error {
 	if name == "" {
 		return errs
