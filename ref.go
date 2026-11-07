@@ -3,6 +3,7 @@ package asyncgo
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
 	"github.com/RubenRibGarcia/asyncgo/spec"
@@ -34,6 +35,13 @@ func messageTraitRef(t *messageTrait) *spec.Reference {
 // CorrelationIDs(...).
 func correlationIDRef(c *correlationID) *spec.Reference {
 	return &spec.Reference{Ref: "#/components/correlationIds/" + jsonpointer.Escape(c.name)}
+}
+
+// refName is the component name a $ref points at: the pointer prefix removed and
+// the remaining JSON Pointer segment unescaped. Every validator resolves a $ref
+// this way, so a change to the escaping convention has one place to land.
+func refName(ref, prefix string) string {
+	return jsonpointer.Unescape(strings.TrimPrefix(ref, prefix))
 }
 
 // correlationIDFromRef hoists an inline correlation id authored with

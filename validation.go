@@ -27,7 +27,7 @@ func (b *builder) validateServerRefs() []error {
 			continue
 		}
 		for _, ref := range ch.Servers {
-			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, "#/servers/"))
+			name := refName(ref.Ref, "#/servers/")
 			if _, ok := b.doc.Servers[name]; !ok {
 				errs = append(
 					errs,
@@ -63,7 +63,7 @@ func (b *builder) validateSecurityRefs() []error {
 			continue // see validateServerRefs: nil entries are skipped, not dereferenced
 		}
 		for _, ref := range srv.Security {
-			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
+			scheme := refName(ref.Ref, prefix)
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
 					errs,
@@ -78,7 +78,7 @@ func (b *builder) validateSecurityRefs() []error {
 			continue
 		}
 		for _, ref := range op.Security {
-			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
+			scheme := refName(ref.Ref, prefix)
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
 					errs,
@@ -93,7 +93,7 @@ func (b *builder) validateSecurityRefs() []error {
 			continue
 		}
 		for _, ref := range trait.Security {
-			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
+			scheme := refName(ref.Ref, prefix)
 			if _, ok := declared[scheme]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"operationTrait.%s: references unknown security scheme %q",
@@ -144,7 +144,7 @@ func (b *builder) validateReplyRefs() []error {
 		if ref == nil {
 			continue
 		}
-		name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, repliesPrefix))
+		name := refName(ref.Ref, repliesPrefix)
 		if _, ok := declaredReplies[name]; !ok {
 			errs = append(errs, fmt.Errorf("operation.%s: references unknown reply %q", key, name))
 		}
@@ -156,7 +156,7 @@ func (b *builder) validateReplyRefs() []error {
 			continue
 		}
 		if r.Address != nil {
-			addr := jsonpointer.Unescape(strings.TrimPrefix(r.Address.Ref, replyAddressesPrefix))
+			addr := refName(r.Address.Ref, replyAddressesPrefix)
 			if _, ok := declaredAddresses[addr]; !ok {
 				errs = append(
 					errs,
@@ -176,7 +176,7 @@ func (b *builder) validateReplyRefs() []error {
 		if r.Channel == nil {
 			continue
 		}
-		channel := jsonpointer.Unescape(strings.TrimPrefix(r.Channel.Ref, channelsPrefix))
+		channel := refName(r.Channel.Ref, channelsPrefix)
 		ch, ok := b.doc.Channels[channel]
 		if !ok || ch == nil {
 			errs = append(
@@ -196,7 +196,7 @@ func (b *builder) validateReplyRefs() []error {
 				))
 				continue
 			}
-			key := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
+			key := refName(msg.Ref, prefix)
 			if _, ok := ch.Messages[key]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"reply.%s: message %q is not in channel %q",
@@ -238,7 +238,7 @@ func (b *builder) validateMessageRefs() []error {
 			if msg == nil || msg.Ref == "" {
 				continue
 			}
-			name := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
+			name := refName(msg.Ref, prefix)
 			if _, ok := declared[name]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"channel.%s.messages.%s: references unknown message %q",
@@ -270,7 +270,7 @@ func (b *builder) validateOperationMessages() []error {
 		if op == nil || op.Channel == nil {
 			continue
 		}
-		address := jsonpointer.Unescape(strings.TrimPrefix(op.Channel.Ref, channelsPrefix))
+		address := refName(op.Channel.Ref, channelsPrefix)
 		ch := b.doc.Channels[address]
 		if ch == nil {
 			// Out of scope: channel.apply always points an operation at the
@@ -292,7 +292,7 @@ func (b *builder) validateOperationMessages() []error {
 				))
 				continue
 			}
-			name := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
+			name := refName(msg.Ref, prefix)
 			if _, ok := ch.Messages[name]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"operation.%s: message %q is not in channel %q",
@@ -341,7 +341,7 @@ func (b *builder) validateTraitRefs() []error {
 			continue // see validateServerRefs: nil entries are skipped, not dereferenced
 		}
 		for _, ref := range op.Traits {
-			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, operationTraitsPrefix))
+			name := refName(ref.Ref, operationTraitsPrefix)
 			if _, ok := declaredOperationTraits[name]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"operation.%s: references unknown operation trait %q",
@@ -358,7 +358,7 @@ func (b *builder) validateTraitRefs() []error {
 			continue
 		}
 		for _, ref := range msg.Traits {
-			trait := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, messageTraitsPrefix))
+			trait := refName(ref.Ref, messageTraitsPrefix)
 			if _, ok := declaredMessageTraits[trait]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"message.%s: references unknown message trait %q",
@@ -368,7 +368,7 @@ func (b *builder) validateTraitRefs() []error {
 			}
 		}
 		if ref := msg.CorrelationID; ref != nil {
-			id := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, correlationIDsPrefix))
+			id := refName(ref.Ref, correlationIDsPrefix)
 			if _, ok := declaredCorrelationIDs[id]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"message.%s: references unknown correlation id %q",
@@ -388,7 +388,7 @@ func (b *builder) validateTraitRefs() []error {
 		if ref == nil {
 			continue
 		}
-		id := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, correlationIDsPrefix))
+		id := refName(ref.Ref, correlationIDsPrefix)
 		if _, ok := declaredCorrelationIDs[id]; !ok {
 			errs = append(errs, fmt.Errorf(
 				"messageTrait.%s: references unknown correlation id %q",
