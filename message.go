@@ -145,7 +145,7 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 			"message: correlation id reference and inline correlation id are mutually exclusive",
 		)
 	case m.correlationIDFrom != nil:
-		ref, err := correlationIDFromRef(b, messageName(m), *m.correlationIDFrom)
+		ref, err := correlationIDFromRef(b, messageKey(m), *m.correlationIDFrom)
 		if err != nil {
 			return nil, err
 		}
