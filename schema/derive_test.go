@@ -551,6 +551,36 @@ func TestStructOf(t *testing.T) {
 	}
 }
 
+func TestNameAndRefRequireANamedType(t *testing.T) {
+	named := reflect.TypeFor[Order]()
+	unnamed := []struct {
+		name string
+		typ  reflect.Type
+	}{
+		{"anonymous struct", reflect.TypeOf(struct{ A int }{})},
+		{"slice", reflect.TypeOf([]int{})},
+		{"map", reflect.TypeOf(map[string]int{})},
+		{"interface", reflect.TypeFor[any]()},
+	}
+
+	t.Run("should_name_a_named_type", func(t *testing.T) {
+		assert.Equal(t, named.PkgPath()+"."+named.Name(), Name(named))
+		assert.NotEmpty(t, Ref(named))
+	})
+
+	for _, tc := range unnamed {
+		t.Run(
+			"should_return_empty_for_an_unnamed_"+strings.ReplaceAll(tc.name, " ", "_"),
+			func(t *testing.T) {
+				// An unnamed type has no stable name, so it can never key a component;
+				// returning "pkg." here produced a dangling $ref.
+				assert.Empty(t, Name(tc.typ))
+				assert.Empty(t, Ref(tc.typ))
+			},
+		)
+	}
+}
+
 func TestRefEscapesSlashes(t *testing.T) {
 	typ := reflect.TypeFor[Order]()
 	// Compute the expectation from the type's own package path so the test
