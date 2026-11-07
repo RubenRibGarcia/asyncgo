@@ -42,15 +42,23 @@ type builder struct {
 // any validation errors encountered while applying its items. Doc is always
 // non-nil; Err is nil when the catalog is valid.
 type SpecResult struct {
-	Doc  *spec.AsyncAPI
-	Err  error
-	errs []error
+	Doc *spec.AsyncAPI
+	Err error
 }
 
 // ValidationErrors returns the individual validation errors that Err joins, or
 // nil when the catalog is valid. The generator harness uses this to render the
-// per-catalog report.
-func (r *SpecResult) ValidationErrors() []error { return r.errs }
+// per-catalog report. Err is already the join of them (errors.Join exposes them
+// through Unwrap() []error), so there is no second copy to keep in step.
+func (r *SpecResult) ValidationErrors() []error {
+	if r == nil || r.Err == nil {
+		return nil
+	}
+	if joined, ok := r.Err.(interface{ Unwrap() []error }); ok {
+		return joined.Unwrap()
+	}
+	return []error{r.Err}
+}
 
 // Spec assembles an AsyncAPI document from the given fragments.
 func Spec(items ...Item) *SpecResult {
@@ -73,7 +81,7 @@ func Spec(items ...Item) *SpecResult {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
 	}
-	return &SpecResult{Doc: b.doc, Err: errors.Join(errs...), errs: errs}
+	return &SpecResult{Doc: b.doc, Err: errors.Join(errs...)}
 }
 
 func (b *builder) components() *spec.Components {
