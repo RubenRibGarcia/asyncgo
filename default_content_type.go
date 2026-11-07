@@ -7,9 +7,7 @@ type contentTypeItem string
 // because the document carries a single default content type.
 func DefaultContentType(s string) Item { return contentTypeItem(s) }
 
-func (c contentTypeItem) apply(
-	b *builder,
-) error {
+func (c contentTypeItem) apply(b *builder) error {
 	b.doc.DefaultContentType = string(c)
 	return nil
 }
