@@ -63,14 +63,6 @@ func (r *reply) apply(b *builder) error {
 		errs = append(errs, fmt.Errorf("reply.name: is required"))
 	}
 	errs = appendKeyError(errs, "reply", r.name)
-	c := b.components()
-	if c.Replies == nil {
-		c.Replies = map[string]*spec.OperationReply{}
-	}
-	if _, dup := c.Replies[r.name]; dup && r.name != "" {
-		errs = append(errs, fmt.Errorf("reply.%s: duplicate name", r.name))
-	} else {
-		c.Replies[r.name] = &r.r
-	}
+	errs = append(errs, registerComponent(b, repliesMap, "reply", r.name, &r.r)...)
 	return errors.Join(errs...)
 }

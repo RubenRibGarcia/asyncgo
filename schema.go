@@ -45,16 +45,6 @@ func (d *schemaDecl) apply(b *builder) error {
 	if d.s == nil {
 		errs = append(errs, fmt.Errorf("schema.%s: is required", d.name))
 	}
-	c := b.components()
-	if _, dup := c.Schemas[d.name]; dup && d.name != "" {
-		errs = append(errs, fmt.Errorf("schema.%s: duplicate name", d.name))
-	} else if d.name != "" && d.s != nil {
-		// Register-anyway policy (see appendKeyError): a component is registered
-		// even when its name or content was rejected, so a $ref written against it
-		// stays resolvable and the error is the one thing the caller has to fix.
-		// A nil schema is the single exception — "null" is not a Schema Object, so
-		// there is nothing to register and the error above already names it.
-		c.Schemas[d.name] = d.s
-	}
+	errs = append(errs, registerComponent(b, schemasMap, "schema", d.name, d.s)...)
 	return errors.Join(errs...)
 }

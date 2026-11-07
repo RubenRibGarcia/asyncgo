@@ -43,14 +43,6 @@ func (c *correlationID) apply(b *builder) error {
 	if c.c.Location == "" {
 		errs = append(errs, fmt.Errorf("correlationId.%s.location: is required", c.name))
 	}
-	comps := b.components()
-	if comps.CorrelationIDs == nil {
-		comps.CorrelationIDs = map[string]*spec.CorrelationID{}
-	}
-	if _, dup := comps.CorrelationIDs[c.name]; dup && c.name != "" {
-		errs = append(errs, fmt.Errorf("correlationId.%s: duplicate name", c.name))
-	} else {
-		comps.CorrelationIDs[c.name] = &c.c
-	}
+	errs = append(errs, registerComponent(b, correlationIDsMap, "correlationId", c.name, &c.c)...)
 	return errors.Join(errs...)
 }

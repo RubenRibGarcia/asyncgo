@@ -108,15 +108,7 @@ func (t *messageTrait) apply(b *builder) error {
 			t.t.CorrelationID = ref
 		}
 	}
-	c := b.components()
-	if c.MessageTraits == nil {
-		c.MessageTraits = map[string]*spec.MessageTrait{}
-	}
-	if _, dup := c.MessageTraits[t.name]; dup && t.name != "" {
-		errs = append(errs, fmt.Errorf("messageTrait.%s: duplicate name", t.name))
-	} else {
-		c.MessageTraits[t.name] = &t.t
-	}
+	errs = append(errs, registerComponent(b, messageTraitsMap, "messageTrait", t.name, &t.t)...)
 	errs = appendBindingErrors(errs, "messageTrait."+t.name, t.t.Bindings.Validate())
 	return errors.Join(errs...)
 }

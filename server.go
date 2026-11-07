@@ -79,11 +79,7 @@ func (s *server) apply(b *builder) error {
 	if s.s.Host == "" {
 		errs = append(errs, fmt.Errorf("server.%s.host: is required", s.name))
 	}
-	if _, dup := b.doc.Servers[s.name]; dup && s.name != "" {
-		errs = append(errs, fmt.Errorf("server.%s: duplicate name", s.name))
-	} else {
-		b.doc.Servers[s.name] = &s.s
-	}
+	errs = append(errs, registerComponent(b, serversMap, "server", s.name, &s.s)...)
 	errs = appendBindingErrors(errs, "server."+s.name, s.s.Bindings.Validate())
 	return errors.Join(errs...)
 }
