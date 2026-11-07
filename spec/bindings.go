@@ -56,14 +56,28 @@ var ProtocolKeys = []string{
 // The *Bindings types are protocol-keyed maps. Values are typed binding
 // structs (see the protocol sections below); using a map keeps the model
 // extensible to new protocols without changing the core object model.
+//
+// The map is the one place the model's YAML round-trip is not byte-stable. Every
+// other union is a concrete struct precisely so a decoded document re-encodes
+// unchanged (see Message), but a binding value decodes into map[string]any, which
+// re-encodes with sorted keys — where the same binding built as a typed struct
+// marshals in declaration order. The divergence is deliberate and bounded to that
+// first crossing: decode once and the document is stable, which is why the
+// committed fixtures are sorted. Bindings are pinned by
+// TestBindingRoundTripIsNotByteStable.
 type (
 	// ServerBindings holds protocol-specific server bindings, keyed by protocol.
+	// See the *Bindings note above: values are typed binding structs, but the map's
+	// round-trip is not byte-stable, and Validate() checks each modelled
+	// protocol's value type.
 	ServerBindings map[string]any
 	// ChannelBindings holds protocol-specific channel bindings, keyed by protocol.
 	ChannelBindings map[string]any
 	// OperationBindings holds protocol-specific operation bindings, keyed by protocol.
+	// A trait's bindings carry the same objects, so a trait validates with it too.
 	OperationBindings map[string]any
 	// MessageBindings holds protocol-specific message bindings, keyed by protocol.
+	// A trait's bindings carry the same objects, so a trait validates with it too.
 	MessageBindings map[string]any
 )
 
