@@ -8,7 +8,9 @@
 //     into "#/components/schemas/...".
 //   - Anonymous embedded structs are flattened, matching encoding/json, unless
 //     tagged asyncgo:"allOf", in which case the embedded type is composed via
-//     allOf instead (opt-in).
+//     allOf instead (opt-in). An embedded struct carrying an explicit name in
+//     its json tag (e.g. `Base `json:"base"``) is a regular named property
+//     instead — encoding/json does not inline it, and neither does derivation.
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
 //   - asyncapi struct tags carry "required", "enum=a|b|...", "examples=...",
@@ -209,7 +211,7 @@ func fillFields(
 			continue
 		}
 
-		if f.Anonymous {
+		if f.Anonymous && !hasExplicitJSONName(f) {
 			if ft, ok := structOf(f.Type); ok {
 				if !flattening && hasFlag(f.Tag.Get("asyncapi"), "allOf") {
 					*embedded = append(*embedded, FromType(f.Type, defs))
@@ -273,7 +275,8 @@ func refs(names []string, declaring reflect.Type) []*spec.Schema {
 }
 
 // jsonName resolves the JSON field name from the "json" struct tag, falling
-// back to the Go field name. A "-" tag skips the field.
+// back to the Go field name. A "-" tag skips the field, and an empty name
+// (json:",omitempty") falls back too, matching encoding/json.
 func jsonName(f reflect.StructField) (string, bool) {
 	tag := f.Tag.Get("json")
 	if tag == "" {
@@ -283,7 +286,19 @@ func jsonName(f reflect.StructField) (string, bool) {
 		return "", true
 	}
 	if before, _, ok := strings.Cut(tag, ","); ok {
+		if before == "" {
+			return f.Name, false
+		}
 		return before, false
 	}
 	return tag, false
+}
+
+// hasExplicitJSONName reports whether the "json" tag names the field, which
+// makes encoding/json treat an anonymous embedded field as a regular field
+// rather than inlining it. Options alone (json:",omitempty") do not name it, and
+// "-" does: it is a directive, not an inline request.
+func hasExplicitJSONName(f reflect.StructField) bool {
+	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+	return name != ""
 }

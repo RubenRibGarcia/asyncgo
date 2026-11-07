@@ -76,6 +76,67 @@ func TestFromTypeInlineAnonymousStruct(t *testing.T) {
 	assert.Equal(t, "string", s.Properties["name"].Type)
 }
 
+func TestEmbeddedFieldNaming(t *testing.T) {
+	baseKey := "github.com/RubenRibGarcia/asyncgo/schema.NamedEmbedBase"
+
+	tests := []struct {
+		name      string
+		typ       reflect.Type
+		wantProps []string
+		wantBase  string // property name carrying the base $ref, "" for none
+	}{
+		{
+			name:      "should_name_a_tagged_embed_instead_of_flattening",
+			typ:       reflect.TypeFor[NamedEmbed](),
+			wantProps: []string{"base", "own"},
+			wantBase:  "base",
+		},
+		{
+			name:      "should_flatten_an_embed_carrying_only_json_options",
+			typ:       reflect.TypeFor[OptionsOnlyEmbed](),
+			wantProps: []string{"baseField", "own"},
+		},
+		{
+			name:      "should_skip_an_embed_tagged_with_a_dash",
+			typ:       reflect.TypeFor[SkippedEmbed](),
+			wantProps: []string{"own"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defs := map[string]*spec.Schema{}
+			s := FromType(tt.typ, defs)
+			require.NotEmpty(t, s.Ref)
+
+			obj := defs[Name(tt.typ)]
+			require.NotNil(t, obj)
+
+			require.Len(t, obj.Properties, len(tt.wantProps))
+			for _, prop := range tt.wantProps {
+				assert.Contains(t, obj.Properties, prop)
+			}
+			if tt.wantBase != "" {
+				base := obj.Properties[tt.wantBase]
+				require.NotNil(t, base)
+				assert.Equal(t, Ref(reflect.TypeFor[NamedEmbedBase]()), base.Ref)
+				assert.Contains(t, defs, baseKey)
+			}
+		})
+	}
+}
+
+func TestEmptyJSONNameFallsBackToFieldName(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+	s := FromType(reflect.TypeFor[EmptyJSONName](), defs)
+	require.NotEmpty(t, s.Ref)
+
+	obj := defs[Name(reflect.TypeFor[EmptyJSONName]())]
+	require.NotNil(t, obj)
+	require.Len(t, obj.Properties, 1)
+	assert.Contains(t, obj.Properties, "Value")
+}
+
 func TestFromTypeUnexportedFieldSkipped(t *testing.T) {
 	// Touch the unexported field so the `unused` linter considers it used;
 	// derivation must still skip it.
@@ -473,6 +534,37 @@ type withUnexported struct {
 type Node struct {
 	Value    string `json:"value"`
 	Children []Node `json:"children"`
+}
+
+// NamedEmbedBase is embedded under an explicit json name by NamedEmbed, which
+// makes it a regular property rather than an inlined base.
+type NamedEmbedBase struct {
+	BaseField string `json:"baseField"`
+}
+
+// NamedEmbed names its embed, so encoding/json (and derivation) emit
+// {"base": {...}} instead of flattening BaseField into the parent.
+type NamedEmbed struct {
+	NamedEmbedBase `json:"base"`
+	Own            string `json:"own"`
+}
+
+// OptionsOnlyEmbed tags its embed with options but no name: encoding/json still
+// inlines it, so derivation must keep flattening.
+type OptionsOnlyEmbed struct {
+	NamedEmbedBase `json:",omitempty"`
+	Own            string `json:"own"`
+}
+
+// SkippedEmbed discards its embed entirely.
+type SkippedEmbed struct {
+	NamedEmbedBase `json:"-"`
+	Own            string `json:"own"`
+}
+
+// EmptyJSONName has an empty json name, so the Go field name is used.
+type EmptyJSONName struct {
+	Value string `json:","`
 }
 
 // AllOfBase is the shared base composed via allOf in the embedding tests.
