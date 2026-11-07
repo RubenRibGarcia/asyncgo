@@ -100,12 +100,12 @@ func Materialize(dir string, cats []Catalog, refs []combinatorRef) ([]*spec.Asyn
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("materializing catalogs: %v\n%s", err, stderr.String())
+		return nil, fmt.Errorf("materializing catalogs: %w\n%s", err, stderr.String())
 	}
 
 	var out harnessOutput
 	if err := yaml.Unmarshal(stdout.Bytes(), &out); err != nil {
-		return nil, fmt.Errorf("decoding harness output: %v", err)
+		return nil, fmt.Errorf("decoding harness output: %w", err)
 	}
 	var docs []*spec.AsyncAPI
 	var catErrs CatalogErrors

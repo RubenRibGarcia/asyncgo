@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -18,6 +19,29 @@ func TestMaterializeMkdirTempError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
 	_, err := Materialize(dir, []Catalog{{PkgPath: "p", VarName: "V"}}, nil)
 	require.Error(t, err)
+}
+
+// TestMaterializeWrapsHarnessError pins the error chain: a harness subprocess
+// failure has to stay reachable via errors.As/Is, since the exit status alone
+// says nothing about why the build or a user init panicked.
+func TestMaterializeWrapsHarnessError(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
+	require.NoError(t, err)
+
+	// The harness references the catalog var by name, so a var that does not
+	// exist fails the generated program's build.
+	cats := []Catalog{{
+		PkgPath: "github.com/RubenRibGarcia/asyncgo/test/data/simple",
+		VarName: "NoSuchCatalog",
+	}}
+
+	docs, err := Materialize(dir, cats, nil)
+	require.Error(t, err)
+	assert.Nil(t, docs)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr, "the subprocess failure must stay in the chain")
+	assert.Contains(t, err.Error(), "materializing catalogs")
 }
 
 func TestHarness(t *testing.T) {
