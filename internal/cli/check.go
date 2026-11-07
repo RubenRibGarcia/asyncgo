@@ -5,18 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/spf13/cobra"
 )
 
 func newCheckCmd() *cobra.Command {
-	return &cobra.Command{
+	var output, format string
+	cmd := &cobra.Command{
 		Use:   "check [dir]",
-		Short: "Fail if asyncapi.yaml is out of date",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Fail if the generated document is out of date",
+		Long: "Fail if the generated document is out of date.\n\n" +
+			"The document is compared byte for byte against the file `asyncgo generate` would " +
+			"write for the same --format and --output flags, so pass the same flags you generate " +
+			"with. The default is asyncapi.yaml in dir.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			selected, err := resolveFormat(format)
+			if err != nil {
+				return err
+			}
+
 			dir, err := resolveDir(args)
 			if err != nil {
 				return fmt.Errorf("checking: %w", err)
@@ -30,12 +39,15 @@ func newCheckCmd() *cobra.Command {
 				}
 				return fmt.Errorf("checking: %w", err)
 			}
-			got, err := doc.YAML()
+			got, err := selected.encode(doc)
 			if err != nil {
 				return fmt.Errorf("encoding document: %w", err)
 			}
 
-			path := filepath.Join(dir, "asyncapi.yaml")
+			path, err := resolveOutput(dir, output, selected.defaultName)
+			if err != nil {
+				return fmt.Errorf("checking: %w", err)
+			}
 			want, err := os.ReadFile(path)
 			if err != nil {
 				if os.IsNotExist(err) {
@@ -50,4 +62,9 @@ func newCheckCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().
+		StringVar(&format, "format", "yaml", "output format to check: yaml or json")
+	cmd.Flags().
+		StringVarP(&output, "output", "o", "", "output file or directory (default: <dir>/asyncapi.<format>)")
+	return cmd
 }

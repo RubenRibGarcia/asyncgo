@@ -450,6 +450,61 @@ func TestCheckMissing(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
+// TestCheckFormatAndOutput covers the flags check shares with generate: without
+// them, check could only ever verify a yaml document written to the default
+// path, and always failed against json or a custom -o.
+func TestCheckFormatAndOutput(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	tests := []struct {
+		name string
+		args []string
+		want string // artifact the check compares against
+	}{
+		{
+			name: "should_check_json_written_by_generate",
+			args: []string{"--format", "json"},
+			want: "asyncapi.json",
+		},
+		{
+			name: "should_check_a_custom_output_path",
+			args: []string{"--format", "json", "-o", "custom.json"},
+			want: "custom.json",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := copySimpleFixture(t)
+
+			_, _, err := execute(t, BuildInfo{}, append([]string{"generate", dir}, tt.args...)...)
+			require.NoError(t, err)
+
+			stdout, _, err := execute(t, BuildInfo{}, append([]string{"check", dir}, tt.args...)...)
+			require.NoError(t, err)
+			assert.Contains(t, stdout, tt.want+" is up to date")
+		})
+	}
+}
+
+func TestCheckFormatMissingArtifact(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+
+	// The yaml default is not consulted when json is requested: the missing
+	// artifact has to be named so the user sees which generate run is needed.
+	_, _, err := execute(t, BuildInfo{}, "check", dir, "--format", "json")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "asyncapi.json not found")
+}
+
+func TestCheckRejectsUnknownFormat(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+
+	_, _, err := execute(t, BuildInfo{}, "check", dir, "--format", "xml")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown format "xml"`)
+}
+
 func TestCheckNoCatalogs(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "spec"))
 	require.NoError(t, err)
