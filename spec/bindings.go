@@ -299,10 +299,10 @@ type AnypointMQChannelBinding struct {
 }
 
 // AnypointMQMessageBinding describes Anypoint MQ-specific message information.
-// Headers is Schema Object | Reference Object, so it is `any`.
+// Headers is Schema Object | Reference Object, which *Schema already expresses.
 type AnypointMQMessageBinding struct {
-	Headers        any    `json:"headers,omitempty"        yaml:"headers,omitempty"`
-	BindingVersion string `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
+	Headers        *Schema `json:"headers,omitempty"        yaml:"headers,omitempty"`
+	BindingVersion string  `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
 }
 
 // --- Google Cloud Pub/Sub bindings (binding version 0.2.0) -------------------
@@ -497,14 +497,13 @@ type KafkaOperationBinding struct {
 
 // KafkaMessageBinding describes Kafka-specific message information. Key is
 // Schema Object | Reference Object: a schema describing the message key, or a
-// reference to one. It is `any` because the union's reference side has to be
-// expressible.
+// reference to one. *Schema expresses both sides of that union.
 type KafkaMessageBinding struct {
-	Key                     any    `json:"key,omitempty"                     yaml:"key,omitempty"`
-	SchemaIDLocation        string `json:"schemaIdLocation,omitempty"        yaml:"schemaIdLocation,omitempty"`
-	SchemaIDPayloadEncoding string `json:"schemaIdPayloadEncoding,omitempty" yaml:"schemaIdPayloadEncoding,omitempty"`
-	SchemaLookupStrategy    string `json:"schemaLookupStrategy,omitempty"    yaml:"schemaLookupStrategy,omitempty"`
-	BindingVersion          string `json:"bindingVersion,omitempty"          yaml:"bindingVersion,omitempty"`
+	Key                     *Schema `json:"key,omitempty"                     yaml:"key,omitempty"`
+	SchemaIDLocation        string  `json:"schemaIdLocation,omitempty"        yaml:"schemaIdLocation,omitempty"`
+	SchemaIDPayloadEncoding string  `json:"schemaIdPayloadEncoding,omitempty" yaml:"schemaIdPayloadEncoding,omitempty"`
+	SchemaLookupStrategy    string  `json:"schemaLookupStrategy,omitempty"    yaml:"schemaLookupStrategy,omitempty"`
+	BindingVersion          string  `json:"bindingVersion,omitempty"          yaml:"bindingVersion,omitempty"`
 }
 
 // --- MQTT bindings (binding version 0.2.0) -----------------------------------
@@ -545,14 +544,15 @@ type MQTTOperationBinding struct {
 
 // MQTTMessageBinding describes MQTT-specific message information.
 //
-// CorrelationData is Schema Object | Reference Object, and ResponseTopic is
-// string | Schema Object | Reference Object, so both are `any`.
+// CorrelationData is Schema Object | Reference Object, which *Schema expresses.
+// ResponseTopic is string | Schema Object | Reference Object, which is why it
+// stays `any`: a bare string is not a schema.
 type MQTTMessageBinding struct {
-	PayloadFormatIndicator int    `json:"payloadFormatIndicator,omitempty" yaml:"payloadFormatIndicator,omitempty"`
-	CorrelationData        any    `json:"correlationData,omitempty"        yaml:"correlationData,omitempty"`
-	ContentType            string `json:"contentType,omitempty"            yaml:"contentType,omitempty"`
-	ResponseTopic          any    `json:"responseTopic,omitempty"          yaml:"responseTopic,omitempty"`
-	BindingVersion         string `json:"bindingVersion,omitempty"         yaml:"bindingVersion,omitempty"`
+	PayloadFormatIndicator int     `json:"payloadFormatIndicator,omitempty" yaml:"payloadFormatIndicator,omitempty"`
+	CorrelationData        *Schema `json:"correlationData,omitempty"        yaml:"correlationData,omitempty"`
+	ContentType            string  `json:"contentType,omitempty"            yaml:"contentType,omitempty"`
+	ResponseTopic          any     `json:"responseTopic,omitempty"          yaml:"responseTopic,omitempty"`
+	BindingVersion         string  `json:"bindingVersion,omitempty"         yaml:"bindingVersion,omitempty"`
 }
 
 // --- MQTT 5 bindings (binding version 0.2.0) ---------------------------------
@@ -846,10 +846,10 @@ type SQSStatement struct {
 // reserved bindings section. Only the channel object defines fields.
 
 // WSChannelBinding describes WebSockets-specific channel information. Query and
-// Headers are Schema Object | Reference Object, so they are `any`.
+// Headers are Schema Object | Reference Object, which *Schema expresses.
 type WSChannelBinding struct {
-	Method         string `json:"method,omitempty"         yaml:"method,omitempty"`
-	Query          any    `json:"query,omitempty"          yaml:"query,omitempty"`
-	Headers        any    `json:"headers,omitempty"        yaml:"headers,omitempty"`
-	BindingVersion string `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
+	Method         string  `json:"method,omitempty"         yaml:"method,omitempty"`
+	Query          *Schema `json:"query,omitempty"          yaml:"query,omitempty"`
+	Headers        *Schema `json:"headers,omitempty"        yaml:"headers,omitempty"`
+	BindingVersion string  `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
 }
