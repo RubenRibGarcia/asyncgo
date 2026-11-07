@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -65,7 +66,12 @@ type catalogOutcome struct {
 // Running the harness executes only package init functions of the catalog
 // packages (never the main package, which is not importable); the catalog
 // values themselves are already-built DSL results.
-func Materialize(dir string, cats []Catalog, refs []combinatorRef) ([]*spec.AsyncAPI, error) {
+func Materialize(
+	ctx context.Context,
+	dir string,
+	cats []Catalog,
+	refs []combinatorRef,
+) ([]*spec.AsyncAPI, error) {
 	if len(cats) == 0 {
 		return nil, nil
 	}
@@ -94,18 +100,18 @@ func Materialize(dir string, cats []Catalog, refs []combinatorRef) ([]*spec.Asyn
 		return nil, fmt.Errorf("writing harness: %w", err)
 	}
 
-	cmd := exec.Command("go", "run", "./"+filepath.Base(tmp))
+	cmd := exec.CommandContext(ctx, "go", "run", "./"+filepath.Base(tmp))
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("materializing catalogs: %v\n%s", err, stderr.String())
+		return nil, fmt.Errorf("materializing catalogs: %w\n%s", err, stderr.String())
 	}
 
 	var out harnessOutput
 	if err := yaml.Unmarshal(stdout.Bytes(), &out); err != nil {
-		return nil, fmt.Errorf("decoding harness output: %v", err)
+		return nil, fmt.Errorf("decoding harness output: %w", err)
 	}
 	var docs []*spec.AsyncAPI
 	var catErrs CatalogErrors

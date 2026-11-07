@@ -20,7 +20,13 @@ func (b *builder) validateServerRefs() []error {
 	// Channels are walked in sorted order so the joined error message is stable:
 	// SpecResult.Err is compared by exact string in tests.
 	for _, addr := range slices.Sorted(maps.Keys(b.doc.Channels)) {
-		for _, ref := range b.doc.Channels[addr].Servers {
+		ch := b.doc.Channels[addr]
+		if ch == nil {
+			// A hand-assembled document may hold a nil entry; skip it rather than
+			// dereferencing it, like every other validator here.
+			continue
+		}
+		for _, ref := range ch.Servers {
 			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, "#/servers/"))
 			if _, ok := b.doc.Servers[name]; !ok {
 				errs = append(
@@ -52,7 +58,11 @@ func (b *builder) validateSecurityRefs() []error {
 	// joined error message is stable: SpecResult.Err is compared by exact string
 	// in tests.
 	for _, name := range slices.Sorted(maps.Keys(b.doc.Servers)) {
-		for _, ref := range b.doc.Servers[name].Security {
+		srv := b.doc.Servers[name]
+		if srv == nil {
+			continue // see validateServerRefs: nil entries are skipped, not dereferenced
+		}
+		for _, ref := range srv.Security {
 			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
@@ -63,7 +73,11 @@ func (b *builder) validateSecurityRefs() []error {
 		}
 	}
 	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
-		for _, ref := range b.doc.Operations[key].Security {
+		op := b.doc.Operations[key]
+		if op == nil {
+			continue
+		}
+		for _, ref := range op.Security {
 			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
@@ -74,7 +88,11 @@ func (b *builder) validateSecurityRefs() []error {
 		}
 	}
 	for _, name := range slices.Sorted(maps.Keys(declaredTraits)) {
-		for _, ref := range declaredTraits[name].Security {
+		trait := declaredTraits[name]
+		if trait == nil {
+			continue
+		}
+		for _, ref := range trait.Security {
 			scheme := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, prefix))
 			if _, ok := declared[scheme]; !ok {
 				errs = append(errs, fmt.Errorf(
@@ -118,7 +136,11 @@ func (b *builder) validateReplyRefs() []error {
 	// Keys are walked in sorted order so the joined error message is stable:
 	// SpecResult.Err is compared by exact string in tests.
 	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
-		ref := b.doc.Operations[key].Reply
+		op := b.doc.Operations[key]
+		if op == nil {
+			continue // see validateServerRefs: nil entries are skipped, not dereferenced
+		}
+		ref := op.Reply
 		if ref == nil {
 			continue
 		}
@@ -130,6 +152,9 @@ func (b *builder) validateReplyRefs() []error {
 
 	for _, name := range slices.Sorted(maps.Keys(declaredReplies)) {
 		r := declaredReplies[name]
+		if r == nil {
+			continue
+		}
 		if r.Address != nil {
 			addr := jsonpointer.Unescape(strings.TrimPrefix(r.Address.Ref, replyAddressesPrefix))
 			if _, ok := declaredAddresses[addr]; !ok {
@@ -152,7 +177,8 @@ func (b *builder) validateReplyRefs() []error {
 			continue
 		}
 		channel := jsonpointer.Unescape(strings.TrimPrefix(r.Channel.Ref, channelsPrefix))
-		if _, ok := b.doc.Channels[channel]; !ok {
+		ch, ok := b.doc.Channels[channel]
+		if !ok || ch == nil {
 			errs = append(
 				errs,
 				fmt.Errorf("reply.%s: references unknown channel %q", name, channel),
@@ -171,7 +197,7 @@ func (b *builder) validateReplyRefs() []error {
 				continue
 			}
 			key := jsonpointer.Unescape(strings.TrimPrefix(msg.Ref, prefix))
-			if _, ok := b.doc.Channels[channel].Messages[key]; !ok {
+			if _, ok := ch.Messages[key]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"reply.%s: message %q is not in channel %q",
 					name,
@@ -310,7 +336,11 @@ func (b *builder) validateTraitRefs() []error {
 	// Keys are walked in sorted order so the joined error message is stable:
 	// SpecResult.Err is compared by exact string in tests.
 	for _, key := range slices.Sorted(maps.Keys(b.doc.Operations)) {
-		for _, ref := range b.doc.Operations[key].Traits {
+		op := b.doc.Operations[key]
+		if op == nil {
+			continue // see validateServerRefs: nil entries are skipped, not dereferenced
+		}
+		for _, ref := range op.Traits {
 			name := jsonpointer.Unescape(strings.TrimPrefix(ref.Ref, operationTraitsPrefix))
 			if _, ok := declaredOperationTraits[name]; !ok {
 				errs = append(errs, fmt.Errorf(
@@ -350,7 +380,11 @@ func (b *builder) validateTraitRefs() []error {
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(declaredMessageTraits)) {
-		ref := declaredMessageTraits[name].CorrelationID
+		trait := declaredMessageTraits[name]
+		if trait == nil {
+			continue
+		}
+		ref := trait.CorrelationID
 		if ref == nil {
 			continue
 		}

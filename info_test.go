@@ -26,6 +26,19 @@ func TestInfoFields(t *testing.T) {
 	assert.Equal(t, "orders", i.info.Tags[0].Name)
 }
 
+func TestInfoTagsAppend(t *testing.T) {
+	// Every other Tags setter (message, channel, server, operation, both traits)
+	// appends; info must behave the same, including on a second call.
+	i := Info("Orders", "1.0.0").
+		Tags(spec.Tag{Name: "orders"}).
+		Tags(spec.Tag{Name: "billing"}, spec.Tag{Name: "audit"})
+
+	require.Len(t, i.info.Tags, 3)
+	assert.Equal(t, "orders", i.info.Tags[0].Name)
+	assert.Equal(t, "billing", i.info.Tags[1].Name)
+	assert.Equal(t, "audit", i.info.Tags[2].Name)
+}
+
 func TestInfoValidationErrors(t *testing.T) {
 	tests := []struct {
 		name string

@@ -12,7 +12,7 @@ func TestExtractDescriptionsSimple(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
 	require.NoError(t, err)
 
-	pkgs, err := load(dir)
+	pkgs, err := load(t.Context(), dir)
 	require.NoError(t, err)
 	desc := extractDescriptions(pkgs, reachableFromMain(pkgs))
 
@@ -25,7 +25,7 @@ func TestExtractDescriptionsAllOf(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "allof"))
 	require.NoError(t, err)
 
-	pkgs, err := load(dir)
+	pkgs, err := load(t.Context(), dir)
 	require.NoError(t, err)
 	desc := extractDescriptions(pkgs, reachableFromMain(pkgs))
 

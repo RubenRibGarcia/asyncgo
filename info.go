@@ -20,7 +20,10 @@ func (i *infoBuilder) Description(s string) *infoBuilder    { i.info.Description
 func (i *infoBuilder) TermsOfService(s string) *infoBuilder { i.info.TermsOfService = s; return i }
 func (i *infoBuilder) Contact(c spec.Contact) *infoBuilder  { i.info.Contact = &c; return i }
 func (i *infoBuilder) License(l spec.License) *infoBuilder  { i.info.License = &l; return i }
-func (i *infoBuilder) Tags(tags ...spec.Tag) *infoBuilder   { i.info.Tags = tags; return i }
+func (i *infoBuilder) Tags(tags ...spec.Tag) *infoBuilder {
+	i.info.Tags = append(i.info.Tags, tags...)
+	return i
+}
 
 func (i *infoBuilder) apply(b *builder) error {
 	var errs []error

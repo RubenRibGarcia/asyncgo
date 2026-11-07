@@ -53,7 +53,7 @@ func newGenerateCmd() *cobra.Command {
 				return fmt.Errorf("generating: %w", err)
 			}
 
-			doc, n, err := discovery.Build(dir)
+			doc, n, err := discovery.Build(cmd.Context(), dir)
 			if err != nil {
 				var catErrs discovery.CatalogErrors
 				if errors.As(err, &catErrs) {

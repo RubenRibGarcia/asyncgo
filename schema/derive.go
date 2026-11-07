@@ -8,7 +8,10 @@
 //     into "#/components/schemas/...".
 //   - Anonymous embedded structs are flattened, matching encoding/json, unless
 //     tagged asyncgo:"allOf", in which case the embedded type is composed via
-//     allOf instead (opt-in).
+//     allOf instead (opt-in). An embedded struct carrying an explicit name in
+//     its json tag (for example a Base field tagged json:"base") is a regular
+//     named property instead — encoding/json does not inline it, and neither
+//     does derivation.
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
 //   - asyncapi struct tags carry "required", "enum=a|b|...", "examples=...",
@@ -23,6 +26,11 @@
 //     overrides derivation: its AsyncAPISchema() result is hoisted under the
 //     type's fully-qualified name as-is. Non-struct kinds are hoisted only when
 //     they carry a provider, so a plain `type ID string` stays inline.
+//   - Byte slices are base64 strings by kind, so a named `type Raw []byte`
+//     derives the same way []byte does. Only the exact time.Time maps to
+//     date-time: a type defined from time.Time is an ordinary named struct
+//     whose fields are all unexported, so it derives as an empty object unless
+//     it implements spec.SchemaProvider.
 package schema
 
 import (
@@ -38,7 +46,6 @@ import (
 var (
 	timeType           = reflect.TypeFor[time.Time]()
 	rawMessageType     = reflect.TypeFor[json.RawMessage]()
-	byteSliceType      = reflect.TypeFor[[]byte]()
 	schemaProviderType = reflect.TypeFor[spec.SchemaProvider]()
 )
 
@@ -62,7 +69,14 @@ func RefByName(fqn string) string {
 // non-struct types implementing spec.SchemaProvider, are hoisted into defs
 // (keyed by their fully-qualified name) and returned as a $ref; all other types
 // are inlined.
+//
+// A nil t yields an unconstrained schema rather than a panic. defs must be
+// non-nil whenever t is hoistable (a named struct or provider); FromType panics
+// on a hoistable type with a nil defs map.
 func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
+	if t == nil {
+		return &spec.Schema{}
+	}
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
@@ -89,14 +103,18 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	switch t {
 	case timeType:
 		return &spec.Schema{Type: "string", Format: "date-time"}
-	case byteSliceType:
-		// encoding/json marshals []byte as base64, so the Draft-07 content
-		// annotation says so. Format "byte" stays: AsyncAPI's own Data Type
-		// Formats table defines byte as base64-encoded characters, and it is
-		// an annotation, so emitting both asserts nothing contradictory.
-		return &spec.Schema{Type: "string", Format: "byte", ContentEncoding: "base64"}
 	case rawMessageType:
 		return &spec.Schema{}
+	}
+
+	// encoding/json marshals any byte slice as base64, so the Draft-07 content
+	// annotation says so. The check is kind-based because a named type defined
+	// from []byte (type Raw []byte) marshals the same way, while an array
+	// ([N]byte) does not. Format "byte" stays: AsyncAPI's own Data Type Formats
+	// table defines byte as base64-encoded characters, and it is an annotation,
+	// so emitting both asserts nothing contradictory.
+	if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
+		return &spec.Schema{Type: "string", Format: "byte", ContentEncoding: "base64"}
 	}
 
 	switch t.Kind() {
@@ -209,7 +227,7 @@ func fillFields(
 			continue
 		}
 
-		if f.Anonymous {
+		if f.Anonymous && !hasExplicitJSONName(f) {
 			if ft, ok := structOf(f.Type); ok {
 				if !flattening && hasFlag(f.Tag.Get("asyncapi"), "allOf") {
 					*embedded = append(*embedded, FromType(f.Type, defs))
@@ -273,7 +291,8 @@ func refs(names []string, declaring reflect.Type) []*spec.Schema {
 }
 
 // jsonName resolves the JSON field name from the "json" struct tag, falling
-// back to the Go field name. A "-" tag skips the field.
+// back to the Go field name. A "-" tag skips the field, and an empty name
+// (json:",omitempty") falls back too, matching encoding/json.
 func jsonName(f reflect.StructField) (string, bool) {
 	tag := f.Tag.Get("json")
 	if tag == "" {
@@ -283,7 +302,19 @@ func jsonName(f reflect.StructField) (string, bool) {
 		return "", true
 	}
 	if before, _, ok := strings.Cut(tag, ","); ok {
+		if before == "" {
+			return f.Name, false
+		}
 		return before, false
 	}
 	return tag, false
+}
+
+// hasExplicitJSONName reports whether the "json" tag names the field, which
+// makes encoding/json treat an anonymous embedded field as a regular field
+// rather than inlining it. Options alone (json:",omitempty") do not name it, and
+// "-" does: it is a directive, not an inline request.
+func hasExplicitJSONName(f reflect.StructField) bool {
+	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+	return name != ""
 }

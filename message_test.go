@@ -448,7 +448,11 @@ func TestMessageCorrelationIDFrom(t *testing.T) {
 			name: "should_derive_the_key_from_the_payload_type_name",
 			msg: MessageOf(OrderPlaced{}).
 				CorrelationIDFrom(spec.CorrelationID{Location: "$message.header#/correlationId"}),
-			key: "OrderPlacedCorrelationID",
+			// The component key follows the message's component key, which is the
+			// fully-qualified type name when no Name is set. Keying by the short
+			// type name made two same-named payload types from different packages
+			// collide on one correlation id.
+			key: schema.Name(reflect.TypeFor[OrderPlaced]()) + "CorrelationID",
 		},
 	}
 	for _, tc := range tests {
@@ -459,7 +463,11 @@ func TestMessageCorrelationIDFrom(t *testing.T) {
 			require.NoError(t, err)
 
 			require.NotNil(t, msg.CorrelationID)
-			assert.Equal(t, "#/components/correlationIds/"+tc.key, msg.CorrelationID.Ref)
+			assert.Equal(
+				t,
+				"#/components/correlationIds/"+jsonpointer.Escape(tc.key),
+				msg.CorrelationID.Ref,
+			)
 			require.Contains(t, b.doc.Components.CorrelationIDs, tc.key)
 			assert.Equal(
 				t,
