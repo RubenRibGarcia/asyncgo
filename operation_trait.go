@@ -85,5 +85,6 @@ func (t *operationTrait) apply(b *builder) error {
 	} else {
 		c.OperationTraits[t.name] = &t.t
 	}
+	errs = appendBindingErrors(errs, "operationTrait."+t.name, t.t.Bindings.Validate())
 	return errors.Join(errs...)
 }

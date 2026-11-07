@@ -117,5 +117,6 @@ func (t *messageTrait) apply(b *builder) error {
 	} else {
 		c.MessageTraits[t.name] = &t.t
 	}
+	errs = appendBindingErrors(errs, "messageTrait."+t.name, t.t.Bindings.Validate())
 	return errors.Join(errs...)
 }

@@ -1,6 +1,7 @@
 package asyncgo
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -136,6 +137,9 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 	}
 	if err := m.queuePayloadExamples(b, payload); err != nil {
 		return nil, err
+	}
+	if found := m.bindings.Validate(); len(found) > 0 {
+		return nil, fmt.Errorf("message.%s: %w", messageName(m), errors.Join(found...))
 	}
 
 	correlationID := m.correlationID

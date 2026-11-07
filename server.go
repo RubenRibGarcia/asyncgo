@@ -84,5 +84,6 @@ func (s *server) apply(b *builder) error {
 	} else {
 		b.doc.Servers[s.name] = &s.s
 	}
+	errs = appendBindingErrors(errs, "server."+s.name, s.s.Bindings.Validate())
 	return errors.Join(errs...)
 }

@@ -1808,3 +1808,84 @@ func TestProtocolKeys(t *testing.T) {
 		assert.ElementsMatch(t, constants, spec.ProtocolKeys)
 	})
 }
+
+// TestBindingsValidationThroughSpec pins that the typed binding maps are checked
+// during the DSL build, not only when a spec user calls Validate directly: the
+// maps are map[string]any, so a wrong protocol key or a binding object for the
+// wrong position was previously undetectable until external validation.
+func TestBindingsValidationThroughSpec(t *testing.T) {
+	tests := []struct {
+		name string
+		item Item
+		want string
+	}{
+		{
+			name: "should_report_a_wrong_binding_object_on_a_server",
+			item: Servers(Server("prod", "kafka", "broker:9092").
+				Binding(spec.ProtocolKafka, spec.KafkaChannelBinding{})),
+			want: "server.prod: bindings.kafka: want spec.KafkaServerBinding, " +
+				"got spec.KafkaChannelBinding",
+		},
+		{
+			name: "should_report_a_wrong_binding_object_on_a_channel",
+			item: Channels(Channel("orders").
+				Binding(spec.ProtocolKafka, spec.KafkaServerBinding{})),
+			want: "channel.orders: bindings.kafka: want spec.KafkaChannelBinding, " +
+				"got spec.KafkaServerBinding",
+		},
+		{
+			name: "should_report_a_wrong_binding_object_on_an_operation",
+			item: Channels(Channel("orders").
+				Send(Operation().
+					Binding(spec.ProtocolKafka, spec.KafkaChannelBinding{}))),
+			want: "operation.orders.send: bindings.kafka: want spec.KafkaOperationBinding, " +
+				"got spec.KafkaChannelBinding",
+		},
+		{
+			name: "should_report_a_wrong_binding_object_on_a_message",
+			item: Channels(Channel("orders").
+				Send(Operation().
+					Message(MessageOf(OrderPlaced{}).
+						Binding(spec.ProtocolKafka, spec.KafkaServerBinding{})))),
+			want: "message.OrderPlaced: bindings.kafka: want spec.KafkaMessageBinding, " +
+				"got spec.KafkaServerBinding",
+		},
+		{
+			name: "should_report_a_wrong_binding_object_on_an_operation_trait",
+			item: OperationTraits(OperationTrait("kafka-base").
+				Binding(spec.ProtocolKafka, spec.KafkaMessageBinding{})),
+			want: "operationTrait.kafka-base: bindings.kafka: want spec.KafkaOperationBinding, " +
+				"got spec.KafkaMessageBinding",
+		},
+		{
+			name: "should_report_a_wrong_binding_object_on_a_message_trait",
+			item: MessageTraits(MessageTrait("traced").
+				Binding(spec.ProtocolKafka, spec.KafkaServerBinding{})),
+			want: "messageTrait.traced: bindings.kafka: want spec.KafkaMessageBinding, " +
+				"got spec.KafkaServerBinding",
+		},
+		{
+			name: "should_accept_the_matching_binding_object",
+			item: Servers(Server("prod", "kafka", "broker:9092").
+				Binding(spec.ProtocolKafka, spec.KafkaServerBinding{})),
+		},
+		{
+			name: "should_leave_an_unmodelled_protocol_key_alone",
+			item: Servers(Server("prod", "kafka", "broker:9092").
+				Binding("some-new-protocol", "value")),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := Spec(tc.item)
+
+			if tc.want == "" {
+				require.NoError(t, res.Err)
+				return
+			}
+			require.Error(t, res.Err)
+			assert.Contains(t, res.Err.Error(), tc.want)
+		})
+	}
+}

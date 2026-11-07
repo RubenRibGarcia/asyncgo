@@ -1,11 +1,27 @@
 package asyncgo
 
-import "github.com/RubenRibGarcia/asyncgo/spec"
+import (
+	"fmt"
+
+	"github.com/RubenRibGarcia/asyncgo/spec"
+)
 
 // The following setters attach protocol-specific bindings to servers, channels,
 // operations, messages, and the two trait builders. Each protocol has a typed
 // helper in its own protocol section below (compile-checked), plus a generic
 // Binding escape hatch for protocols the library does not model.
+
+// appendBindingErrors validates the bindings of one document object at one
+// position and appends each failure to errs, prefixed with path (e.g.
+// "server.prod"). A protocol the model does not know is not reported: the
+// untyped Binding escape hatch is how a protocol added to the specification
+// before asyncgo models it is expressed.
+func appendBindingErrors(errs []error, path string, found []error) []error {
+	for _, err := range found {
+		errs = append(errs, fmt.Errorf("%s: %w", path, err))
+	}
+	return errs
+}
 
 // --- server bindings ---------------------------------------------------------
 
