@@ -10,27 +10,37 @@ import (
 
 func TestResolveCombinatorName(t *testing.T) {
 	t.Run("should_resolve_short_name_against_declaring_package", func(t *testing.T) {
+		ref, err := resolveCombinatorName("OrderPlaced", "example.com/orders")
+		require.NoError(t, err)
 		assert.Equal(
 			t,
 			combinatorRef{ImportPath: "example.com/orders", TypeName: "OrderPlaced"},
-			resolveCombinatorName("OrderPlaced", "example.com/orders"),
+			ref,
 		)
 	})
 
 	t.Run("should_pass_through_fully_qualified_name", func(t *testing.T) {
+		ref, err := resolveCombinatorName("example.com/orders.OrderPlaced", "unused")
+		require.NoError(t, err)
 		assert.Equal(
 			t,
 			combinatorRef{ImportPath: "example.com/orders", TypeName: "OrderPlaced"},
-			resolveCombinatorName("example.com/orders.OrderPlaced", "unused"),
+			ref,
 		)
 	})
 
-	t.Run("should_keep_path_without_dot_as_import_path", func(t *testing.T) {
-		assert.Equal(
-			t,
-			combinatorRef{ImportPath: "foo/bar"},
-			resolveCombinatorName("foo/bar", "unused"),
-		)
+	t.Run("should_reject_a_path_without_a_type_name", func(t *testing.T) {
+		// The harness emits new(alias.TypeName); a slash with no dot produced
+		// new(pkgN.) — a Go syntax error surfacing as `exit status 1`.
+		_, err := resolveCombinatorName("foo/bar", "unused")
+		require.Error(t, err)
+	})
+
+	t.Run("should_reject_a_semi_qualified_name", func(t *testing.T) {
+		// Without an import path the name is package-local, so a dot cannot be
+		// resolved and new(alias.pkg.Type) does not compile.
+		_, err := resolveCombinatorName("orders.OrderPlaced", "example.com/app")
+		require.Error(t, err)
 	})
 }
 
@@ -79,7 +89,8 @@ func TestCollectCombinatorRefs(t *testing.T) {
 		pkgs, err := load(t.Context(), dir)
 		require.NoError(t, err)
 
-		refs := collectCombinatorRefs(pkgs, reachableFromMain(pkgs))
+		refs, err := collectCombinatorRefs(pkgs, reachableFromMain(pkgs))
+		require.NoError(t, err)
 
 		const pkg = "github.com/RubenRibGarcia/asyncgo/test/data/oneof"
 		require.Contains(t, refs, combinatorRef{ImportPath: pkg, TypeName: "OrderPlaced"})

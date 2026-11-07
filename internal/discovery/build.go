@@ -24,7 +24,11 @@ func Build(ctx context.Context, dir string) (*spec.AsyncAPI, int, error) {
 			dir,
 		)
 	}
-	docs, err := Materialize(ctx, dir, cats, collectCombinatorRefs(pkgs, reachable))
+	refs, err := collectCombinatorRefs(pkgs, reachable)
+	if err != nil {
+		return nil, 0, err
+	}
+	docs, err := Materialize(ctx, dir, cats, refs)
 	if err != nil {
 		return nil, 0, err
 	}
