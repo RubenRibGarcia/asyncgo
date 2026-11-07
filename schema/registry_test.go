@@ -17,6 +17,12 @@ func TestRegister(t *testing.T) {
 		)
 	})
 
+	t.Run("should_ignore_nil_types", func(t *testing.T) {
+		before := len(registry)
+		assert.NotPanics(t, func() { Register(nil) })
+		assert.Len(t, registry, before)
+	})
+
 	t.Run("should_ignore_anonymous_types", func(t *testing.T) {
 		before := len(registry)
 		Register(struct{ A string }{})
