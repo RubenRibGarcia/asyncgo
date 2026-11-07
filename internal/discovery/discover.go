@@ -25,6 +25,13 @@ type Catalog struct {
 
 // specResultType is the identity of *asyncgo.SpecResult, derived from the real
 // type so it stays correct if the module path changes.
+//
+// This is the only place internal/discovery depends on the root package, and the
+// dependency is deliberate: a catalog is recognised by its type identity, so the
+// type has to be the one the DSL actually returns — a duplicate of SpecResult in
+// spec would make an alias, and an alias is not an identity the discovery pass
+// could trust to stay in step. The alternative (moving SpecResult into spec and
+// aliasing it here) buys nothing at this size, so the edge is documented and kept.
 var specResultType = reflect.TypeFor[asyncgo.SpecResult]()
 
 // load loads all packages in the module rooted at dir with the syntax and type
