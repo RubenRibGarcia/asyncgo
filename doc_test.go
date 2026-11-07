@@ -8,6 +8,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestSingletonItemsAreLastWins pins the one place the DSL is not
+// duplicate-is-an-error: the document carries a single info section and a single
+// default content type, and the last declaration wins. Every other duplicate
+// errors and keeps the first entry (TestDuplicateKeepsFirstEntry).
+func TestSingletonItemsAreLastWins(t *testing.T) {
+	t.Run("should_keep_the_last_info_section", func(t *testing.T) {
+		res := Spec(
+			Info("First", "1.0.0"),
+			Info("Second", "2.0.0").Description("second"),
+		)
+
+		require.NoError(t, res.Err)
+		assert.Equal(t, "Second", res.Doc.Info.Title)
+		assert.Equal(t, "2.0.0", res.Doc.Info.Version)
+		assert.Equal(t, "second", res.Doc.Info.Description)
+	})
+
+	t.Run("should_keep_the_last_default_content_type", func(t *testing.T) {
+		res := Spec(
+			Info("Orders", "1.0.0"),
+			DefaultContentType("application/json"),
+			DefaultContentType("application/cloudevents+json"),
+		)
+
+		require.NoError(t, res.Err)
+		assert.Equal(t, "application/cloudevents+json", res.Doc.DefaultContentType)
+	})
+}
+
 func TestDuplicateKeepsFirstEntry(t *testing.T) {
 	t.Run("should_keep_first_server_on_duplicate_name", func(t *testing.T) {
 		res := Spec(
