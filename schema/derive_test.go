@@ -595,26 +595,27 @@ type NamedEmbedBase struct {
 // NamedEmbed names its embed, so encoding/json (and derivation) emit
 // {"base": {...}} instead of flattening BaseField into the parent.
 type NamedEmbed struct {
-	NamedEmbedBase `json:"base"`
+	NamedEmbedBase `       json:"base"`
 	Own            string `json:"own"`
 }
 
 // OptionsOnlyEmbed tags its embed with options but no name: encoding/json still
 // inlines it, so derivation must keep flattening.
 type OptionsOnlyEmbed struct {
-	NamedEmbedBase `json:",omitempty"`
+	NamedEmbedBase `       json:",omitempty"`
 	Own            string `json:"own"`
 }
 
 // SkippedEmbed discards its embed entirely.
 type SkippedEmbed struct {
-	NamedEmbedBase `json:"-"`
+	NamedEmbedBase `       json:"-"`
 	Own            string `json:"own"`
 }
 
-// EmptyJSONName has an empty json name, so the Go field name is used.
+// EmptyJSONName carries a json tag with options but no name, so the Go field
+// name is used instead of an empty property key.
 type EmptyJSONName struct {
-	Value string `json:","`
+	Value string `json:",omitempty"`
 }
 
 // AllOfBase is the shared base composed via allOf in the embedding tests.

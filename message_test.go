@@ -463,7 +463,11 @@ func TestMessageCorrelationIDFrom(t *testing.T) {
 			require.NoError(t, err)
 
 			require.NotNil(t, msg.CorrelationID)
-			assert.Equal(t, "#/components/correlationIds/"+jsonpointer.Escape(tc.key), msg.CorrelationID.Ref)
+			assert.Equal(
+				t,
+				"#/components/correlationIds/"+jsonpointer.Escape(tc.key),
+				msg.CorrelationID.Ref,
+			)
 			require.Contains(t, b.doc.Components.CorrelationIDs, tc.key)
 			assert.Equal(
 				t,

@@ -9,8 +9,9 @@
 //   - Anonymous embedded structs are flattened, matching encoding/json, unless
 //     tagged asyncgo:"allOf", in which case the embedded type is composed via
 //     allOf instead (opt-in). An embedded struct carrying an explicit name in
-//     its json tag (e.g. `Base `json:"base"``) is a regular named property
-//     instead — encoding/json does not inline it, and neither does derivation.
+//     its json tag (for example a Base field tagged json:"base") is a regular
+//     named property instead — encoding/json does not inline it, and neither
+//     does derivation.
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
 //   - asyncapi struct tags carry "required", "enum=a|b|...", "examples=...",
