@@ -248,7 +248,7 @@ type (
 
 // AMQPChannelBinding describes AMQP-specific channel information.
 type AMQPChannelBinding struct {
-	Is             string        `json:"is,omitempty"             yaml:"is,omitempty"` // "queue" | "routingKey"
+	Is             string        `json:"is,omitempty"             yaml:"is,omitempty"` // AMQPChannelBindingIs*
 	Exchange       *AMQPExchange `json:"exchange,omitempty"       yaml:"exchange,omitempty"`
 	Queue          *AMQPQueue    `json:"queue,omitempty"          yaml:"queue,omitempty"`
 	BindingVersion string        `json:"bindingVersion,omitempty" yaml:"bindingVersion,omitempty"`
@@ -397,7 +397,7 @@ type IBMMQServerBinding struct {
 
 // IBMMQChannelBinding describes IBM MQ-specific channel information.
 type IBMMQChannelBinding struct {
-	DestinationType string      `json:"destinationType,omitempty" yaml:"destinationType,omitempty"` // "topic" | "queue"
+	DestinationType string      `json:"destinationType,omitempty" yaml:"destinationType,omitempty"` // IBMMQDestinationType*
 	Queue           *IBMMQQueue `json:"queue,omitempty"           yaml:"queue,omitempty"`
 	Topic           *IBMMQTopic `json:"topic,omitempty"           yaml:"topic,omitempty"`
 	MaxMsgLength    int         `json:"maxMsgLength,omitempty"    yaml:"maxMsgLength,omitempty"`
@@ -606,7 +606,7 @@ type PulsarServerBinding struct {
 // and Persistence are required by the binding specification.
 type PulsarChannelBinding struct {
 	Namespace      string           `json:"namespace"                 yaml:"namespace"`
-	Persistence    string           `json:"persistence"               yaml:"persistence"` // "persistent" | "non-persistent"
+	Persistence    string           `json:"persistence"               yaml:"persistence"` // PulsarChannelBindingPersistence*
 	Compaction     int              `json:"compaction,omitempty"      yaml:"compaction,omitempty"`
 	GeoReplication []string         `json:"geo-replication,omitempty" yaml:"geo-replication,omitempty"`
 	Retention      *PulsarRetention `json:"retention,omitempty"       yaml:"retention,omitempty"`
