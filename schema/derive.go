@@ -18,6 +18,12 @@
 //     "format=...", "const=...", "discriminator=...", the numeric bounds
 //     ("minItems=", "maxItems=", "minProperties=", "maxProperties="), and the
 //     flags "readOnly", "writeOnly", "uniqueItems", "deprecated".
+//     Combinator members are named as "oneOf=A|B": a bare name resolves against
+//     the declaring struct's package, and a name containing "/" is a
+//     fully-qualified pkgPath.TypeName. A semi-qualified name (pkg.Type, with no
+//     import path) is neither, so it emits a dangling $ref — use the full path.
+//     internal/discovery applies the same rule when it collects the types to
+//     hoist, and rejects a name the generated harness could not emit.
 //     Directives are separated by whitespace, so a value may contain a comma.
 //     Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
