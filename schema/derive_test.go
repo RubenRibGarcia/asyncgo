@@ -253,6 +253,18 @@ func TestFromTypeSpecials(t *testing.T) {
 			wantContentEncoding: "base64",
 		},
 		{
+			name:                "should_return_byte_string_for_a_type_defined_from_byte_slice",
+			typ:                 reflect.TypeFor[RawBytes](),
+			wantType:            "string",
+			wantFormat:          "byte",
+			wantContentEncoding: "base64",
+		},
+		{
+			name:     "should_return_an_array_for_a_byte_array",
+			typ:      reflect.TypeFor[ByteArray](),
+			wantType: "array",
+		},
+		{
 			name:     "should_return_unconstrained_for_interface",
 			typ:      reflect.TypeFor[any](),
 			wantType: "",
@@ -273,6 +285,21 @@ func TestFromTypeRawMessage(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	s := FromType(reflect.TypeFor[json.RawMessage](), defs)
 	assert.Empty(t, s.Type) // unconstrained
+}
+
+func TestFromTypeDefinedFromTime(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+
+	// A type defined from time.Time is an ordinary named struct with no exported
+	// fields, so it hoists as an empty object; only the exact time.Time is
+	// date-time. spec.SchemaProvider is the documented escape hatch.
+	s := FromType(reflect.TypeFor[MyTime](), defs)
+
+	assert.Equal(t, Ref(reflect.TypeFor[MyTime]()), s.Ref)
+	obj := defs[Name(reflect.TypeFor[MyTime]())]
+	require.NotNil(t, obj)
+	assert.Equal(t, "object", obj.Type)
+	assert.Empty(t, obj.Properties)
 }
 
 func TestRecursiveStructTerminates(t *testing.T) {
@@ -547,6 +574,17 @@ type Node struct {
 	Value    string `json:"value"`
 	Children []Node `json:"children"`
 }
+
+// RawBytes is defined from []byte, so it marshals as base64 exactly like
+// []byte does — the derivation check is kind-based, not identity-based.
+type RawBytes []byte
+
+// ByteArray marshals as an array of numbers, so it stays an array schema.
+type ByteArray [4]byte
+
+// MyTime is defined from time.Time: an ordinary named struct with no exported
+// fields, so it derives as an empty object (see the package doc).
+type MyTime time.Time
 
 // NamedEmbedBase is embedded under an explicit json name by NamedEmbed, which
 // makes it a regular property rather than an inlined base.

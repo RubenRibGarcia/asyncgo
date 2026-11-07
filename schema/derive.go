@@ -25,6 +25,11 @@
 //     overrides derivation: its AsyncAPISchema() result is hoisted under the
 //     type's fully-qualified name as-is. Non-struct kinds are hoisted only when
 //     they carry a provider, so a plain `type ID string` stays inline.
+//   - Byte slices are base64 strings by kind, so a named `type Raw []byte`
+//     derives the same way []byte does. Only the exact time.Time maps to
+//     date-time: a type defined from time.Time is an ordinary named struct
+//     whose fields are all unexported, so it derives as an empty object unless
+//     it implements spec.SchemaProvider.
 package schema
 
 import (
@@ -40,7 +45,6 @@ import (
 var (
 	timeType           = reflect.TypeFor[time.Time]()
 	rawMessageType     = reflect.TypeFor[json.RawMessage]()
-	byteSliceType      = reflect.TypeFor[[]byte]()
 	schemaProviderType = reflect.TypeFor[spec.SchemaProvider]()
 )
 
@@ -98,14 +102,18 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	switch t {
 	case timeType:
 		return &spec.Schema{Type: "string", Format: "date-time"}
-	case byteSliceType:
-		// encoding/json marshals []byte as base64, so the Draft-07 content
-		// annotation says so. Format "byte" stays: AsyncAPI's own Data Type
-		// Formats table defines byte as base64-encoded characters, and it is
-		// an annotation, so emitting both asserts nothing contradictory.
-		return &spec.Schema{Type: "string", Format: "byte", ContentEncoding: "base64"}
 	case rawMessageType:
 		return &spec.Schema{}
+	}
+
+	// encoding/json marshals any byte slice as base64, so the Draft-07 content
+	// annotation says so. The check is kind-based because a named type defined
+	// from []byte (type Raw []byte) marshals the same way, while an array
+	// ([N]byte) does not. Format "byte" stays: AsyncAPI's own Data Type Formats
+	// table defines byte as base64-encoded characters, and it is an annotation,
+	// so emitting both asserts nothing contradictory.
+	if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
+		return &spec.Schema{Type: "string", Format: "byte", ContentEncoding: "base64"}
 	}
 
 	switch t.Kind() {
