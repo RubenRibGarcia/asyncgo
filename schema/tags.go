@@ -30,7 +30,8 @@ import (
 //	anyOf=A|B            (handled by the caller via combinatorNames; ignored here)
 //	allOf=A|B            (handled by the caller via combinatorNames; ignored here)
 //
-// A malformed value — a non-numeric bound, an empty examples= — is ignored
+// A malformed value — a non-numeric bound, an empty examples=, an empty enum= —
+// is ignored
 // rather than reported: the FromType/fillFields/applyTag chain returns no error,
 // matching how an unknown directive is already treated. A directive that no
 // longer exists is ignored the same way, so the removed `example=` is silently
@@ -58,8 +59,10 @@ func applyTag(s *spec.Schema, tag string) {
 		case part == "deprecated":
 			s.Deprecated = true
 		case strings.HasPrefix(part, "enum="):
-			for v := range strings.SplitSeq(strings.TrimPrefix(part, "enum="), "|") {
-				s.Enum = append(s.Enum, v)
+			if v := strings.TrimPrefix(part, "enum="); v != "" {
+				for e := range strings.SplitSeq(v, "|") {
+					s.Enum = append(s.Enum, e)
+				}
 			}
 		case strings.HasPrefix(part, "examples="):
 			if v := strings.TrimPrefix(part, "examples="); v != "" {

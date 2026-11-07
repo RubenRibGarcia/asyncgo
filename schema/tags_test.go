@@ -30,6 +30,13 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
+			name: "should_ignore_empty_enum",
+			tag:  "enum=",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Empty(t, s.Enum)
+			},
+		},
+		{
 			// example= was removed along with spec.Schema.Example: 3.1.0 defines only
 			// the Draft-07 `examples` array. applyTag ignores an unknown directive, so
 			// a stale example= is dropped rather than quietly mapped onto examples=.
