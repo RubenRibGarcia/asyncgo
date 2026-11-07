@@ -177,27 +177,7 @@ func (b *builder) validateReplyRefs() []error {
 			)
 			continue
 		}
-		prefix := channelsRefPrefix + jsonpointer.Escape(channel) + channelMessagesSegment
-		for _, msg := range r.Messages {
-			if !strings.HasPrefix(msg.Ref, prefix) {
-				errs = append(errs, fmt.Errorf(
-					"reply.%s: message %q is not in channel %q",
-					name,
-					msg.Ref,
-					channel,
-				))
-				continue
-			}
-			key := refName(msg.Ref, prefix)
-			if _, ok := ch.Messages[key]; !ok {
-				errs = append(errs, fmt.Errorf(
-					"reply.%s: message %q is not in channel %q",
-					name,
-					msg.Ref,
-					channel,
-				))
-			}
-		}
+		errs = append(errs, channelMessageErrors("reply."+name, channel, ch, r.Messages)...)
 	}
 
 	return errs
@@ -266,32 +246,43 @@ func (b *builder) validateOperationMessages() []error {
 			// from the DSL.
 			continue
 		}
-		prefix := channelsRefPrefix + jsonpointer.Escape(address) + channelMessagesSegment
-		for _, msg := range op.Messages {
-			if msg == nil {
-				continue
-			}
-			if !strings.HasPrefix(msg.Ref, prefix) {
-				errs = append(errs, fmt.Errorf(
-					"operation.%s: message %q is not in channel %q",
-					key,
-					msg.Ref,
-					address,
-				))
-				continue
-			}
-			name := refName(msg.Ref, prefix)
-			if _, ok := ch.Messages[name]; !ok {
-				errs = append(errs, fmt.Errorf(
-					"operation.%s: message %q is not in channel %q",
-					key,
-					msg.Ref,
-					address,
-				))
-			}
-		}
+		errs = append(errs, channelMessageErrors("operation."+key, address, ch, op.Messages)...)
 	}
 
+	return errs
+}
+
+// channelMessageErrors reports every message reference that is not one ch carries.
+// owner names the referring object in the error, e.g. "reply.OrderReply".
+//
+// Both callers enforce the same specification MUST — an operation's or a reply's
+// messages must be a subset of the channel's — so the membership test is written
+// once. A reference counts as carried only when its own $ref names ch: a message
+// of the same key reached through another channel is a miss.
+func channelMessageErrors(
+	owner string,
+	channel string,
+	ch *spec.Channel,
+	refs []*spec.Reference,
+) []error {
+	prefix := channelsRefPrefix + jsonpointer.Escape(channel) + channelMessagesSegment
+	var errs []error
+	for _, ref := range refs {
+		if ref == nil {
+			continue // see validateServerRefs: nil entries are skipped, not dereferenced
+		}
+		if strings.HasPrefix(ref.Ref, prefix) {
+			if _, carried := ch.Messages[refName(ref.Ref, prefix)]; carried {
+				continue
+			}
+		}
+		errs = append(errs, fmt.Errorf(
+			"%s: message %q is not in channel %q",
+			owner,
+			ref.Ref,
+			channel,
+		))
+	}
 	return errs
 }
 
