@@ -3,6 +3,7 @@ package asyncgo
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
@@ -66,7 +67,7 @@ func (t *operationTrait) Security(schemes ...*securityScheme) *operationTrait {
 // protocol helpers (see the protocol sections in bindings.go) to set a single
 // protocol.
 func (t *operationTrait) Bindings(bindings spec.OperationBindings) *operationTrait {
-	t.t.Bindings = bindings
+	t.t.Bindings = maps.Clone(bindings)
 	return t
 }
 

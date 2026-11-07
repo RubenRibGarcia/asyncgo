@@ -3,6 +3,7 @@ package asyncgo
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
@@ -84,7 +85,7 @@ func (t *messageTrait) Example(name string, payload any) *messageTrait {
 // protocol helpers (see the protocol sections in bindings.go) to set a single
 // protocol.
 func (t *messageTrait) Bindings(bindings spec.MessageBindings) *messageTrait {
-	t.t.Bindings = bindings
+	t.t.Bindings = maps.Clone(bindings)
 	return t
 }
 
