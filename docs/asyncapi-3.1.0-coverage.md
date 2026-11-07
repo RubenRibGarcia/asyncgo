@@ -119,7 +119,7 @@ and `components.correlationIds` / `components.operationTraits` /
 ## 3. Bindings protocols
 
 3.1.0 defines 20 protocol keys. The library ships a typed struct for every
-binding object each protocol defines, and `spec.ProtocolKeys` lists all 20.
+binding object each protocol defines, and `spec.Protocols()` lists all 20.
 
 Legend: **✅** typed struct with fields · **⬜** reserved object, modelled as a
 `spec.ReservedBinding` alias (`bindingVersion` only) · **—** the protocol is not
@@ -575,7 +575,7 @@ implementation effort.
 - **Implemented** — [#23](https://github.com/RubenRibGarcia/asyncgo/issues/23):
   one protocol section in `spec/bindings.go` carrying every binding object the
   3.1.0 schemas define, a typed DSL helper per (protocol, level) on the matching
-  core and trait builders, `spec.ProtocolKeys`, and two discovery fixtures
+  core and trait builders, `spec.Protocols()`, and two discovery fixtures
   (`test/data/bindings`, `test/data/bindings-unlisted`). Reserving the object
   shape to `spec.ReservedBinding` keeps the unconstrained objects one type. Three
   corrections came out of it: `AMQPOperationBinding.ReplyTo` was removed (0.3.0

@@ -148,6 +148,18 @@ func TestChannelOperationAndMessageBindingsValidate(t *testing.T) {
 	}
 }
 
+func TestBindingTableCoversEveryProtocol(t *testing.T) {
+	// Protocols() is the model's advertised protocol set; the validation table is
+	// what enforces the typing of each. A protocol added to one and not the other
+	// would leave its bindings unchecked, so the two are pinned together.
+	keys := make([]string, 0, len(bindingObjectTypes))
+	for key := range bindingObjectTypes {
+		keys = append(keys, key)
+	}
+
+	assert.ElementsMatch(t, Protocols(), keys)
+}
+
 func TestValidateReportsEveryFailureInKeyOrder(t *testing.T) {
 	b := ServerBindings{
 		ProtocolKafka: KafkaChannelBinding{},

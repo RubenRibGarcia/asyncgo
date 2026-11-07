@@ -1774,12 +1774,22 @@ func TestMessageTraitBindings(t *testing.T) {
 
 func TestProtocolKeys(t *testing.T) {
 	t.Run("should_list_twenty_unique_protocols", func(t *testing.T) {
-		assert.Len(t, spec.ProtocolKeys, 20)
-		seen := make(map[string]bool, len(spec.ProtocolKeys))
-		for _, proto := range spec.ProtocolKeys {
+		keys := spec.Protocols()
+		assert.Len(t, keys, 20)
+		seen := make(map[string]bool, len(keys))
+		for _, proto := range keys {
 			require.False(t, seen[proto], "duplicate protocol key %q", proto)
 			seen[proto] = true
 		}
+	})
+
+	t.Run("should_hand_out_a_copy", func(t *testing.T) {
+		keys := spec.Protocols()
+		require.NotEmpty(t, keys)
+
+		keys[0] = "mutated"
+		assert.NotEqual(t, "mutated", spec.Protocols()[0],
+			"mutating the returned slice must not change the model's protocol set")
 	})
 
 	t.Run("should_match_the_protocol_constants", func(t *testing.T) {
@@ -1805,7 +1815,7 @@ func TestProtocolKeys(t *testing.T) {
 			spec.ProtocolStomp,
 			spec.ProtocolWS,
 		}
-		assert.ElementsMatch(t, constants, spec.ProtocolKeys)
+		assert.ElementsMatch(t, constants, spec.Protocols())
 	})
 }
 

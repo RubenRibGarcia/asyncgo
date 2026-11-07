@@ -1,5 +1,7 @@
 package spec
 
+import "slices"
+
 // Protocol identifiers used as keys in the *Bindings maps.
 const (
 	ProtocolKafka        = "kafka"
@@ -24,13 +26,15 @@ const (
 	ProtocolROS2         = "ros2"
 )
 
-// ProtocolKeys lists every protocol key the model supports, in the order the
-// bindings coverage table presents them.
+// protocolKeys lists every protocol key the model supports, in the order the
+// bindings coverage table presents them. Protocols() exposes a copy: the slice is
+// package state, so handing it out directly would let a caller reorder or extend
+// the model's protocol set.
 //
 // mqtt5 and mercure are listed even though the published 3.1.0 binding JSON
 // Schemas omit them: the specification text defines both protocols, and a
 // document using either is rejected only because the schemas lag the prose.
-var ProtocolKeys = []string{
+var protocolKeys = []string{
 	ProtocolKafka,
 	ProtocolAMQP,
 	ProtocolNATS,
@@ -52,6 +56,11 @@ var ProtocolKeys = []string{
 	ProtocolPulsar,
 	ProtocolROS2,
 }
+
+// Protocols returns every protocol key the model supports, in the order the
+// bindings coverage table presents them. The result is a copy: mutating it does
+// not change the model.
+func Protocols() []string { return slices.Clone(protocolKeys) }
 
 // The *Bindings types are protocol-keyed maps. Values are typed binding
 // structs (see the protocol sections below); using a map keeps the model
