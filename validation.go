@@ -27,7 +27,7 @@ func (b *builder) validateServerRefs() []error {
 			continue
 		}
 		for _, ref := range ch.Servers {
-			name := refName(ref.Ref, "#/servers/")
+			name := refName(ref.Ref, serversRefPrefix)
 			if _, ok := b.doc.Servers[name]; !ok {
 				errs = append(
 					errs,
@@ -44,8 +44,6 @@ func (b *builder) validateServerRefs() []error {
 // SecuritySchemes(...). It is a post-pass for the same reason as
 // validateServerRefs: declaration order is arbitrary.
 func (b *builder) validateSecurityRefs() []error {
-	const prefix = "#/components/securitySchemes/"
-
 	var declared map[string]*spec.SecurityScheme
 	var declaredTraits map[string]*spec.OperationTrait
 	if b.doc.Components != nil {
@@ -63,7 +61,7 @@ func (b *builder) validateSecurityRefs() []error {
 			continue // see validateServerRefs: nil entries are skipped, not dereferenced
 		}
 		for _, ref := range srv.Security {
-			scheme := refName(ref.Ref, prefix)
+			scheme := refName(ref.Ref, securitySchemesRefPrefix)
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
 					errs,
@@ -78,7 +76,7 @@ func (b *builder) validateSecurityRefs() []error {
 			continue
 		}
 		for _, ref := range op.Security {
-			scheme := refName(ref.Ref, prefix)
+			scheme := refName(ref.Ref, securitySchemesRefPrefix)
 			if _, ok := declared[scheme]; !ok {
 				errs = append(
 					errs,
@@ -93,7 +91,7 @@ func (b *builder) validateSecurityRefs() []error {
 			continue
 		}
 		for _, ref := range trait.Security {
-			scheme := refName(ref.Ref, prefix)
+			scheme := refName(ref.Ref, securitySchemesRefPrefix)
 			if _, ok := declared[scheme]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"operationTrait.%s: references unknown security scheme %q",
@@ -118,12 +116,6 @@ func (b *builder) validateSecurityRefs() []error {
 // constraint relates two objects and a JSON Schema cannot express that — so this
 // is the only place it is enforced.
 func (b *builder) validateReplyRefs() []error {
-	const (
-		repliesPrefix        = "#/components/replies/"
-		replyAddressesPrefix = "#/components/replyAddresses/"
-		channelsPrefix       = "#/channels/"
-	)
-
 	var declaredReplies map[string]*spec.OperationReply
 	var declaredAddresses map[string]*spec.OperationReplyAddress
 	if b.doc.Components != nil {
@@ -144,7 +136,7 @@ func (b *builder) validateReplyRefs() []error {
 		if ref == nil {
 			continue
 		}
-		name := refName(ref.Ref, repliesPrefix)
+		name := refName(ref.Ref, repliesRefPrefix)
 		if _, ok := declaredReplies[name]; !ok {
 			errs = append(errs, fmt.Errorf("operation.%s: references unknown reply %q", key, name))
 		}
@@ -156,7 +148,7 @@ func (b *builder) validateReplyRefs() []error {
 			continue
 		}
 		if r.Address != nil {
-			addr := refName(r.Address.Ref, replyAddressesPrefix)
+			addr := refName(r.Address.Ref, replyAddressesRefPrefix)
 			if _, ok := declaredAddresses[addr]; !ok {
 				errs = append(
 					errs,
@@ -176,7 +168,7 @@ func (b *builder) validateReplyRefs() []error {
 		if r.Channel == nil {
 			continue
 		}
-		channel := refName(r.Channel.Ref, channelsPrefix)
+		channel := refName(r.Channel.Ref, channelsRefPrefix)
 		ch, ok := b.doc.Channels[channel]
 		if !ok || ch == nil {
 			errs = append(
@@ -185,7 +177,7 @@ func (b *builder) validateReplyRefs() []error {
 			)
 			continue
 		}
-		prefix := channelsPrefix + jsonpointer.Escape(channel) + "/messages/"
+		prefix := channelsRefPrefix + jsonpointer.Escape(channel) + channelMessagesSegment
 		for _, msg := range r.Messages {
 			if !strings.HasPrefix(msg.Ref, prefix) {
 				errs = append(errs, fmt.Errorf(
@@ -218,8 +210,6 @@ func (b *builder) validateReplyRefs() []error {
 // cannot produce a dangling reference; the check guards a document assembled
 // through the spec package directly.
 func (b *builder) validateMessageRefs() []error {
-	const prefix = "#/components/messages/"
-
 	var declared map[string]*spec.Message
 	if b.doc.Components != nil {
 		declared = b.doc.Components.Messages
@@ -238,7 +228,7 @@ func (b *builder) validateMessageRefs() []error {
 			if msg == nil || msg.Ref == "" {
 				continue
 			}
-			name := refName(msg.Ref, prefix)
+			name := refName(msg.Ref, messagesRefPrefix)
 			if _, ok := declared[name]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"channel.%s.messages.%s: references unknown message %q",
@@ -260,8 +250,6 @@ func (b *builder) validateMessageRefs() []error {
 // validator can catch — the constraint relates two objects, which a JSON Schema
 // cannot express.
 func (b *builder) validateOperationMessages() []error {
-	const channelsPrefix = "#/channels/"
-
 	var errs []error
 	// Keys are walked in sorted order so the joined error message is stable:
 	// SpecResult.Err is compared by exact string in tests.
@@ -270,7 +258,7 @@ func (b *builder) validateOperationMessages() []error {
 		if op == nil || op.Channel == nil {
 			continue
 		}
-		address := refName(op.Channel.Ref, channelsPrefix)
+		address := refName(op.Channel.Ref, channelsRefPrefix)
 		ch := b.doc.Channels[address]
 		if ch == nil {
 			// Out of scope: channel.apply always points an operation at the
@@ -278,7 +266,7 @@ func (b *builder) validateOperationMessages() []error {
 			// from the DSL.
 			continue
 		}
-		prefix := channelsPrefix + jsonpointer.Escape(address) + "/messages/"
+		prefix := channelsRefPrefix + jsonpointer.Escape(address) + channelMessagesSegment
 		for _, msg := range op.Messages {
 			if msg == nil {
 				continue
@@ -314,12 +302,6 @@ func (b *builder) validateOperationMessages() []error {
 // validateServerRefs: declaration order is arbitrary, so a trait may be
 // referenced before it is declared.
 func (b *builder) validateTraitRefs() []error {
-	const (
-		operationTraitsPrefix = "#/components/operationTraits/"
-		messageTraitsPrefix   = "#/components/messageTraits/"
-		correlationIDsPrefix  = "#/components/correlationIds/"
-	)
-
 	var declaredOperationTraits map[string]*spec.OperationTrait
 	var declaredMessageTraits map[string]*spec.MessageTrait
 	var declaredCorrelationIDs map[string]*spec.CorrelationID
@@ -341,7 +323,7 @@ func (b *builder) validateTraitRefs() []error {
 			continue // see validateServerRefs: nil entries are skipped, not dereferenced
 		}
 		for _, ref := range op.Traits {
-			name := refName(ref.Ref, operationTraitsPrefix)
+			name := refName(ref.Ref, operationTraitsRefPrefix)
 			if _, ok := declaredOperationTraits[name]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"operation.%s: references unknown operation trait %q",
@@ -358,7 +340,7 @@ func (b *builder) validateTraitRefs() []error {
 			continue
 		}
 		for _, ref := range msg.Traits {
-			trait := refName(ref.Ref, messageTraitsPrefix)
+			trait := refName(ref.Ref, messageTraitsRefPrefix)
 			if _, ok := declaredMessageTraits[trait]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"message.%s: references unknown message trait %q",
@@ -368,7 +350,7 @@ func (b *builder) validateTraitRefs() []error {
 			}
 		}
 		if ref := msg.CorrelationID; ref != nil {
-			id := refName(ref.Ref, correlationIDsPrefix)
+			id := refName(ref.Ref, correlationIDsRefPrefix)
 			if _, ok := declaredCorrelationIDs[id]; !ok {
 				errs = append(errs, fmt.Errorf(
 					"message.%s: references unknown correlation id %q",
@@ -388,7 +370,7 @@ func (b *builder) validateTraitRefs() []error {
 		if ref == nil {
 			continue
 		}
-		id := refName(ref.Ref, correlationIDsPrefix)
+		id := refName(ref.Ref, correlationIDsRefPrefix)
 		if _, ok := declaredCorrelationIDs[id]; !ok {
 			errs = append(errs, fmt.Errorf(
 				"messageTrait.%s: references unknown correlation id %q",

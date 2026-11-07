@@ -90,7 +90,7 @@ func (o *operation) build(
 	var errs []error
 	specOp := &spec.Operation{
 		Action:       o.action,
-		Channel:      &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(address)},
+		Channel:      &spec.Reference{Ref: channelsRefPrefix + jsonpointer.Escape(address)},
 		Title:        o.title,
 		Summary:      o.summary,
 		Description:  o.description,
@@ -122,9 +122,9 @@ func (o *operation) build(
 		}
 		ch.Messages[key] = entry
 		specOp.Messages = append(specOp.Messages, &spec.Reference{
-			Ref: "#/channels/" + jsonpointer.Escape(
+			Ref: channelsRefPrefix + jsonpointer.Escape(
 				address,
-			) + "/messages/" + jsonpointer.Escape(
+			) + channelMessagesSegment + jsonpointer.Escape(
 				key,
 			),
 		})
