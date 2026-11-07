@@ -7,6 +7,33 @@ import (
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
+// directive is one whitespace-separated part of an asyncapi struct tag, split at
+// the first "=" into a key and its value. hasValue separates a value directive
+// (even one with an empty value, as in "format=") from a bare flag (readOnly,
+// required, allOf).
+type directive struct {
+	key      string
+	value    string
+	hasValue bool
+}
+
+// parseTag splits an asyncapi struct tag into its directives once. Every reader —
+// applyTag for the value directives, hasFlag for the bare flags, combinatorNames
+// for the member lists — works on the result, instead of each re-splitting the
+// same tag.
+func parseTag(tag string) []directive {
+	parts := strings.Fields(tag)
+	if len(parts) == 0 {
+		return nil
+	}
+	ds := make([]directive, len(parts))
+	for i, part := range parts {
+		key, value, hasValue := strings.Cut(part, "=")
+		ds[i] = directive{key: key, value: value, hasValue: hasValue}
+	}
+	return ds
+}
+
 // applyTag applies the asyncapi struct tag to the schema. Supported directives:
 //
 //	required             (handled by the caller; ignored here)
@@ -45,55 +72,58 @@ import (
 //
 // Descriptions are not carried in the tag; the generator's discovery pass reads
 // them from the field's doc comment instead.
-func applyTag(s *spec.Schema, tag string) {
-	for _, part := range strings.Fields(tag) {
-		switch {
-		case part == "" || part == "required":
-			// nothing to set on the schema itself
-		case part == "readOnly":
-			s.ReadOnly = true
-		case part == "writeOnly":
-			s.WriteOnly = true
-		case part == "uniqueItems":
-			s.UniqueItems = true
-		case part == "deprecated":
-			s.Deprecated = true
-		case strings.HasPrefix(part, "enum="):
-			if v := strings.TrimPrefix(part, "enum="); v != "" {
-				for e := range strings.SplitSeq(v, "|") {
+func applyTag(s *spec.Schema, ds []directive) {
+	for _, d := range ds {
+		if !d.hasValue {
+			switch d.key {
+			case "readOnly":
+				s.ReadOnly = true
+			case "writeOnly":
+				s.WriteOnly = true
+			case "uniqueItems":
+				s.UniqueItems = true
+			case "deprecated":
+				s.Deprecated = true
+			}
+			continue
+		}
+		switch d.key {
+		case "enum":
+			if d.value != "" {
+				for e := range strings.SplitSeq(d.value, "|") {
 					s.Enum = append(s.Enum, e)
 				}
 			}
-		case strings.HasPrefix(part, "examples="):
-			if v := strings.TrimPrefix(part, "examples="); v != "" {
-				s.Examples = append(s.Examples, v)
+		case "examples":
+			if d.value != "" {
+				s.Examples = append(s.Examples, d.value)
 			}
-		case strings.HasPrefix(part, "format="):
-			s.Format = strings.TrimPrefix(part, "format=")
-		case strings.HasPrefix(part, "contentEncoding="):
-			if v := strings.TrimPrefix(part, "contentEncoding="); v != "" {
-				s.ContentEncoding = v
+		case "format":
+			s.Format = d.value
+		case "contentEncoding":
+			if d.value != "" {
+				s.ContentEncoding = d.value
 			}
-		case strings.HasPrefix(part, "contentMediaType="):
-			if v := strings.TrimPrefix(part, "contentMediaType="); v != "" {
-				s.ContentMediaType = v
+		case "contentMediaType":
+			if d.value != "" {
+				s.ContentMediaType = d.value
 			}
-		case strings.HasPrefix(part, "const="):
-			if v := strings.TrimPrefix(part, "const="); v != "" {
-				s.Const = v
+		case "const":
+			if d.value != "" {
+				s.Const = d.value
 			}
-		case strings.HasPrefix(part, "discriminator="):
-			if v := strings.TrimPrefix(part, "discriminator="); v != "" {
-				s.Discriminator = v
+		case "discriminator":
+			if d.value != "" {
+				s.Discriminator = d.value
 			}
-		case strings.HasPrefix(part, "minItems="):
-			setUint(&s.MinItems, strings.TrimPrefix(part, "minItems="))
-		case strings.HasPrefix(part, "maxItems="):
-			setUint(&s.MaxItems, strings.TrimPrefix(part, "maxItems="))
-		case strings.HasPrefix(part, "minProperties="):
-			setUint(&s.MinProperties, strings.TrimPrefix(part, "minProperties="))
-		case strings.HasPrefix(part, "maxProperties="):
-			setUint(&s.MaxProperties, strings.TrimPrefix(part, "maxProperties="))
+		case "minItems":
+			setUint(&s.MinItems, d.value)
+		case "maxItems":
+			setUint(&s.MaxItems, d.value)
+		case "minProperties":
+			setUint(&s.MinProperties, d.value)
+		case "maxProperties":
+			setUint(&s.MaxProperties, d.value)
 		}
 	}
 }
@@ -108,9 +138,12 @@ func setUint(dst **uint64, value string) {
 	*dst = &n
 }
 
-func hasFlag(tag, flag string) bool {
-	for _, part := range strings.Fields(tag) {
-		if part == flag {
+// hasFlag reports whether ds carries flag as a bare directive. A value directive
+// of the same key is not a flag: "allOf=A" composes types, "allOf" marks an
+// embedded struct for composition.
+func hasFlag(ds []directive, flag string) bool {
+	for _, d := range ds {
+		if d.key == flag && !d.hasValue {
 			return true
 		}
 	}
@@ -118,16 +151,15 @@ func hasFlag(tag, flag string) bool {
 }
 
 // combinatorNames returns the "|"-separated type names for a combinator
-// directive (oneOf=/anyOf=/allOf=), or ok=false when the directive is absent.
-func combinatorNames(tag, key string) ([]string, bool) {
-	prefix := key + "="
-	for _, part := range strings.Fields(tag) {
-		if strings.HasPrefix(part, prefix) {
-			raw := strings.TrimPrefix(part, prefix)
-			if raw == "" {
+// directive (oneOf=/anyOf=/allOf=), or ok=false when the directive is absent or
+// has an empty value.
+func combinatorNames(ds []directive, key string) ([]string, bool) {
+	for _, d := range ds {
+		if d.key == key && d.hasValue {
+			if d.value == "" {
 				return nil, false
 			}
-			return strings.Split(raw, "|"), true
+			return strings.Split(d.value, "|"), true
 		}
 	}
 	return nil, false

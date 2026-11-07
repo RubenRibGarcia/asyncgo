@@ -251,7 +251,7 @@ func fillFields(
 
 		if f.Anonymous && !hasExplicitJSONName(f) {
 			if ft, ok := structOf(f.Type); ok {
-				if !flattening && hasFlag(f.Tag.Get("asyncapi"), "allOf") {
+				if !flattening && hasFlag(parseTag(f.Tag.Get("asyncapi")), "allOf") {
 					*embedded = append(*embedded, FromType(f.Type, defs))
 					continue
 				}
@@ -266,18 +266,18 @@ func fillFields(
 		}
 
 		prop := FromType(f.Type, defs)
-		if tag := f.Tag.Get("asyncapi"); tag != "" {
-			applyTag(prop, tag)
-			if hasFlag(tag, "required") {
+		if ds := parseTag(f.Tag.Get("asyncapi")); len(ds) > 0 {
+			applyTag(prop, ds)
+			if hasFlag(ds, "required") {
 				own.Required = append(own.Required, name)
 			}
-			if names, ok := combinatorNames(tag, "oneOf"); ok {
+			if names, ok := combinatorNames(ds, "oneOf"); ok {
 				prop.OneOf = refs(names, t)
 			}
-			if names, ok := combinatorNames(tag, "anyOf"); ok {
+			if names, ok := combinatorNames(ds, "anyOf"); ok {
 				prop.AnyOf = refs(names, t)
 			}
-			if names, ok := combinatorNames(tag, "allOf"); ok {
+			if names, ok := combinatorNames(ds, "allOf"); ok {
 				prop.AllOf = refs(names, t)
 			}
 		}
