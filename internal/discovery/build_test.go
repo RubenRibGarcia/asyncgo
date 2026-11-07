@@ -12,7 +12,7 @@ func TestBuild(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
 	require.NoError(t, err)
 
-	doc, n, err := Build(dir)
+	doc, n, err := Build(t.Context(), dir)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 
@@ -29,7 +29,7 @@ func TestBuildNoCatalogs(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "spec"))
 	require.NoError(t, err)
 
-	doc, n, err := Build(dir)
+	doc, n, err := Build(t.Context(), dir)
 	require.Error(t, err)
 	assert.Nil(t, doc)
 	assert.Zero(t, n)
@@ -37,6 +37,6 @@ func TestBuildNoCatalogs(t *testing.T) {
 }
 
 func TestBuildBadDir(t *testing.T) {
-	_, _, err := Build(filepath.Join(t.TempDir(), "does-not-exist"))
+	_, _, err := Build(t.Context(), filepath.Join(t.TempDir(), "does-not-exist"))
 	require.Error(t, err)
 }

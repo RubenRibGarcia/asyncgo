@@ -5,6 +5,7 @@
 package discovery
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -27,13 +28,15 @@ type Catalog struct {
 var specResultType = reflect.TypeFor[asyncgo.SpecResult]()
 
 // load loads all packages in the module rooted at dir with the syntax and type
-// information needed for catalog discovery and comment extraction.
-func load(dir string) ([]*packages.Package, error) {
+// information needed for catalog discovery and comment extraction. It stops
+// when ctx is cancelled.
+func load(ctx context.Context, dir string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports |
 			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
-		Dir:   dir,
-		Tests: false,
+		Dir:     dir,
+		Context: ctx,
+		Tests:   false,
 	}
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
@@ -49,8 +52,8 @@ func load(dir string) ([]*packages.Package, error) {
 // in the module rooted at dir, restricted to packages reachable from a main
 // package. If the module has no main package, all module packages are
 // considered.
-func Find(dir string) ([]Catalog, error) {
-	pkgs, err := load(dir)
+func Find(ctx context.Context, dir string) ([]Catalog, error) {
+	pkgs, err := load(ctx, dir)
 	if err != nil {
 		return nil, err
 	}

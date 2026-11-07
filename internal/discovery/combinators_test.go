@@ -76,7 +76,7 @@ func TestCollectCombinatorRefs(t *testing.T) {
 		dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "oneof"))
 		require.NoError(t, err)
 
-		pkgs, err := load(dir)
+		pkgs, err := load(t.Context(), dir)
 		require.NoError(t, err)
 
 		refs := collectCombinatorRefs(pkgs, reachableFromMain(pkgs))

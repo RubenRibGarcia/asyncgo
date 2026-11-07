@@ -22,7 +22,7 @@ func newCheckCmd() *cobra.Command {
 				return fmt.Errorf("checking: %w", err)
 			}
 
-			doc, _, err := discovery.Build(dir)
+			doc, _, err := discovery.Build(cmd.Context(), dir)
 			if err != nil {
 				var catErrs discovery.CatalogErrors
 				if errors.As(err, &catErrs) {

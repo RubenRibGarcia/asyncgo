@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -10,14 +11,35 @@ import (
 )
 
 func TestMaterializeEmptyCatalogs(t *testing.T) {
-	docs, err := Materialize(".", nil, nil)
+	docs, err := Materialize(t.Context(), ".", nil, nil)
 	require.NoError(t, err)
 	assert.Nil(t, docs)
 }
 
+// TestMaterializeStopsOnCancelledContext pins the context plumbing: the harness
+// subprocess compiles and runs user packages, so an unbounded run can hang
+// generate/check forever on a stuck build or a blocking init.
+func TestMaterializeStopsOnCancelledContext(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	cats := []Catalog{{
+		PkgPath: "github.com/RubenRibGarcia/asyncgo/test/data/simple",
+		VarName: "Catalog",
+	}}
+
+	docs, err := Materialize(ctx, dir, cats, nil)
+	require.Error(t, err)
+	assert.Nil(t, docs)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestMaterializeMkdirTempError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
-	_, err := Materialize(dir, []Catalog{{PkgPath: "p", VarName: "V"}}, nil)
+	_, err := Materialize(t.Context(), dir, []Catalog{{PkgPath: "p", VarName: "V"}}, nil)
 	require.Error(t, err)
 }
 
@@ -35,7 +57,7 @@ func TestMaterializeWrapsHarnessError(t *testing.T) {
 		VarName: "NoSuchCatalog",
 	}}
 
-	docs, err := Materialize(dir, cats, nil)
+	docs, err := Materialize(t.Context(), dir, cats, nil)
 	require.Error(t, err)
 	assert.Nil(t, docs)
 
