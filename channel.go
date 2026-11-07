@@ -144,65 +144,34 @@ func (c *channel) apply(b *builder) error {
 	if b.doc.Channels == nil {
 		b.doc.Channels = map[string]*spec.Channel{}
 	}
-	if b.doc.Operations == nil {
-		b.doc.Operations = map[string]*spec.Operation{}
-	}
 
 	ch := &c.s
+	// A duplicate address keeps its first declaration, so this channel's
+	// operations are skipped below: each would be registered under a key of its
+	// own while referencing the channel entry the first declaration displaced,
+	// reporting a cascade of the duplicate error instead of a mistake of its own.
+	rejected := false
 	if _, dup := b.doc.Channels[c.address]; dup && c.address != "" {
 		errs = append(errs, fmt.Errorf("channel.%s: duplicate address", c.address))
+		rejected = true
 	} else {
 		b.doc.Channels[c.address] = ch
 	}
 	errs = appendBindingErrors(errs, "channel."+c.address, c.s.Bindings.Validate())
+	if rejected {
+		return errors.Join(errs...)
+	}
+	if len(c.ops) > 0 && b.doc.Operations == nil {
+		b.doc.Operations = map[string]*spec.Operation{}
+	}
 
 	for _, op := range c.ops {
-		specOp := &spec.Operation{
-			Action:       op.action,
-			Channel:      &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(c.address)},
-			Title:        op.title,
-			Summary:      op.summary,
-			Description:  op.description,
-			Tags:         op.tags,
-			ExternalDocs: op.externalDocs,
-			Security:     op.security,
-			Bindings:     op.bindings,
-			Traits:       op.traits,
-			Reply:        op.replyReference(),
-		}
-		for _, m := range op.messages {
-			sm, err := m.build(b)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			key := messageKey(m)
-			// The key becomes the message's components.messages key, which the
-			// specification patterns. A key derived from the payload type's fully
-			// qualified name is exempt: appendKeyError skips an unauthored name.
-			errs = appendKeyError(errs, "message", m.name)
-			entry, err := hoistMessage(b, key, "channel."+c.address, sm)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			if ch.Messages == nil {
-				ch.Messages = map[string]*spec.Message{}
-			}
-			ch.Messages[key] = entry
-			specOp.Messages = append(specOp.Messages, &spec.Reference{
-				Ref: "#/channels/" + jsonpointer.Escape(
-					c.address,
-				) + "/messages/" + jsonpointer.Escape(
-					key,
-				),
-			})
-		}
+		specOp, opErrs := op.build(b, ch, c.address)
+		errs = append(errs, opErrs...)
 		// An operation's map key is <channel>.<action>, so a second Send/Receive on
 		// the same channel would overwrite the first silently. The guard mirrors
 		// the sibling duplicate checks: report it and keep the first entry.
 		opKey := c.address + "." + op.action
-		errs = appendBindingErrors(errs, "operation."+opKey, op.bindings.Validate())
 		if _, dup := b.doc.Operations[opKey]; dup && c.address != "" {
 			errs = append(errs, fmt.Errorf("operation.%s: duplicate action", opKey))
 		} else {

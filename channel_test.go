@@ -138,11 +138,11 @@ func TestChannelValidationErrors(t *testing.T) {
 				"channel.order-shipped: references unknown server \"staging\"",
 		},
 		{
-			// The one reachable shape: a duplicate channel address whose second
-			// declaration uses a different action. That operation is registered under
-			// its own key, but the message it carries was written into the duplicate
-			// channel that the first declaration displaced.
-			name: "should_return_error_when_an_operation_carries_a_message_the_channel_lacks",
+			// A rejected channel takes its operations with it. Registering them
+			// would report the duplicate action and the dangling-message errors the
+			// displaced declaration caused, so the duplicate address is reported
+			// once and nothing else.
+			name: "should_report_only_the_duplicate_address_of_a_rejected_channel",
 			spec: func() *SpecResult {
 				return Spec(
 					Info("Orders", "1.0.0"),
@@ -150,15 +150,13 @@ func TestChannelValidationErrors(t *testing.T) {
 						Channel("order-placed").Send(Operation().Message(
 							MessageOf(OrderPlaced{}).Name("OrderPlaced"),
 						)),
-						Channel("order-placed").Receive(Operation().Message(
+						Channel("order-placed").Send(Operation().Message(
 							MessageOf(OrderPlaced{}).Name("OrderShipped"),
 						)),
 					),
 				)
 			},
-			want: "channel.order-placed: duplicate address\n" +
-				`operation.order-placed.receive: message "#/channels/order-placed/messages/OrderShipped" ` +
-				`is not in channel "order-placed"`,
+			want: "channel.order-placed: duplicate address",
 		},
 		{
 			name: "should_return_error_when_an_address_expression_has_no_parameter",

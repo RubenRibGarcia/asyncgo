@@ -1,6 +1,9 @@
 package asyncgo
 
-import "github.com/RubenRibGarcia/asyncgo/spec"
+import (
+	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
+	"github.com/RubenRibGarcia/asyncgo/spec"
+)
 
 type operation struct {
 	action       string
@@ -73,4 +76,59 @@ func (o *operation) replyReference() *spec.Reference {
 		return nil
 	}
 	return replyRef(o.reply)
+}
+
+// build assembles the Operation Object o declares and writes the messages it
+// carries into ch, returning the errors found on the way. It mirrors
+// message.build: registration is the caller's, so a duplicate action does not
+// stop the operations declared after it from being built.
+func (o *operation) build(
+	b *builder,
+	ch *spec.Channel,
+	address string,
+) (*spec.Operation, []error) {
+	var errs []error
+	specOp := &spec.Operation{
+		Action:       o.action,
+		Channel:      &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(address)},
+		Title:        o.title,
+		Summary:      o.summary,
+		Description:  o.description,
+		Tags:         o.tags,
+		ExternalDocs: o.externalDocs,
+		Security:     o.security,
+		Bindings:     o.bindings,
+		Traits:       o.traits,
+		Reply:        o.replyReference(),
+	}
+	for _, m := range o.messages {
+		sm, err := m.build(b)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		key := messageKey(m)
+		// The key becomes the message's components.messages key, which the
+		// specification patterns. A key derived from the payload type's fully
+		// qualified name is exempt: appendKeyError skips an unauthored name.
+		errs = appendKeyError(errs, "message", m.name)
+		entry, err := hoistMessage(b, key, "channel."+address, sm)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if ch.Messages == nil {
+			ch.Messages = map[string]*spec.Message{}
+		}
+		ch.Messages[key] = entry
+		specOp.Messages = append(specOp.Messages, &spec.Reference{
+			Ref: "#/channels/" + jsonpointer.Escape(
+				address,
+			) + "/messages/" + jsonpointer.Escape(
+				key,
+			),
+		})
+	}
+	errs = appendBindingErrors(errs, "operation."+address+"."+o.action, o.bindings.Validate())
+	return specOp, errs
 }
