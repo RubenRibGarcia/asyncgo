@@ -137,6 +137,18 @@ func TestEmptyJSONNameFallsBackToFieldName(t *testing.T) {
 	assert.Contains(t, obj.Properties, "Value")
 }
 
+func TestFromTypeNilType(t *testing.T) {
+	defs := map[string]*spec.Schema{}
+
+	// A nil reflect.Type is unconstrained, not a panic.
+	s := FromType(nil, defs)
+
+	require.NotNil(t, s)
+	assert.Empty(t, s.Type)
+	assert.Empty(t, s.Ref)
+	assert.Empty(t, defs)
+}
+
 func TestFromTypeUnexportedFieldSkipped(t *testing.T) {
 	// Touch the unexported field so the `unused` linter considers it used;
 	// derivation must still skip it.

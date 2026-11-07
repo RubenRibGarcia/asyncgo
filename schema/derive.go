@@ -64,7 +64,14 @@ func RefByName(fqn string) string {
 // non-struct types implementing spec.SchemaProvider, are hoisted into defs
 // (keyed by their fully-qualified name) and returned as a $ref; all other types
 // are inlined.
+//
+// A nil t yields an unconstrained schema rather than a panic. defs must be
+// non-nil whenever t is hoistable (a named struct or provider); FromType panics
+// on a hoistable type with a nil defs map.
 func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
+	if t == nil {
+		return &spec.Schema{}
+	}
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
