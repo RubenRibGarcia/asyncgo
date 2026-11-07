@@ -457,28 +457,35 @@ func TestCheckFormatAndOutput(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	tests := []struct {
 		name string
-		args []string
+		args func(t *testing.T) []string
 		want string // artifact the check compares against
 	}{
 		{
 			name: "should_check_json_written_by_generate",
-			args: []string{"--format", "json"},
+			args: func(*testing.T) []string { return []string{"--format", "json"} },
 			want: "asyncapi.json",
 		},
 		{
 			name: "should_check_a_custom_output_path",
-			args: []string{"--format", "json", "-o", "custom.json"},
+			// A relative -o is resolved against the process cwd, which under
+			// `go test` is this package, so the artifact has to be aimed at a
+			// temp dir explicitly or the test drops custom.json in the source
+			// tree.
+			args: func(t *testing.T) []string {
+				return []string{"--format", "json", "-o", filepath.Join(t.TempDir(), "custom.json")}
+			},
 			want: "custom.json",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := copySimpleFixture(t)
+			args := tt.args(t)
 
-			_, _, err := execute(t, BuildInfo{}, append([]string{"generate", dir}, tt.args...)...)
+			_, _, err := execute(t, BuildInfo{}, append([]string{"generate", dir}, args...)...)
 			require.NoError(t, err)
 
-			stdout, _, err := execute(t, BuildInfo{}, append([]string{"check", dir}, tt.args...)...)
+			stdout, _, err := execute(t, BuildInfo{}, append([]string{"check", dir}, args...)...)
 			require.NoError(t, err)
 			assert.Contains(t, stdout, tt.want+" is up to date")
 		})
