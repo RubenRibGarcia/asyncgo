@@ -252,6 +252,13 @@ func fillObject(s *spec.Schema, t reflect.Type, defs map[string]*spec.Schema) {
 		s.Required = own.Required
 		return
 	}
+	// A struct that only composes embeds contributes no member of its own, and an
+	// empty {type: object, properties: {}} among the allOf members constrains
+	// nothing — every instance satisfies it. Omit it rather than emit noise.
+	if len(own.Properties) == 0 {
+		s.AllOf = embedded
+		return
+	}
 	s.AllOf = append(embedded, own)
 }
 

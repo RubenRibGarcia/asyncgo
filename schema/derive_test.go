@@ -375,6 +375,19 @@ func TestAllOfEmbedding(t *testing.T) {
 			},
 		},
 		{
+			// A struct that only composes embeds declares nothing of its own, so the
+			// empty {type: object, properties: {}} allOf member constrains nothing
+			// and is omitted rather than emitted.
+			name: "should_omit_the_empty_own_member_of_an_allOf_only_struct",
+			typ:  reflect.TypeFor[AllOfOnly](),
+			verify: func(t *testing.T, defs map[string]*spec.Schema) {
+				only := defs["github.com/RubenRibGarcia/asyncgo/schema.AllOfOnly"]
+				require.NotNil(t, only)
+				require.Len(t, only.AllOf, 1)
+				assert.Equal(t, Ref(reflect.TypeFor[AllOfBase]()), only.AllOf[0].Ref)
+			},
+		},
+		{
 			name: "should_terminate_on_recursive_allOf",
 			typ:  reflect.TypeFor[RecursiveAllOfWrapper](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
@@ -688,6 +701,11 @@ type RecursiveAllOfNode struct {
 type RecursiveAllOfWrapper struct {
 	RecursiveAllOfNode `       asyncapi:"allOf"`
 	Label              string `                 json:"label"`
+}
+
+// AllOfOnly only composes a base, so it has no member of its own.
+type AllOfOnly struct {
+	AllOfBase `asyncapi:"allOf"`
 }
 
 // UnionMemberA is one arm of a tag-driven union.
