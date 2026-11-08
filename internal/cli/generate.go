@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
+	"github.com/RubenRibGarcia/asyncgo/internal/logging"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/spf13/cobra"
 )
@@ -67,6 +69,24 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmpName, path)
 }
 
+// formatSize renders a byte count the way a human reads it (12.3 KiB). It is a
+// log detail, so it rounds to one decimal and never says "bytes" for a section
+// the user is about to dump into a diff.
+func formatSize(n int) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	value := float64(n) / unit
+	for _, suffix := range []string{"KiB", "MiB", "GiB"} {
+		if value < unit {
+			return fmt.Sprintf("%.1f %s", value, suffix)
+		}
+		value /= unit
+	}
+	return fmt.Sprintf("%.1f TiB", value)
+}
+
 func newGenerateCmd() *cobra.Command {
 	var output, format, config string
 	cmd := &cobra.Command{
@@ -79,26 +99,44 @@ func newGenerateCmd() *cobra.Command {
 				return err
 			}
 
+			log := logging.FromContext(cmd.Context())
+
 			dir, err := resolveDir(args)
 			if err != nil {
 				return fmt.Errorf("generating: %w", err)
 			}
 
-			doc, n, err := buildDoc(cmd, dir, config, "generating")
+			doc, n, err := buildDoc(
+				cmd,
+				dir,
+				discovery.Options{Config: config, Log: log},
+				"generating",
+			)
 			if err != nil {
 				return err
 			}
+			_, encodeDone := logging.Step(log, "encode")
 			out, err := selected.encode(doc)
 			if err != nil {
 				return fmt.Errorf("encoding document: %w", err)
 			}
+			encodeDone(
+				format+", "+formatSize(len(out)),
+				"format", format,
+				"bytes", len(out),
+			)
 			path, err := resolveOutput(dir, output, selected.defaultName)
 			if err != nil {
 				return fmt.Errorf("generating: %w", err)
 			}
+			_, writeDone := logging.Step(log, "write")
 			if err := writeFileAtomic(path, out, 0o644); err != nil {
 				return fmt.Errorf("writing %s: %w", path, err)
 			}
+			writeDone(path, "path", path)
+			// The recap is printed before the artifact line so the two streams read in
+			// the order the run happened: diagnostics, then the result.
+			logging.Recap(log)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "wrote %s (%d catalog(s))\n", path, n)
 			return nil
 		},

@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/logging"
 	"github.com/RubenRibGarcia/asyncgo/internal/mappingconfig"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/goccy/go-yaml"
@@ -75,18 +77,24 @@ type catalogOutcome struct {
 }
 
 // removeHarnessDir removes the transient harness directory and reports a failure
-// on w. A directory left behind is a diagnostic rather than a build failure — the
-// document was materialized either way — but it is not silence: it is written to
-// the process's stderr because the command's own output writer belongs to the
-// caller and stdout already carries the artifact messages.
+// through log. A directory left behind is a diagnostic rather than a build
+// failure — the document was materialized either way — but it is not silence: it
+// is a warning record, which the CLI prints by default because it printed today.
+//
+// keep suppresses the removal. A harness that failed is the one case where the
+// generated program must survive: it is the only artifact that explains why a
+// catalog would not compile, and the error already names it.
 //
 // remove is a parameter so the failure path can be tested without contriving an
 // unremovable directory.
-func removeHarnessDir(tmp string, w io.Writer, remove func(string) error) {
+func removeHarnessDir(tmp string, log *slog.Logger, keep bool, remove func(string) error) {
+	if keep {
+		return
+	}
 	if err := remove(tmp); err != nil {
-		// The diagnostic is best-effort: a writer that fails cannot be reported to
-		// itself, and the build already succeeded.
-		_, _ = fmt.Fprintf(w, "asyncgo: removing harness directory %s: %v\n", tmp, err)
+		// Best effort: a writer that fails cannot be reported to itself, and the
+		// build already succeeded.
+		log.Warn("removing harness directory " + tmp + ": " + err.Error())
 	}
 }
 
@@ -106,10 +114,14 @@ func Materialize(
 	ctx context.Context,
 	dir string,
 	plan Plan,
+	opts Options,
 ) ([]*spec.AsyncAPI, error) {
 	if len(plan.Catalogs) == 0 {
 		return nil, nil
 	}
+	log := logging.OrQuiet(opts.Log)
+	stage, done := logging.Step(log, "harness")
+	stage.Info("materializing " + count(len(plan.Catalogs), "catalog") + "...")
 
 	// The underscore prefix is load-bearing: the go tool ignores directories whose
 	// name starts with "_" when matching patterns, so load()'s `./...` scan cannot
@@ -120,30 +132,43 @@ func Materialize(
 	if err != nil {
 		return nil, fmt.Errorf("creating harness directory: %w", err)
 	}
-	defer removeHarnessDir(tmp, os.Stderr, os.RemoveAll)
+	// keep is set on the failure path below, so the generated program survives for
+	// the user to read. The deferred call reads it through the closure.
+	keep := false
+	defer func() { removeHarnessDir(tmp, log, keep, os.RemoveAll) }()
 
-	if err := os.WriteFile(
-		filepath.Join(tmp, "main.go"),
-		[]byte(harness(plan)),
-		0o644,
-	); err != nil {
+	harnessPath := filepath.Join(tmp, "main.go")
+	stage.Debug("writing harness program to " + harnessPath)
+	if err := os.WriteFile(harnessPath, []byte(harness(plan)), 0o644); err != nil {
 		return nil, fmt.Errorf("writing harness: %w", err)
 	}
 
+	// The start line names what the user is waiting for: go run compiles the module,
+	// which is the slowest and least obvious step of a generate/check run.
+	stage.Debug("running go run ./" + filepath.Base(tmp) + " (this compiles the module)")
 	cmd := exec.CommandContext(ctx, "go", "run", "./"+filepath.Base(tmp))
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	if logging.Enabled(log, slog.LevelDebug) {
+		// Tee the subprocess's stderr into the log stream at Debug: a compiler
+		// warning or an init() writing to stderr used to vanish on a successful run.
+		cmd.Stderr = io.MultiWriter(&stderr, logging.Writer(log))
+	}
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("materializing catalogs: %w\n%s", err, stderr.String())
+		keep = true
+		return nil, fmt.Errorf(
+			"materializing catalogs: %w\n%sharness program kept for inspection: %s",
+			err, stderr.String(), harnessPath,
+		)
 	}
 
 	var out harnessOutput
 	if err := yaml.Unmarshal(stdout.Bytes(), &out); err != nil {
 		return nil, fmt.Errorf("decoding harness output: %w", err)
 	}
-	reportMappingWarnings(os.Stderr, out.Warnings)
+	reportMappingWarnings(log, out.Warnings)
 	var docs []*spec.AsyncAPI
 	var catErrs CatalogErrors
 	for _, c := range out.Catalogs {
@@ -157,28 +182,34 @@ func Materialize(
 		}
 		docs = append(docs, c.Doc)
 	}
+	// The stage closes even when a catalog is invalid: the harness did run, and the
+	// counts are what make the failure report below legible.
+	done(
+		count(len(docs), "catalog")+" valid, "+count(len(catErrs), "error"),
+		"catalogs", len(docs),
+		"errors", len(catErrs),
+	)
 	if len(catErrs) > 0 {
 		return nil, catErrs
 	}
 	return docs, nil
 }
 
-// reportMappingWarnings writes one diagnostic line per mapping that was
+// reportMappingWarnings reports one warning record per mapping that was
 // registered but never consulted, so a typo'd fully-qualified name in
 // asyncgo.yaml — or an API mapping declared in a package the harness never
 // imports — is visible in generate/check output instead of silently ignored.
 //
-// It goes to stderr, like the harness-cleanup diagnostic: stdout carries the
-// artifact messages, and a warning must not fail the run. w is a parameter so the
-// formatting is testable without capturing the process's stderr.
-func reportMappingWarnings(w io.Writer, warnings []string) {
+// It is a warning, so it is printed by default: it was before verbosity existed,
+// and a stale mapping is a fact the user needs, not a diagnostic they opted into.
+// log is a parameter so the formatting is testable over a buffer.
+func reportMappingWarnings(log *slog.Logger, warnings []string) {
 	for _, fqn := range warnings {
-		// Best-effort: a writer that fails cannot be reported to itself, and the
+		// Best effort: a writer that fails cannot be reported to itself, and the
 		// document was materialized either way.
-		_, _ = fmt.Fprintf(
-			w,
-			"asyncgo: schema mapping for %s was never used: no derived type matched that name\n",
-			fqn,
+		log.Warn(
+			"schema mapping for " + fqn + " was never used: " +
+				"no derived type matched that name",
 		)
 	}
 }

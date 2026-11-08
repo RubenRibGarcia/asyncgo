@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
@@ -252,7 +253,169 @@ func TestMerge(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.verify(t, Merge(tc.docs...))
+			merged, _ := Merge(documentsOf(tc.docs)...)
+			tc.verify(t, merged)
 		})
 	}
+}
+
+// documentsOf wraps bare documents as Document values. The fixtures are about
+// content, so their catalogs are named by position; only the collision tests
+// care about identity, and they build their own.
+func documentsOf(docs []*spec.AsyncAPI) []Document {
+	wrapped := make([]Document, 0, len(docs))
+	for i, d := range docs {
+		wrapped = append(wrapped, Document{Catalog: catalogNamed(i), Doc: d})
+	}
+	return wrapped
+}
+
+// catalogNamed builds a catalog identity for a test fixture. The name follows the
+// position so a collision message can be asserted in full.
+func catalogNamed(i int) Catalog {
+	return Catalog{PkgPath: "example.com/pkg" + strconv.Itoa(i), VarName: "Catalog"}
+}
+
+// TestMergeReportsCollisions pins the behaviour that motivated labelling
+// documents: first-wins used to discard the losing definition with no trace, so a
+// merged document could be quietly wrong for one of its catalogs.
+func TestMergeReportsCollisions(t *testing.T) {
+	t.Run("should_report_a_channel_two_catalogs_declared", func(t *testing.T) {
+		first, second := catalogNamed(0), catalogNamed(1)
+		a := spec.New()
+		a.Channels = map[string]*spec.Channel{"order-placed": {Address: "orders"}}
+		b := spec.New()
+		b.Channels = map[string]*spec.Channel{"order-placed": {Address: "orders-v2"}}
+
+		merged, collisions := Merge(
+			Document{Catalog: first, Doc: a},
+			Document{Catalog: second, Doc: b},
+		)
+
+		assert.Equal(t, "orders", merged.Channels["order-placed"].Address, "first wins")
+		require.Len(t, collisions, 1)
+		assert.Equal(t, "channels", collisions[0].Section)
+		assert.Equal(t, "order-placed", collisions[0].Name)
+		assert.Equal(t, first, collisions[0].Kept)
+		assert.Equal(t, []Catalog{second}, collisions[0].Dropped)
+	})
+
+	t.Run("should_join_a_third_catalog_onto_the_same_collision", func(t *testing.T) {
+		first, second, third := catalogNamed(0), catalogNamed(1), catalogNamed(2)
+		doc := func(address string) *spec.AsyncAPI {
+			d := spec.New()
+			d.Channels = map[string]*spec.Channel{"c": {Address: address}}
+			return d
+		}
+
+		_, collisions := Merge(
+			Document{Catalog: first, Doc: doc("one")},
+			Document{Catalog: second, Doc: doc("two")},
+			Document{Catalog: third, Doc: doc("three")},
+		)
+
+		require.Len(t, collisions, 1, "one report per key, not one per loser")
+		assert.Equal(t, first, collisions[0].Kept)
+		assert.Equal(t, []Catalog{second, third}, collisions[0].Dropped)
+	})
+
+	t.Run("should_name_the_components_section_a_collision_happened_in", func(t *testing.T) {
+		a := spec.New()
+		a.Components = &spec.Components{Schemas: map[string]*spec.Schema{"X": {Type: "string"}}}
+		b := spec.New()
+		b.Components = &spec.Components{Schemas: map[string]*spec.Schema{"X": {Type: "integer"}}}
+
+		_, collisions := Merge(
+			Document{Catalog: catalogNamed(0), Doc: a},
+			Document{Catalog: catalogNamed(1), Doc: b},
+		)
+
+		require.Len(t, collisions, 1)
+		assert.Equal(t, "components.schemas", collisions[0].Section)
+	})
+
+	t.Run("should_report_a_losing_info_title", func(t *testing.T) {
+		_, collisions := Merge(
+			Document{Catalog: catalogNamed(0), Doc: docWith("Orders", nil)},
+			Document{Catalog: catalogNamed(1), Doc: docWith("Admin", nil)},
+		)
+
+		require.Len(t, collisions, 1)
+		assert.Equal(t, "info", collisions[0].Section)
+		assert.Equal(t, "Admin", collisions[0].Name)
+	})
+
+	t.Run("should_report_nothing_when_keys_do_not_overlap", func(t *testing.T) {
+		a := spec.New()
+		a.Channels = map[string]*spec.Channel{"a": {Address: "a"}}
+		b := spec.New()
+		b.Channels = map[string]*spec.Channel{"b": {Address: "b"}}
+
+		_, collisions := Merge(
+			Document{Catalog: catalogNamed(0), Doc: a},
+			Document{Catalog: catalogNamed(1), Doc: b},
+		)
+
+		assert.Empty(t, collisions)
+	})
+
+	t.Run("should_sort_collisions_by_section_then_name", func(t *testing.T) {
+		a := spec.New()
+		a.Channels = map[string]*spec.Channel{
+			"zeta":  {Address: "z"},
+			"alpha": {Address: "a"},
+		}
+		b := spec.New()
+		b.Channels = map[string]*spec.Channel{
+			"zeta":  {Address: "z"},
+			"alpha": {Address: "a"},
+		}
+
+		_, collisions := Merge(
+			Document{Catalog: catalogNamed(0), Doc: a},
+			Document{Catalog: catalogNamed(1), Doc: b},
+		)
+
+		require.Len(t, collisions, 2)
+		assert.Equal(t, "alpha", collisions[0].Name)
+		assert.Equal(t, "zeta", collisions[1].Name)
+	})
+}
+
+// TestCollisionFindings pins how a collision reaches the user: a located line naming
+// both catalogs, so the drop is legible without reading the artifact.
+func TestCollisionFindings(t *testing.T) {
+	t.Run("should_name_the_kept_and_dropped_catalogs", func(t *testing.T) {
+		findings := collisionFindings([]Collision{{
+			Section: "channels",
+			Name:    "order-placed",
+			Kept:    Catalog{PkgPath: "example.com/admin", VarName: "AdminSpec"},
+			Dropped: []Catalog{
+				{PkgPath: "example.com/orders", VarName: "OrdersSpec"},
+			},
+		}})
+
+		require.Len(t, findings, 1)
+		assert.Equal(
+			t,
+			"channels.order-placed: duplicate, kept from example.com/admin.AdminSpec "+
+				"(dropped from example.com/orders.OrdersSpec)",
+			findings[0].String(),
+		)
+	})
+
+	t.Run("should_list_every_dropped_catalog", func(t *testing.T) {
+		findings := collisionFindings([]Collision{{
+			Section: "channels",
+			Name:    "c",
+			Kept:    Catalog{PkgPath: "a", VarName: "A"},
+			Dropped: []Catalog{
+				{PkgPath: "b", VarName: "B"},
+				{PkgPath: "c", VarName: "C"},
+			},
+		}})
+
+		require.Len(t, findings, 1)
+		assert.Contains(t, findings[0].String(), "dropped from b.B, c.C")
+	})
 }

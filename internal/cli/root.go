@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
+	"github.com/RubenRibGarcia/asyncgo/internal/logging"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +43,7 @@ func ExitCode(err error) int {
 }
 
 func newRootCmd(bi BuildInfo) *cobra.Command {
+	var verbosity int
 	root := &cobra.Command{
 		Use:   "asyncgo",
 		Short: "Generate and check AsyncAPI specifications from Go code",
@@ -50,7 +52,16 @@ func newRootCmd(bi BuildInfo) *cobra.Command {
 		// Runtime errors (e.g. "no AsyncAPI catalogs") should not dump usage.
 		SilenceUsage: true,
 		Version:      formatVersion(bi),
+		// The logger is built here, once per command tree, so every subcommand
+		// reports through the streams Cobra was given — which is what makes the
+		// diagnostics capturable in tests and redirectable by a caller.
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			log := logging.New(cmd.ErrOrStderr(), logging.Verbosity(verbosity))
+			cmd.SetContext(logging.WithLogger(cmd.Context(), log))
+		},
 	}
+	root.PersistentFlags().CountVarP(&verbosity, "verbose", "v",
+		"log what the command is doing to stderr (repeat for more detail)")
 	root.SetVersionTemplate("asyncgo {{.Version}}\n")
 	root.AddCommand(newGenerateCmd(), newCheckCmd(), newVersionCmd(bi))
 	return root
@@ -90,14 +101,19 @@ func resolveOutput(dir, output, defaultName string) (string, error) {
 	return abs, nil
 }
 
-// buildDoc materializes the catalog rooted at dir into a merged document.
-// configPath names the schema-mapping config file (empty auto-discovers
-// <dir>/asyncgo.yaml); it is forwarded verbatim, so the error naming a config file
-// the user chose is the path they typed. A catalog validation failure is returned
-// as is, so the command prints the per-catalog report; any other failure is
-// wrapped with verb, which names the command in the message ("generating: ...").
-func buildDoc(cmd *cobra.Command, dir, configPath, verb string) (*spec.AsyncAPI, int, error) {
-	doc, n, err := discovery.Build(cmd.Context(), dir, configPath)
+// buildDoc materializes the catalog rooted at dir into a merged document. opts
+// carries the schema-mapping config path and the diagnostics sink, and is
+// forwarded verbatim, so the error naming a config file the user chose is the
+// path they typed. A catalog validation failure is returned as is, so the command
+// prints the per-catalog report; any other failure is wrapped with verb, which
+// names the command in the message ("generating: ...").
+func buildDoc(
+	cmd *cobra.Command,
+	dir string,
+	opts discovery.Options,
+	verb string,
+) (*spec.AsyncAPI, int, error) {
+	doc, n, err := discovery.Build(cmd.Context(), dir, opts)
 	if err != nil {
 		var catErrs discovery.CatalogErrors
 		if errors.As(err, &catErrs) {

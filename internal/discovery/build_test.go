@@ -1,11 +1,15 @@
 package discovery
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/logging"
+	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +18,7 @@ func TestBuild(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
 	require.NoError(t, err)
 
-	doc, n, err := Build(t.Context(), dir, "")
+	doc, n, err := Build(t.Context(), dir, Options{})
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 
@@ -31,7 +35,7 @@ func TestBuildNoCatalogs(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "spec"))
 	require.NoError(t, err)
 
-	doc, n, err := Build(t.Context(), dir, "")
+	doc, n, err := Build(t.Context(), dir, Options{})
 	require.Error(t, err)
 	assert.Nil(t, doc)
 	assert.Zero(t, n)
@@ -39,7 +43,7 @@ func TestBuildNoCatalogs(t *testing.T) {
 }
 
 func TestBuildBadDir(t *testing.T) {
-	_, _, err := Build(t.Context(), filepath.Join(t.TempDir(), "does-not-exist"), "")
+	_, _, err := Build(t.Context(), filepath.Join(t.TempDir(), "does-not-exist"), Options{})
 	require.Error(t, err)
 }
 
@@ -51,7 +55,7 @@ func TestBuildRejectsInvalidConfig(t *testing.T) {
 		0o644,
 	))
 
-	doc, n, err := Build(t.Context(), dir, "")
+	doc, n, err := Build(t.Context(), dir, Options{})
 
 	require.Error(t, err)
 	assert.Nil(t, doc)
@@ -75,7 +79,7 @@ func TestLoadMappingConfig(t *testing.T) {
 	const valid = "mappings:\n  math/big.Int:\n    type: integer\n"
 
 	t.Run("should_return_no_mappings_without_a_config_file", func(t *testing.T) {
-		mappings, err := loadMappingConfig(t.TempDir(), "")
+		mappings, err := loadMappingConfig(t.TempDir(), "", logging.New(io.Discard, logging.Quiet))
 
 		require.NoError(t, err)
 		assert.Empty(t, mappings)
@@ -85,7 +89,7 @@ func TestLoadMappingConfig(t *testing.T) {
 		dir := t.TempDir()
 		writeConfig(t, dir, configFileName, valid)
 
-		mappings, err := loadMappingConfig(dir, "")
+		mappings, err := loadMappingConfig(dir, "", logging.New(io.Discard, logging.Quiet))
 
 		require.NoError(t, err)
 		require.Len(t, mappings, 1)
@@ -98,7 +102,11 @@ func TestLoadMappingConfig(t *testing.T) {
 		// and the error names the path the user typed rather than a joined one.
 		path := writeConfig(t, t.TempDir(), "team.yaml", valid)
 
-		mappings, err := loadMappingConfig(t.TempDir(), path)
+		mappings, err := loadMappingConfig(
+			t.TempDir(),
+			path,
+			logging.New(io.Discard, logging.Quiet),
+		)
 
 		require.NoError(t, err)
 		require.Len(t, mappings, 1)
@@ -110,7 +118,7 @@ func TestLoadMappingConfig(t *testing.T) {
 		writeConfig(t, dir, configFileName, "mappings:\n  math/big.Int:\n    type: string\n")
 		path := writeConfig(t, t.TempDir(), "team.yaml", valid)
 
-		mappings, err := loadMappingConfig(dir, path)
+		mappings, err := loadMappingConfig(dir, path, logging.New(io.Discard, logging.Quiet))
 
 		require.NoError(t, err)
 		// One mapping set shapes a run: the default file is not read at all.
@@ -122,7 +130,7 @@ func TestLoadMappingConfig(t *testing.T) {
 		dir := t.TempDir()
 		writeConfig(t, dir, configFileName, "mappings:\n  big.Int:\n    type: integer\n")
 
-		mappings, err := loadMappingConfig(dir, "")
+		mappings, err := loadMappingConfig(dir, "", logging.New(io.Discard, logging.Quiet))
 
 		require.Error(t, err)
 		assert.Nil(t, mappings)
@@ -139,7 +147,7 @@ func TestLoadMappingConfig(t *testing.T) {
 		writeConfig(t, dir, configFileName, valid)
 		missing := filepath.Join(dir, "typo.yaml")
 
-		mappings, err := loadMappingConfig(dir, missing)
+		mappings, err := loadMappingConfig(dir, missing, logging.New(io.Discard, logging.Quiet))
 
 		require.Error(t, err)
 		assert.Nil(t, mappings)
@@ -152,12 +160,84 @@ func TestLoadMappingConfig(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.Mkdir(filepath.Join(dir, configFileName), 0o755))
 
-		_, err := loadMappingConfig(dir, "")
+		_, err := loadMappingConfig(dir, "", logging.New(io.Discard, logging.Quiet))
 
 		require.Error(t, err)
 		// The default file is reported by its joined path, so the message says which
 		// module's config could not be read.
 		assert.Contains(t, err.Error(), "reading ")
 		assert.Contains(t, err.Error(), configFileName)
+	})
+}
+
+// TestBuildReportsDebugDetail pins the debug-level story: the per-catalog origin,
+// the combinator and alias counts, and the description count. They are the lines
+// a maintainer reads when the document is not what they expected.
+func TestBuildReportsDebugDetail(t *testing.T) {
+	t.Run("should_report_catalogs_refs_and_descriptions", func(t *testing.T) {
+		dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
+		require.NoError(t, err)
+		var log bytes.Buffer
+
+		_, _, err = Build(
+			t.Context(),
+			dir,
+			Options{Log: logging.New(&log, logging.Debug)},
+		)
+		require.NoError(t, err)
+
+		got := log.String()
+		assert.Contains(
+			t,
+			got,
+			"catalogs: github.com/RubenRibGarcia/asyncgo/test/data/simple.Catalog",
+		)
+		assert.Contains(t, got, "declared in catalog.go", "the file is shown relative to dir")
+		assert.Contains(t, got, "refs: ")
+		assert.Contains(t, got, "descriptions: ")
+	})
+
+	t.Run("should_stay_quiet_without_a_logger", func(t *testing.T) {
+		dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
+		require.NoError(t, err)
+
+		_, _, err = Build(t.Context(), dir, Options{})
+
+		require.NoError(t, err, "a nil logger must not break the build")
+	})
+}
+
+func TestSchemaCount(t *testing.T) {
+	t.Run("should_be_zero_without_components", func(t *testing.T) {
+		assert.Zero(t, schemaCount(spec.New()))
+	})
+
+	t.Run("should_count_hoisted_schemas", func(t *testing.T) {
+		doc := spec.New()
+		doc.Components = &spec.Components{Schemas: map[string]*spec.Schema{"a": {}, "b": {}}}
+
+		assert.Equal(t, 2, schemaCount(doc))
+	})
+}
+
+func TestPairCatalogs(t *testing.T) {
+	t.Run("should_pair_each_document_with_its_catalog", func(t *testing.T) {
+		cats := []Catalog{{PkgPath: "a", VarName: "A"}, {PkgPath: "b", VarName: "B"}}
+		docs := []*spec.AsyncAPI{spec.New(), spec.New()}
+
+		pairs := pairCatalogs(cats, docs)
+
+		require.Len(t, pairs, 2)
+		assert.Equal(t, cats[0], pairs[0].Catalog)
+		assert.Equal(t, cats[1], pairs[1].Catalog)
+	})
+
+	t.Run("should_tolerate_more_catalogs_than_documents", func(t *testing.T) {
+		cats := []Catalog{{PkgPath: "a", VarName: "A"}, {PkgPath: "b", VarName: "B"}}
+
+		pairs := pairCatalogs(cats, []*spec.AsyncAPI{spec.New()})
+
+		require.Len(t, pairs, 1)
+		assert.Equal(t, cats[0], pairs[0].Catalog)
 	})
 }
