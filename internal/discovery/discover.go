@@ -21,7 +21,12 @@ import (
 type Catalog struct {
 	PkgPath string // import path of the package declaring the variable
 	VarName string // exported variable name
+	File    string // absolute path of the file declaring it, for diagnostics
 }
+
+// String renders the catalog as pkgPath.VarName, which is how every diagnostic
+// names one.
+func (c Catalog) String() string { return c.PkgPath + "." + c.VarName }
 
 // specResultType is the identity of *asyncgo.SpecResult, derived from the real
 // type so it stays correct if the module path changes.
@@ -110,7 +115,11 @@ func scanFile(pkg *packages.Package, file *ast.File) []Catalog {
 					continue
 				}
 				if isSpecResult(obj.Type()) {
-					out = append(out, Catalog{PkgPath: pkg.PkgPath, VarName: name.Name})
+					out = append(out, Catalog{
+						PkgPath: pkg.PkgPath,
+						VarName: name.Name,
+						File:    pkg.Fset.Position(name.Pos()).Filename,
+					})
 				}
 			}
 		}

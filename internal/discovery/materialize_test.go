@@ -7,16 +7,45 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/logging"
 	"github.com/RubenRibGarcia/asyncgo/internal/mappingconfig"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// cleanupHarnessDirs removes the harness directories a failing materialize run
+// leaves behind. Keeping a failed harness is the designed behaviour — the
+// generated program is the only explanation of why it would not compile — so a
+// test that fails a harness deliberately has to clean up after itself.
+func cleanupHarnessDirs(t *testing.T, dir string) {
+	t.Helper()
+	t.Cleanup(func() {
+		matches, err := filepath.Glob(filepath.Join(dir, "_asyncgo-harness-*"))
+		if err != nil {
+			return
+		}
+		for _, match := range matches {
+			_ = os.RemoveAll(match)
+		}
+	})
+}
+
+// stampPattern matches the elapsed-time prefix the logging handler puts on every
+// record. Assertions strip it so a golden line does not pin a duration; the
+// stamp's format is pinned once in the logging package's own tests.
+var stampPattern = regexp.MustCompile(`(?m)^(asyncgo: )\+\d+\.\d{3}s `)
+
+// withoutStamp returns s with the elapsed prefixes removed.
+func withoutStamp(s string) string {
+	return stampPattern.ReplaceAllString(s, "$1")
+}
+
 func TestMaterializeEmptyCatalogs(t *testing.T) {
-	docs, err := Materialize(t.Context(), ".", Plan{})
+	docs, err := Materialize(t.Context(), ".", Plan{}, Options{})
 	require.NoError(t, err)
 	assert.Nil(t, docs)
 }
@@ -30,13 +59,14 @@ func TestMaterializeStopsOnCancelledContext(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
+	cleanupHarnessDirs(t, dir)
 
 	cats := []Catalog{{
 		PkgPath: "github.com/RubenRibGarcia/asyncgo/test/data/simple",
 		VarName: "Catalog",
 	}}
 
-	docs, err := Materialize(ctx, dir, Plan{Catalogs: cats})
+	docs, err := Materialize(ctx, dir, Plan{Catalogs: cats}, Options{})
 	require.Error(t, err)
 	assert.Nil(t, docs)
 	assert.ErrorIs(t, err, context.Canceled)
@@ -44,7 +74,12 @@ func TestMaterializeStopsOnCancelledContext(t *testing.T) {
 
 func TestMaterializeMkdirTempError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
-	_, err := Materialize(t.Context(), dir, Plan{Catalogs: []Catalog{{PkgPath: "p", VarName: "V"}}})
+	_, err := Materialize(
+		t.Context(),
+		dir,
+		Plan{Catalogs: []Catalog{{PkgPath: "p", VarName: "V"}}},
+		Options{},
+	)
 	require.Error(t, err)
 }
 
@@ -54,6 +89,7 @@ func TestMaterializeMkdirTempError(t *testing.T) {
 func TestMaterializeWrapsHarnessError(t *testing.T) {
 	dir, err := filepath.Abs(filepath.Join("..", "..", "test", "data", "simple"))
 	require.NoError(t, err)
+	cleanupHarnessDirs(t, dir)
 
 	// The harness references the catalog var by name, so a var that does not
 	// exist fails the generated program's build.
@@ -62,7 +98,7 @@ func TestMaterializeWrapsHarnessError(t *testing.T) {
 		VarName: "NoSuchCatalog",
 	}}
 
-	docs, err := Materialize(t.Context(), dir, Plan{Catalogs: cats})
+	docs, err := Materialize(t.Context(), dir, Plan{Catalogs: cats}, Options{})
 	require.Error(t, err)
 	assert.Nil(t, docs)
 
@@ -222,7 +258,7 @@ func TestRemoveHarnessDir(t *testing.T) {
 	t.Run("should_stay_silent_when_the_directory_is_removed", func(t *testing.T) {
 		var out bytes.Buffer
 
-		removeHarnessDir(t.TempDir(), &out, os.RemoveAll)
+		removeHarnessDir(t.TempDir(), logging.New(&out, logging.Quiet), false, os.RemoveAll)
 
 		assert.Empty(t, out.String())
 	})
@@ -231,12 +267,17 @@ func TestRemoveHarnessDir(t *testing.T) {
 		var out bytes.Buffer
 		boom := errors.New("device busy")
 
-		removeHarnessDir("/tmp/harness", &out, func(string) error { return boom })
+		removeHarnessDir(
+			"/tmp/harness",
+			logging.New(&out, logging.Quiet),
+			false,
+			func(string) error { return boom },
+		)
 
 		assert.Equal(
 			t,
 			"asyncgo: removing harness directory /tmp/harness: device busy\n",
-			out.String(),
+			withoutStamp(out.String()),
 		)
 	})
 }
@@ -249,7 +290,7 @@ func TestReportMappingWarnings(t *testing.T) {
 	t.Run("should_stay_silent_when_nothing_was_left_unused", func(t *testing.T) {
 		var out bytes.Buffer
 
-		reportMappingWarnings(&out, nil)
+		reportMappingWarnings(logging.New(&out, logging.Quiet), nil)
 
 		assert.Empty(t, out.String())
 	})
@@ -257,7 +298,10 @@ func TestReportMappingWarnings(t *testing.T) {
 	t.Run("should_report_one_line_per_unused_mapping", func(t *testing.T) {
 		var out bytes.Buffer
 
-		reportMappingWarnings(&out, []string{"example.com/a.One", "example.com/b.Two"})
+		reportMappingWarnings(
+			logging.New(&out, logging.Quiet),
+			[]string{"example.com/a.One", "example.com/b.Two"},
+		)
 
 		assert.Equal(
 			t,
@@ -265,7 +309,7 @@ func TestReportMappingWarnings(t *testing.T) {
 				"no derived type matched that name\n"+
 				"asyncgo: schema mapping for example.com/b.Two was never used: "+
 				"no derived type matched that name\n",
-			out.String(),
+			withoutStamp(out.String()),
 		)
 	})
 }

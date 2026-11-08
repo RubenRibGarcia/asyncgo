@@ -19,11 +19,12 @@ func TestFindMaterializeMerge(t *testing.T) {
 	assert.Equal(t, "github.com/RubenRibGarcia/asyncgo/test/data/simple", cats[0].PkgPath)
 	assert.Equal(t, "Catalog", cats[0].VarName)
 
-	docs, err := Materialize(t.Context(), dir, Plan{Catalogs: cats})
+	docs, err := Materialize(t.Context(), dir, Plan{Catalogs: cats}, Options{})
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
 
-	merged := Merge(docs...)
+	merged, collisions := Merge(pairCatalogs(cats, docs)...)
+	assert.Empty(t, collisions, "one catalog cannot collide with itself")
 	assert.Equal(t, "Orders Service", merged.Info.Title)
 
 	require.Contains(t, merged.Channels, "order-placed")

@@ -59,3 +59,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | [0006](0006-schema-keywords.md) | Model the full Draft-07 and AsyncAPI Schema keyword set | accepted | 2026-10-10 | 2026-10-10 |
 | [0007](0007-shared-tag-grammar.md) | Share the struct-tag grammar between the two passes | accepted | 2026-11-08 | 2026-11-08 |
 | [0008](0008-external-type-mappings.md) | Derive third-party types from declared, name-keyed mappings | accepted | 2026-11-08 | 2026-11-08 |
+| [0009](0009-verbose-cli-logging.md) | Narrate CLI runs with a repeatable verbose flag | accepted | 2026-11-08 | 2026-11-08 |
