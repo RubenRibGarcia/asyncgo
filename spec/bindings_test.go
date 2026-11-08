@@ -11,9 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// bindingValues lists every typed binding struct with all of its fields set, so
-// the assertions below see every tag. Structs whose fields are all zero-valued
-// by design (the reserved objects) appear once, because they share one type.
+// bindingValues lists every binding object type with every field set to a
+// non-zero value, so the assertions below see each field on the wire. Nested
+// objects (MQTTLastWill, PulsarRetention, JMSProperty, ...) are exercised
+// through the binding that carries them.
+//
+// Reserved objects carry only bindingVersion by design, and every protocol's is
+// an alias of ReservedBinding, so they appear once — one row per document
+// position rather than per protocol.
 var bindingValues = []struct {
 	name  string
 	value any
@@ -240,7 +245,7 @@ var bindingValues = []struct {
 			Mandatory:      true,
 			BCC:            []string{"bcc"},
 			Timestamp:      true,
-			Ack:            false,
+			Ack:            true,
 			BindingVersion: "0.3.0",
 		},
 	},
@@ -430,7 +435,7 @@ func TestBindingEncodings(t *testing.T) {
 				require.NoError(t, json.Unmarshal(jsonOut, &fromJSON))
 				require.NoError(t, yaml.Unmarshal(yamlOut, &fromYAML))
 
-				assert.JSONEq(t, mustMarshal(t, fromJSON), mustMarshal(t, fromYAML))
+				assert.JSONEq(t, canonicalJSON(t, fromJSON), canonicalJSON(t, fromYAML))
 			})
 		})
 	}
@@ -441,11 +446,4 @@ func TestReservedBindingReservedShape(t *testing.T) {
 	out, err := json.Marshal(StompServerBinding{BindingVersion: "0.1.0"})
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"bindingVersion":"0.1.0"}`, string(out))
-}
-
-func mustMarshal(t *testing.T, v any) string {
-	t.Helper()
-	out, err := json.Marshal(v)
-	require.NoError(t, err)
-	return string(out)
 }
