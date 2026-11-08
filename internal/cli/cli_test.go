@@ -679,3 +679,53 @@ func copyFixture(t *testing.T, name string) string {
 
 	return dst
 }
+
+// TestWriteFileAtomic pins what the artifact write guarantees: the target is
+// replaced, and a failed write leaves neither a partial artifact nor a temp file
+// behind. `generate` rewrites the same path on every run, so a truncated artifact
+// from a failed write would be worse than no write at all.
+func TestWriteFileAtomic(t *testing.T) {
+	t.Run("should_replace_an_existing_artifact", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "asyncapi.yaml")
+		require.NoError(t, os.WriteFile(path, []byte("old\n"), 0o644))
+
+		require.NoError(t, writeFileAtomic(path, []byte("new\n"), 0o644))
+
+		got, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, "new\n", string(got))
+	})
+
+	t.Run("should_leave_no_temp_file_behind", func(t *testing.T) {
+		dir := t.TempDir()
+
+		require.NoError(t, writeFileAtomic(filepath.Join(dir, "asyncapi.yaml"), []byte("x"), 0o644))
+
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		assert.Equal(t, "asyncapi.yaml", entries[0].Name())
+	})
+
+	t.Run("should_leave_the_target_untouched_when_the_rename_fails", func(t *testing.T) {
+		dir := t.TempDir()
+		// A non-empty directory in place of the artifact makes os.Rename fail with
+		// ENOTEMPTY regardless of the user running the test, so the failure path is
+		// exercised without relying on permissions.
+		path := filepath.Join(dir, "asyncapi.yaml")
+		require.NoError(t, os.Mkdir(path, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(path, "keep.yaml"), []byte("keep"), 0o644))
+
+		require.Error(t, writeFileAtomic(path, []byte("new"), 0o644))
+
+		// The previous artifact survives, and the temp file was removed rather than
+		// left beside it for the next run to trip over.
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		assert.Equal(t, "asyncapi.yaml", entries[0].Name())
+		keep, err := os.ReadFile(filepath.Join(path, "keep.yaml"))
+		require.NoError(t, err)
+		assert.Equal(t, "keep", string(keep))
+	})
+}
