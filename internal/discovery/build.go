@@ -12,6 +12,14 @@ import (
 // It returns the merged document and the number of catalogs found. The whole
 // run — including the harness subprocess it spawns — is bounded by ctx.
 func Build(ctx context.Context, dir string) (*spec.AsyncAPI, int, error) {
+	// The config is validated first, before the module is even loaded, so a typo in
+	// asyncgo.yaml is a build error naming the file rather than a panic inside a
+	// generated program — and it does not hide behind a slower failure.
+	mappings, err := loadMappingConfig(dir)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	pkgs, err := load(ctx, dir)
 	if err != nil {
 		return nil, 0, err
@@ -28,7 +36,12 @@ func Build(ctx context.Context, dir string) (*spec.AsyncAPI, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	docs, err := Materialize(ctx, dir, cats, refs)
+	docs, err := Materialize(ctx, dir, Plan{
+		Catalogs: cats,
+		Refs:     refs,
+		Mappings: mappings,
+		Aliases:  collectAliasEdges(pkgs, reachable),
+	})
 	if err != nil {
 		return nil, 0, err
 	}

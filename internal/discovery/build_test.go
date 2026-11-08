@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -39,4 +40,21 @@ func TestBuildNoCatalogs(t *testing.T) {
 func TestBuildBadDir(t *testing.T) {
 	_, _, err := Build(t.Context(), filepath.Join(t.TempDir(), "does-not-exist"))
 	require.Error(t, err)
+}
+
+func TestBuildRejectsInvalidConfig(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, configFileName),
+		[]byte("mappings:\n  big.Int:\n    type: integer\n"),
+		0o644,
+	))
+
+	doc, n, err := Build(t.Context(), dir)
+
+	require.Error(t, err)
+	assert.Nil(t, doc)
+	assert.Zero(t, n)
+	assert.Contains(t, err.Error(), configFileName)
+	assert.Contains(t, err.Error(), "not a fully-qualified type name")
 }
