@@ -34,10 +34,19 @@ func Register(types ...any) {
 // Finalize hoists every registered type into doc.Components.Schemas so the
 // $refs emitted by FromType resolve. Types are derived in sorted-FQN order for
 // deterministic output, and existing schemas are never overwritten.
+//
+// It also completes the document's payload schemas: a catalog derives them while
+// its own package variables initialize, which is before any declared mapping can
+// be registered, so Finalize redoes each derivation with the mappings in place
+// (see FromTypePayload). A catalog document therefore has to be finalized before
+// it is merged into another: the deferred derivations are attached to the
+// document object, not to its contents.
 func Finalize(doc *spec.AsyncAPI) {
 	if doc == nil {
 		return
 	}
+
+	rederivePayloads(doc)
 
 	names := make([]string, 0, len(registry))
 	for name := range registry {
@@ -47,6 +56,16 @@ func Finalize(doc *spec.AsyncAPI) {
 
 	defs := map[string]*spec.Schema{}
 	for _, name := range names {
+		// A registered type may itself be mapped — through an exact mapping or an
+		// alias chain — in which case the mapping, not kind derivation, is what its
+		// combinator $ref has to resolve to. mappingFor runs here (rather than a
+		// registry lookup) so a directive naming an alias hoists the base type's
+		// mapping under the alias's own name, and marks the resolved name
+		// consulted for MappingWarnings.
+		if s := mappingFor(registry[name]); s != nil {
+			defs[name] = s // mappingFor already returns a copy
+			continue
+		}
 		FromType(registry[name], defs)
 	}
 	if len(defs) == 0 {

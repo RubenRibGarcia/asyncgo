@@ -1,8 +1,10 @@
 package asyncgo
 
 import (
+	"reflect"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,4 +96,47 @@ func TestChannelServers(t *testing.T) {
 
 func TestMessageOfInfersName(t *testing.T) {
 	assert.Equal(t, "OrderPlaced", messageName(MessageOf(OrderPlaced{})))
+}
+
+// MappedID stands in for a third-party type a project maps by name: a named byte
+// array, which kind derivation renders as an array of integers.
+type MappedID [16]byte
+
+// MappedPayload is the payload whose field the mapping applies to.
+type MappedPayload struct {
+	ID MappedID `json:"id" asyncapi:"required"`
+}
+
+// TestFinalizeRedrivesPayloadWithDeclaredMapping pins the derivation order a
+// catalog actually goes through: Spec derives the payload while the catalog
+// package's own variables initialize, which is before a harness can register any
+// declared mapping, so Finalize has to redo that derivation — otherwise a mapped
+// type would apply when reachable from Finalize's combinator hoisting but not in
+// the payload that most needs it.
+func TestFinalizeRedrivesPayloadWithDeclaredMapping(t *testing.T) {
+	payloadKey := schema.Name(reflect.TypeFor[MappedPayload]())
+	idKey := schema.Name(reflect.TypeFor[MappedID]())
+
+	res := Spec(
+		Info("Mapped", "1.0.0"),
+		Channels(
+			Channel("mapped").Send(Operation().Message(MessageOf(MappedPayload{}))),
+		),
+	)
+	require.NoError(t, res.Err)
+	doc := res.Doc
+
+	// Provisional: derived by kind, with no mapping registered yet.
+	require.Contains(t, doc.Components.Schemas, payloadKey)
+	id := doc.Components.Schemas[payloadKey].Properties["id"]
+	require.NotNil(t, id)
+	assert.Equal(t, "array", id.Type)
+
+	schema.MapSchemaByName(idKey, &spec.Schema{Type: "string", Format: "uuid"})
+	schema.Finalize(doc)
+
+	id = doc.Components.Schemas[payloadKey].Properties["id"]
+	require.NotNil(t, id)
+	assert.Equal(t, "string", id.Type)
+	assert.Equal(t, "uuid", id.Format)
 }
