@@ -32,29 +32,33 @@ func TestEncodeDefinitions(t *testing.T) {
 }
 
 func TestEncodeChannelServers(t *testing.T) {
-	// Present: emits servers with $ref.
-	withServers := New()
-	withServers.Info = Info{Title: "Orders", Version: "1.0.0"}
-	withServers.Channels = map[string]*Channel{
-		"order-placed": {
-			Address: "order-placed",
-			Servers: []*Reference{{Ref: "#/servers/prod"}},
-		},
-	}
-	out, err := withServers.YAML()
-	require.NoError(t, err)
-	assert.Contains(t, string(out), "servers:")
-	assert.Contains(t, string(out), "#/servers/prod")
+	t.Run("should_emit_the_servers_a_channel_declares", func(t *testing.T) {
+		doc := New()
+		doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+		doc.Channels = map[string]*Channel{
+			"order-placed": {
+				Address: "order-placed",
+				Servers: []*Reference{{Ref: "#/servers/prod"}},
+			},
+		}
 
-	// Omitted: a channel without servers has no `servers:` key.
-	noServers := New()
-	noServers.Info = Info{Title: "Orders", Version: "1.0.0"}
-	noServers.Channels = map[string]*Channel{
-		"order-placed": {Address: "order-placed"},
-	}
-	out, err = noServers.YAML()
-	require.NoError(t, err)
-	assert.NotContains(t, string(out), "servers:")
+		out, err := doc.YAML()
+		require.NoError(t, err)
+		assert.Contains(t, string(out), "servers:")
+		assert.Contains(t, string(out), "#/servers/prod")
+	})
+
+	t.Run("should_omit_the_servers_key_when_a_channel_declares_none", func(t *testing.T) {
+		doc := New()
+		doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+		doc.Channels = map[string]*Channel{
+			"order-placed": {Address: "order-placed"},
+		}
+
+		out, err := doc.YAML()
+		require.NoError(t, err)
+		assert.NotContains(t, string(out), "servers:")
+	})
 }
 
 func TestEncodeJSON(t *testing.T) {
@@ -78,16 +82,23 @@ func TestEncodeJSONIndent(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
 
-	// The artifact shape: parseable, 2-space indented, newline-terminated.
-	var decoded AsyncAPI
-	require.NoError(t, json.Unmarshal(out, &decoded))
-	assert.Equal(t, Version, decoded.AsyncAPI)
-	assert.Equal(t, "Orders", decoded.Info.Title)
-	assert.Contains(t, string(out), "\n  \"asyncapi\": \"3.1.0\"")
-	assert.Equal(t, byte('\n'), out[len(out)-1], "output must end with a newline")
+	t.Run("should_decode_back_to_the_document_it_encodes", func(t *testing.T) {
+		var decoded AsyncAPI
+		require.NoError(t, json.Unmarshal(out, &decoded))
+		assert.Equal(t, Version, decoded.AsyncAPI)
+		assert.Equal(t, "Orders", decoded.Info.Title)
+	})
 
-	// The compact form stays on JSON(); JSONIndent must not emit it.
-	assert.NotContains(t, string(out), `"asyncapi":"3.1.0"`)
+	t.Run("should_indent_with_two_spaces_and_end_with_a_newline", func(t *testing.T) {
+		// The artifact shape: 2-space indented, newline-terminated.
+		assert.Contains(t, string(out), "\n  \"asyncapi\": \"3.1.0\"")
+		assert.Equal(t, byte('\n'), out[len(out)-1], "output must end with a newline")
+	})
+
+	t.Run("should_not_emit_the_compact_form", func(t *testing.T) {
+		// The compact form stays on JSON(); JSONIndent must not emit it.
+		assert.NotContains(t, string(out), `"asyncapi":"3.1.0"`)
+	})
 }
 
 func TestEncodeYAML(t *testing.T) {
@@ -313,32 +324,37 @@ func TestEncodeServerAndOperationSecurity(t *testing.T) {
 }
 
 func TestEncodeSecuritySchemeOmitsZeroFields(t *testing.T) {
-	doc := New()
-	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
-	doc.Servers = map[string]*Server{"prod": {Host: "broker:9092", Protocol: ProtocolKafka}}
+	t.Run("should_omit_the_security_keys_when_no_scheme_is_declared", func(t *testing.T) {
+		doc := New()
+		doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+		doc.Servers = map[string]*Server{"prod": {Host: "broker:9092", Protocol: ProtocolKafka}}
 
-	out, err := doc.YAML()
-	require.NoError(t, err)
-	assert.NotContains(t, string(out), "securitySchemes:")
-	assert.NotContains(t, string(out), "security:")
+		out, err := doc.YAML()
+		require.NoError(t, err)
+		assert.NotContains(t, string(out), "securitySchemes:")
+		assert.NotContains(t, string(out), "security:")
+	})
 
-	doc.Components = &Components{
-		SecuritySchemes: map[string]*SecurityScheme{"basic": {Type: "http", Scheme: "basic"}},
-	}
+	t.Run("should_emit_the_scheme_and_omit_its_zero_fields", func(t *testing.T) {
+		doc := New()
+		doc.Info = Info{Title: "Orders", Version: "1.0.0"}
+		doc.Servers = map[string]*Server{"prod": {Host: "broker:9092", Protocol: ProtocolKafka}}
+		doc.Components = &Components{
+			SecuritySchemes: map[string]*SecurityScheme{"basic": {Type: "http", Scheme: "basic"}},
+		}
 
-	out, err = doc.YAML()
-	require.NoError(t, err)
-	assert.Contains(t, string(out), "securitySchemes:")
-	assert.Contains(t, string(out), "type: http")
-	assert.NotContains(t, string(out), "flows:")
-	assert.NotContains(t, string(out), "openIdConnectUrl:")
+		out, err := doc.YAML()
+		require.NoError(t, err)
+		assert.Contains(t, string(out), "securitySchemes:")
+		assert.Contains(t, string(out), "type: http")
+		assert.NotContains(t, string(out), "flows:")
+		assert.NotContains(t, string(out), "openIdConnectUrl:")
+	})
 }
 
-// TestEncodeReply covers the reply refs the model can emit: an operation's
-// reply, a reply's address, and a reply's channel and messages. The reply
-// channel deliberately carries no address, which is the shape the specification
-// requires when a reply names an address.
 func TestEncodeReply(t *testing.T) {
+	// The reply channel deliberately carries no address, which is the shape the
+	// specification requires when a reply names an address.
 	doc := New()
 	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
 	doc.Channels = map[string]*Channel{
@@ -376,28 +392,32 @@ func TestEncodeReply(t *testing.T) {
 
 	yamlOut, err := doc.YAML()
 	require.NoError(t, err)
-
-	for _, want := range []string{
-		"replies:",
-		"replyAddresses:",
-		"#/components/replies/OrderReply",
-		"#/components/replyAddresses/ReplyTo",
-		"#/channels/order-replies/messages/OrderAccepted",
-		"description: Consumer inbox",
-		`location: "$message.header#/replyTo"`,
-	} {
-		assert.Contains(t, string(yamlOut), want)
-	}
-
 	jsonOut, err := doc.JSON()
 	require.NoError(t, err)
-	for _, want := range []string{
-		`"reply":{"$ref":"#/components/replies/OrderReply"}`,
-		`"location":"$message.header#/replyTo"`,
-		`"description":"Consumer inbox"`,
-	} {
-		assert.Contains(t, string(jsonOut), want)
-	}
+
+	t.Run("should_emit_the_reply_refs_in_yaml", func(t *testing.T) {
+		for _, want := range []string{
+			"replies:",
+			"replyAddresses:",
+			"#/components/replies/OrderReply",
+			"#/components/replyAddresses/ReplyTo",
+			"#/channels/order-replies/messages/OrderAccepted",
+			"description: Consumer inbox",
+			`location: "$message.header#/replyTo"`,
+		} {
+			assert.Contains(t, string(yamlOut), want)
+		}
+	})
+
+	t.Run("should_emit_the_reply_refs_in_json", func(t *testing.T) {
+		for _, want := range []string{
+			`"reply":{"$ref":"#/components/replies/OrderReply"}`,
+			`"location":"$message.header#/replyTo"`,
+			`"description":"Consumer inbox"`,
+		} {
+			assert.Contains(t, string(jsonOut), want)
+		}
+	})
 
 	t.Run("should_decode_yaml_and_json_to_the_same_document", func(t *testing.T) {
 		var fromYAML, fromJSON AsyncAPI
@@ -408,10 +428,6 @@ func TestEncodeReply(t *testing.T) {
 	})
 }
 
-// TestEncodeReferenceMessage covers a channel messages entry that is a
-// Reference Object pointing at components.messages: the shape the generator
-// emits for a hoisted message, and the referencing half of the Message Object |
-// Reference Object union.
 func TestEncodeReferenceMessage(t *testing.T) {
 	doc := New()
 	doc.Info = Info{Title: "Orders", Version: "1.0.0"}
@@ -797,38 +813,42 @@ func TestEncodeOmitsNonSpecFields(t *testing.T) {
 	var root map[string]any
 	require.NoError(t, yaml.Unmarshal(out, &root))
 
-	// Every root key has to be one of the eight 3.1.0 root-object fields.
-	specRootFields := map[string]bool{
-		"asyncapi": true, "id": true, "info": true, "servers": true,
-		"defaultContentType": true, "channels": true, "operations": true,
-		"components": true,
-	}
-	for key := range root {
-		assert.Truef(t, specRootFields[key], "unexpected root field %q", key)
-	}
-	_, hasTags := root["tags"]
-	assert.False(t, hasTags, "root must not emit tags")
-	_, hasExternalDocs := root["externalDocs"]
-	assert.False(t, hasExternalDocs, "root must not emit externalDocs")
+	t.Run("should_emit_only_the_root_object_fields", func(t *testing.T) {
+		// Every root key has to be one of the eight 3.1.0 root-object fields.
+		specRootFields := map[string]bool{
+			"asyncapi": true, "id": true, "info": true, "servers": true,
+			"defaultContentType": true, "channels": true, "operations": true,
+			"components": true,
+		}
+		for key := range root {
+			assert.Truef(t, specRootFields[key], "unexpected root field %q", key)
+		}
+		_, hasTags := root["tags"]
+		assert.False(t, hasTags, "root must not emit tags")
+		_, hasExternalDocs := root["externalDocs"]
+		assert.False(t, hasExternalDocs, "root must not emit externalDocs")
+	})
 
-	info, ok := root["info"].(map[string]any)
-	require.True(t, ok, "info must decode to a map")
-	license, ok := info["license"].(map[string]any)
-	require.True(t, ok, "info.license must decode to a map")
-	assert.Contains(t, license, "name")
-	assert.Contains(t, license, "url")
-	assert.Len(t, license, 2)
-	_, hasIdentifier := license["identifier"]
-	assert.False(t, hasIdentifier, "license must not emit identifier")
+	t.Run("should_emit_only_the_license_fields_of_the_specification", func(t *testing.T) {
+		info, ok := root["info"].(map[string]any)
+		require.True(t, ok, "info must decode to a map")
+		license, ok := info["license"].(map[string]any)
+		require.True(t, ok, "info.license must decode to a map")
+		assert.Contains(t, license, "name")
+		assert.Contains(t, license, "url")
+		assert.Len(t, license, 2)
+		_, hasIdentifier := license["identifier"]
+		assert.False(t, hasIdentifier, "license must not emit identifier")
+	})
 
-	// The nested, legal tags/externalDocs must still be emitted — proof the
-	// fixture exercises them rather than passing vacuously.
-	assert.Contains(t, string(out), "tags:")
-	assert.Contains(t, string(out), "externalDocs:")
+	t.Run("should_still_emit_nested_tags_and_external_docs", func(t *testing.T) {
+		// The nested, legal tags/externalDocs must still be emitted — proof the
+		// fixture exercises them rather than passing vacuously.
+		assert.Contains(t, string(out), "tags:")
+		assert.Contains(t, string(out), "externalDocs:")
+	})
 }
 
-// specFields returns a struct type's JSON field names — the wire names — in
-// declaration order. A field without a `json` tag falls back to its Go name.
 func specFields(t *testing.T, v any) []string {
 	t.Helper()
 	typ := reflect.TypeOf(v)
