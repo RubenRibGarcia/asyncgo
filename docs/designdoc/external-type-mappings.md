@@ -201,8 +201,19 @@ in the output: a payload derived earlier in the process is re-derived there
 
 ### D6 — Config file: `asyncgo.yaml` at the module root, `mappings:` only
 
-Both `generate` and `check` auto-discover `<dir>/asyncgo.yaml`; no new flag in
-v1. Only a `mappings:` section is defined, whose values are whitelisted
+Both `generate` and `check` auto-discover `<dir>/asyncgo.yaml`, and both accept
+`--config <path>` to name a different file (`-c` is not taken). The flag was
+deferred in the first review and shipped once real use showed the module-root
+assumption too narrow — the same override on both commands, never on one alone:
+
+- an explicit path is resolved against the process's working directory, like
+  `-o`, and is used verbatim in errors;
+- it replaces the auto-discovered file rather than merging with it, so exactly
+  one mapping set shapes a run;
+- it must exist — only the auto-discovered file may be absent, so a typo in a CI
+  script fails the command instead of silently generating an unmapped document.
+
+Only a `mappings:` section is defined, whose values are whitelisted
 annotation/constraint keywords:
 
 ```yaml
@@ -471,8 +482,10 @@ data-only change to this file plus a verification note.
 
 ### 6. `internal/discovery` — config, alias scan, and harness emission
 
-`config.go` wraps `mappingconfig.Parse` for `<dir>/asyncgo.yaml`; invalid
-config aborts generation in `buildDoc` before any harness runs.
+`build.go` reads the config through `mappingconfig.Parse` — `<dir>/asyncgo.yaml`
+by default, or the path `--config` names — and validates it before the module is
+loaded, so invalid config aborts generation before any harness runs. The reader
+lives beside `Build` because it has one caller and the rule is about load order.
 
 New `aliases.go` scans the reachable module packages (the same walk as the
 catalog scan, so no extra pass over syntax): for each `GenDecl` with `Tok ==
@@ -495,10 +508,13 @@ literals for twenty keywords (regex escaping, `[]any` for `enum`) — and the
 whitelist itself is enforced by `mappingconfig`, not by the runtime call.
 Naming the file `asyncgo.yaml` keeps it next to the artifact it shapes.
 
-### 7. `internal/cli` — no change
+### 7. `internal/cli` — one flag
 
-`generate` and `check` already funnel through `buildDoc` → discovery; the
-config is picked up there. No flags in v1 (D6).
+`generate` and `check` funnel through `buildDoc`, which forwards the `--config`
+value to `discovery.Build`; an empty value keeps the auto-discovery of D6. No
+other flag changes: `check` compares against the file `generate` would write for
+the same `--format`, `--output` and `--config`, so passing the same flags is the
+rule, and its help text says so.
 
 ## Example (before / after)
 
@@ -591,6 +607,9 @@ github.com/acme/orders.OrderPlaced:
 - **In-process callers** — `Spec` derives a provisional payload; `schema.Finalize`
   is what applies declared mappings, and each catalog document must be finalized
   before it is merged into another.
+- **Explicit config path** — `--config` names the only mapping file read for the
+  run: a missing path is an error even when `<dir>/asyncgo.yaml` exists, and an
+  existing default file is ignored rather than merged (D6).
 - **Built-in not triggered** — a built-in mapping only fires when `FromType`
   meets a type with that exact FQN; a module that does not import the library
   sees no effect and no warning (D7 excludes built-ins).
@@ -630,9 +649,10 @@ github.com/acme/orders.OrderPlaced:
 5. **Stage 4 — documentation** (`docs`): README section on third-party types,
    godoc contracts on the mapping functions, entry in this doc's index flipped
    to Accepted once reviewed.
-6. **Stage 5 — deferred**: `--config` flag override, kind-based mapping
-   hooks, config sections beyond `mappings`, opt-out of alias inheritance,
-   mapping an *existing* component by `$ref` instead of an inline schema.
+6. **Stage 5 — deferred**: kind-based mapping hooks, config sections beyond
+   `mappings`, opt-out of alias inheritance, mapping an *existing* component by
+   `$ref` instead of an inline schema. (`--config` was on this list and shipped;
+   see D6.)
 
 ## Testing plan
 
@@ -688,8 +708,13 @@ github.com/acme/orders.OrderPlaced:
   - `should_load_mappings_from_asyncgo_yaml`
   - `should_reject_an_invalid_config` (message names the file)
   - `should_return_no_mappings_without_a_config_file`
+  - `should_load_mappings_from_an_explicit_path`
+  - `should_use_the_explicit_path_instead_of_the_default`
+  - `should_reject_a_missing_explicit_config`
   - `should_emit_mappings_and_aliases_before_register`
   - `should_report_mapping_warnings` (harness output → stderr, never fatal)
+  - `TestConfigFlag` (`internal/cli`) — generate and check read the same named
+    file, and check without it sees the artifact as stale
 - **Stage 3** (`internal/discovery`):
   - `should_emit_alias_edge_for_defined_type_declaration`
   - `should_emit_alias_edge_for_pointer_base_declaration`

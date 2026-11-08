@@ -482,6 +482,11 @@ asyncgo generate . -o ./docs/ --format json    # -> ./docs/asyncapi.json
 # an explicit -o path wins whatever its extension: --format picks the encoding
 asyncgo generate . -o ./docs/spec.yaml --format json
 
+# read schema mappings from a file other than <dir>/asyncgo.yaml
+# (both commands take it; check must be passed the same flags you generate with)
+asyncgo generate . --config ./ci/mappings.yaml
+asyncgo check . --config ./ci/mappings.yaml
+
 # fail CI when asyncapi.yaml is out of date (check verifies asyncapi.yaml only)
 asyncgo check .
 
@@ -508,8 +513,8 @@ esac
 
 The generator discovers catalogs **reachable from `main`**, then runs a small
 harness to materialize them (never executing your `main` package). Both commands
-also read an optional `asyncgo.yaml` from the module root — see **Third-party
-types and declared mappings**.
+also read schema mappings from `asyncgo.yaml` in the module root, or from the file
+`--config` names — see **Third-party types and declared mappings**.
 
 ## Schema derivation rules
 
@@ -703,7 +708,8 @@ A **mapping** declares how a type derives, keyed by its fully-qualified name
 (`pkgPath.TypeName`), so nothing about the type has to change. Two entry points:
 
 ```yaml
-# asyncgo.yaml, at the module root (read by both generate and check)
+# asyncgo.yaml, at the module root (read by both generate and check; --config
+# names a different file)
 mappings:
   github.com/gofrs/uuid.UUID:
     type: string
@@ -726,6 +732,12 @@ func init() {
         &spec.Schema{Type: "string", Pattern: `^-?\d+(\.\d+)?$`})
 }
 ```
+
+**Where the file lives.** `asyncgo.yaml` in the module root is read
+automatically by both `generate` and `check`; `--config <path>` names a different
+file. The path is resolved against the current directory, it must exist, and it
+replaces the module-root file rather than merging with it — one mapping set shapes
+a run.
 
 A mapped type derives **inline** at every use site — fields, `[]T`, `map[K]T`,
 `*T`, and anonymous structs containing it — so a document stays small. The one

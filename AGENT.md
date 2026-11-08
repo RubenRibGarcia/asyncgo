@@ -98,7 +98,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 | DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Replies`, `Reply`, `ReplyAddresses`, `ReplyAddress`, `OperationTraits`, `OperationTrait`, `MessageTraits`, `MessageTrait`, `CorrelationIDs`, `CorrelationID`, `Channels`, `Channel`, `Operation`, `MessageOf`, `MessageFrom`, `Schemas`, `Schema`, one typed binding helper per protocol (20) plus `Binding` |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `SecurityScheme`, `OAuthFlows`, `OAuthFlow`, `Channel`, `Parameter`, `Operation`, `OperationTrait`, `OperationReply`, `OperationReplyAddress`, `Message`, `MessageTrait`, `CorrelationID`, `Schema`, `MultiFormat`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
-| CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]` |
+| CLI | `asyncgo generate [dir] [-o output] [--config path]`, `asyncgo check [dir] [-o output] [--config path]` |
 
 ## Directory Structure
 

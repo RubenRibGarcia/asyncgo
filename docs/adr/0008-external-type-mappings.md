@@ -66,9 +66,10 @@ Concretely:
   exact-type special case.
 - **`asyncgo.yaml` at the module root** carries a single whitelisted `mappings:`
   section (scalar annotations and constraints only; `$ref`, nested objects and
-  combinators are rejected at discovery time). `internal/mappingconfig` is the one
-  parser, shared with the embedded built-in table, so a built-in is exactly a
-  config entry.
+  combinators are rejected at discovery time), and `--config <path>` on both
+  commands names a different file. `internal/mappingconfig` is the one parser,
+  shared with the embedded built-in table, so a built-in is exactly a config
+  entry.
 - **Alias inheritance is emitted, not guessed.** Discovery walks the module's `type
   X Y` declarations and emits one `schema.MapAlias(X, Y)` per declaration; chains
   stop at the module boundary, and Go type aliases need no edge.
