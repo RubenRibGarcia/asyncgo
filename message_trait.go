@@ -3,6 +3,7 @@ package asyncgo
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
@@ -84,7 +85,7 @@ func (t *messageTrait) Example(name string, payload any) *messageTrait {
 // protocol helpers (see the protocol sections in bindings.go) to set a single
 // protocol.
 func (t *messageTrait) Bindings(bindings spec.MessageBindings) *messageTrait {
-	t.t.Bindings = bindings
+	t.t.Bindings = maps.Clone(bindings)
 	return t
 }
 
@@ -108,15 +109,7 @@ func (t *messageTrait) apply(b *builder) error {
 			t.t.CorrelationID = ref
 		}
 	}
-	c := b.components()
-	if c.MessageTraits == nil {
-		c.MessageTraits = map[string]*spec.MessageTrait{}
-	}
-	if _, dup := c.MessageTraits[t.name]; dup && t.name != "" {
-		errs = append(errs, fmt.Errorf("messageTrait.%s: duplicate name", t.name))
-	} else {
-		c.MessageTraits[t.name] = &t.t
-	}
+	errs = append(errs, registerComponent(b, messageTraitsMap, "messageTrait", t.name, &t.t)...)
 	errs = appendBindingErrors(errs, "messageTrait."+t.name, t.t.Bindings.Validate())
 	return errors.Join(errs...)
 }

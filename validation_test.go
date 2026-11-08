@@ -197,4 +197,9 @@ func TestValidateOperationMessages(t *testing.T) {
 		`operation.order-placed.send: message "#/channels/order-shipped/messages/OrderPlaced" `+
 			`is not in channel "order-placed"`,
 	)
+
+	// A nil entry is skipped rather than dereferenced, as everywhere else in this
+	// file. The reply pass shares channelMessageErrors, so it inherits the guard.
+	b.doc.Operations["order-placed.send"].Messages = []*spec.Reference{nil}
+	assert.Empty(t, b.validateOperationMessages())
 }

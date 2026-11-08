@@ -23,10 +23,8 @@ func Register(types ...any) {
 		if t == nil {
 			continue // a nil value carries no type
 		}
-		for t.Kind() == reflect.Pointer {
-			t = t.Elem()
-		}
-		if t.Name() == "" || t.PkgPath() == "" {
+		t = deref(t)
+		if !isNamed(t) {
 			continue // anonymous types have no stable FQN
 		}
 		registry[Name(t)] = t

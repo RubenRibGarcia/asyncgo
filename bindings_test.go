@@ -1,6 +1,7 @@
 package asyncgo
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
@@ -1897,5 +1898,159 @@ func TestBindingsValidationThroughSpec(t *testing.T) {
 			require.Error(t, res.Err)
 			assert.Contains(t, res.Err.Error(), tc.want)
 		})
+	}
+}
+
+// bindingHelperNames maps a protocol key to the DSL method that sets its
+// binding. The method name is not a case transform of the key — mqtt5 and ws are
+// upper-cased, anypointmq, googlepubsub and ibmmq are CamelCased, amqp1 keeps its
+// digit — so the mapping is spelled out rather than derived.
+var bindingHelperNames = map[string]string{
+	spec.ProtocolAMQP:         "AMQP",
+	spec.ProtocolAMQP1:        "AMQP1",
+	spec.ProtocolAnypointMQ:   "AnypointMQ",
+	spec.ProtocolGooglePubSub: "GooglePubSub",
+	spec.ProtocolHTTP:         "HTTP",
+	spec.ProtocolIBMMQ:        "IBMMQ",
+	spec.ProtocolJMS:          "JMS",
+	spec.ProtocolKafka:        "Kafka",
+	spec.ProtocolMQTT:         "MQTT",
+	spec.ProtocolMQTT5:        "MQTT5",
+	spec.ProtocolMercure:      "Mercure",
+	spec.ProtocolNATS:         "NATS",
+	spec.ProtocolPulsar:       "Pulsar",
+	spec.ProtocolROS2:         "ROS2",
+	spec.ProtocolRedis:        "Redis",
+	spec.ProtocolSNS:          "SNS",
+	spec.ProtocolSQS:          "SQS",
+	spec.ProtocolSolace:       "Solace",
+	spec.ProtocolStomp:        "Stomp",
+	spec.ProtocolWS:           "WS",
+}
+
+// bindingReceivers names the six document positions that carry bindings. The two
+// trait positions are separate receivers that reuse the operation and message
+// binding objects, so they are covered separately.
+var bindingReceivers = []struct {
+	name string
+	// validate reports whether a binding value is the object the specification
+	// defines for this position. A modelled protocol with no binding object at
+	// the position reports nothing, which is how the test tells "no helper" from
+	// "missing helper".
+	validate func(proto string, v any) []error
+}{
+	{
+		name: "server",
+		validate: func(proto string, v any) []error {
+			return spec.ServerBindings{proto: v}.Validate()
+		},
+	},
+	{
+		name: "channel",
+		validate: func(proto string, v any) []error {
+			return spec.ChannelBindings{proto: v}.Validate()
+		},
+	},
+	{
+		name: "operation",
+		validate: func(proto string, v any) []error {
+			return spec.OperationBindings{proto: v}.Validate()
+		},
+	},
+	{
+		name: "message",
+		validate: func(proto string, v any) []error {
+			return spec.MessageBindings{proto: v}.Validate()
+		},
+	},
+	{
+		name: "operationTrait",
+		validate: func(proto string, v any) []error {
+			return spec.OperationBindings{proto: v}.Validate()
+		},
+	},
+	{
+		name: "messageTrait",
+		validate: func(proto string, v any) []error {
+			return spec.MessageBindings{proto: v}.Validate()
+		},
+	},
+}
+
+// bindingReceiverTypes are the concrete builder pointers the helpers hang off.
+var bindingReceiverTypes = map[string]reflect.Type{
+	"server":         reflect.TypeFor[*server](),
+	"channel":        reflect.TypeFor[*channel](),
+	"operation":      reflect.TypeFor[*operation](),
+	"message":        reflect.TypeFor[*message](),
+	"operationTrait": reflect.TypeFor[*operationTrait](),
+	"messageTrait":   reflect.TypeFor[*messageTrait](),
+}
+
+// TestBindingHelpersCoverEveryProtocol pins the coupling between the six helper
+// families and the model's own per-protocol binding table. The helpers are
+// hand-written, and nothing but this test notices when the model gains a binding
+// object the DSL cannot set — or when a helper is wired to the wrong object.
+//
+// The model is asked rather than copied: spec's *Bindings.Validate reports an
+// error for a position it defines an object for, and nothing for a position it
+// does not (mqtt5 below the server, pulsar operation/message, ros2
+// channel/message). A helper must exist exactly where the model defines an
+// object, and its parameter must be that object.
+func TestBindingHelpersCoverEveryProtocol(t *testing.T) {
+	for _, recv := range bindingReceivers {
+		typ := bindingReceiverTypes[recv.name]
+		require.NotNil(t, typ, "no receiver type registered for %q", recv.name)
+
+		for _, proto := range spec.Protocols() {
+			name, known := bindingHelperNames[proto]
+			require.True(t, known, "protocol %q has no DSL method name in the table", proto)
+
+			method, hasHelper := typ.MethodByName(name)
+			// A value of the wrong type always mismatches where an object is
+			// defined, so an empty result means the model defines none here.
+			modelled := len(recv.validate(proto, struct{}{})) > 0
+
+			if !modelled {
+				assert.False(
+					t,
+					hasHelper,
+					"%s.%s exists but the specification defines no %s binding for %q",
+					recv.name,
+					name,
+					recv.name,
+					proto,
+				)
+				continue
+			}
+			if !assert.True(
+				t,
+				hasHelper,
+				"%s.%s is missing: the specification defines a %s binding for %q",
+				recv.name,
+				name,
+				recv.name,
+				proto,
+			) {
+				continue
+			}
+
+			// A fluent setter: (receiver, binding) -> receiver.
+			fn := method.Type
+			require.Equal(t, 2, fn.NumIn(), "%s.%s must take exactly one argument", recv.name, name)
+			require.Equal(t, 1, fn.NumOut(), "%s.%s must return one value", recv.name, name)
+			assert.Equal(t, typ, fn.In(0), "%s.%s has the wrong receiver", recv.name, name)
+			assert.Equal(t, typ, fn.Out(0), "%s.%s must return the receiver", recv.name, name)
+
+			assert.Empty(
+				t,
+				recv.validate(proto, reflect.Zero(fn.In(1)).Interface()),
+				"%s.%s must accept the %q %s binding object",
+				recv.name,
+				name,
+				proto,
+				recv.name,
+			)
+		}
 	}
 }

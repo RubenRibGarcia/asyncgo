@@ -224,7 +224,7 @@ func TestApplyTag(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &spec.Schema{}
-			applyTag(s, tc.tag)
+			applyTag(s, parseTag(tc.tag))
 			tc.verify(t, s)
 		})
 	}
@@ -267,18 +267,65 @@ func TestCombinatorNames(t *testing.T) {
 			wantOK: false,
 		},
 		{
-			name:   "should_match_key_by_prefix",
+			name:   "should_match_the_key_exactly",
 			tag:    "anyOf=A",
 			key:    "anyOf",
 			want:   []string{"A"},
 			wantOK: true,
 		},
+		{
+			// The key is compared whole, so a longer directive name is not a
+			// combinator of the key it merely starts with.
+			name:   "should_not_match_a_longer_key",
+			tag:    "anyOfAll=A",
+			key:    "anyOf",
+			want:   nil,
+			wantOK: false,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := combinatorNames(tc.tag, tc.key)
+			got, ok := combinatorNames(parseTag(tc.tag), tc.key)
 			assert.Equal(t, tc.wantOK, ok)
 			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestParseTag(t *testing.T) {
+	t.Run("should_split_each_part_at_its_first_equals", func(t *testing.T) {
+		assert.Equal(t, []directive{
+			{key: "required"},
+			{key: "format", value: "date-time", hasValue: true},
+			{key: "examples", value: "a=b", hasValue: true},
+			{key: "format", hasValue: true},
+		}, parseTag("required format=date-time examples=a=b format="))
+	})
+
+	t.Run("should_return_nil_for_an_empty_tag", func(t *testing.T) {
+		assert.Nil(t, parseTag(""))
+		assert.Nil(t, parseTag("   "))
+	})
+}
+
+func TestHasFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  string
+		flag string
+		want bool
+	}{
+		{name: "should_find_a_bare_flag", tag: "required readOnly", flag: "required", want: true},
+		{name: "should_not_find_a_value_directive", tag: "required=true", flag: "required"},
+		// "allOf" marks an embed for composition, "allOf=A" composes types; only
+		// the bare form is a flag.
+		{name: "should_not_confuse_the_combinator_with_the_flag", tag: "allOf=A", flag: "allOf"},
+		{name: "should_find_the_embed_flag", tag: "allOf", flag: "allOf", want: true},
+		{name: "should_not_find_an_absent_flag", tag: "readOnly", flag: "required"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, hasFlag(parseTag(tc.tag), tc.flag))
 		})
 	}
 }

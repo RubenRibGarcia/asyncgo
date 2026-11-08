@@ -5,11 +5,14 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
+	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/spf13/cobra"
 )
 
@@ -69,4 +72,20 @@ func resolveOutput(dir, output, defaultName string) (string, error) {
 		return "", fmt.Errorf("resolving output %q: %w", output, err)
 	}
 	return abs, nil
+}
+
+// buildDoc materializes the catalog rooted at dir into a merged document. A
+// catalog validation failure is returned as is, so the command prints the
+// per-catalog report; any other failure is wrapped with verb, which names the
+// command in the message ("generating: ...").
+func buildDoc(cmd *cobra.Command, dir, verb string) (*spec.AsyncAPI, int, error) {
+	doc, n, err := discovery.Build(cmd.Context(), dir)
+	if err != nil {
+		var catErrs discovery.CatalogErrors
+		if errors.As(err, &catErrs) {
+			return nil, 0, catErrs
+		}
+		return nil, 0, fmt.Errorf("%s: %w", verb, err)
+	}
+	return doc, n, nil
 }

@@ -227,9 +227,6 @@ type payloadExamplesRef struct {
 	examples []any
 }
 
-// schemasRefPrefix is the $ref prefix of a components.schemas entry.
-const schemasRefPrefix = "#/components/schemas/"
-
 // queuePayloadExamples applies m's payload examples: immediately when the
 // payload is inline, or as a deferred resolution when it is a $ref.
 func (m *message) queuePayloadExamples(b *builder, payload *spec.Schema) error {

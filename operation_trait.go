@@ -3,6 +3,7 @@ package asyncgo
 import (
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
@@ -66,7 +67,7 @@ func (t *operationTrait) Security(schemes ...*securityScheme) *operationTrait {
 // protocol helpers (see the protocol sections in bindings.go) to set a single
 // protocol.
 func (t *operationTrait) Bindings(bindings spec.OperationBindings) *operationTrait {
-	t.t.Bindings = bindings
+	t.t.Bindings = maps.Clone(bindings)
 	return t
 }
 
@@ -76,15 +77,7 @@ func (t *operationTrait) apply(b *builder) error {
 		errs = append(errs, fmt.Errorf("operationTrait.name: is required"))
 	}
 	errs = appendKeyError(errs, "operationTrait", t.name)
-	c := b.components()
-	if c.OperationTraits == nil {
-		c.OperationTraits = map[string]*spec.OperationTrait{}
-	}
-	if _, dup := c.OperationTraits[t.name]; dup && t.name != "" {
-		errs = append(errs, fmt.Errorf("operationTrait.%s: duplicate name", t.name))
-	} else {
-		c.OperationTraits[t.name] = &t.t
-	}
+	errs = append(errs, registerComponent(b, operationTraitsMap, "operationTrait", t.name, &t.t)...)
 	errs = appendBindingErrors(errs, "operationTrait."+t.name, t.t.Bindings.Validate())
 	return errors.Join(errs...)
 }

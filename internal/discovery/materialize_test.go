@@ -143,3 +143,30 @@ func TestCatalogErrorsError(t *testing.T) {
 		)
 	})
 }
+
+// TestHarnessTagsMatchTheDecoder pins the coupling between the harness source and
+// harnessOutput/catalogOutcome. The generated program declares the same structs as
+// string literals, and only a comment ties the two together: a tag edited in one
+// place and not the other would decode silently into an empty field instead of
+// failing. The test asserts the emitted source carries the exact tag lines the
+// decoder expects.
+func TestHarnessTagsMatchTheDecoder(t *testing.T) {
+	src := harness(nil, nil)
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"catalogs", "Catalogs []catalogOutcome `yaml:\"catalogs\"`"},
+		{"pkgPath", "PkgPath string         `yaml:\"pkgPath\"`"},
+		{"varName", "VarName string         `yaml:\"varName\"`"},
+		{"doc", "Doc     *spec.AsyncAPI `yaml:\"doc,omitempty\"`"},
+		{"errors", "Errors  []string       `yaml:\"errors,omitempty\"`"},
+	}
+	for _, tc := range tests {
+		t.Run("should_emit_the_"+tc.name+"_tag", func(t *testing.T) {
+			assert.Contains(t, src, tc.want,
+				"the generated struct field must match the decoder's tag")
+		})
+	}
+}

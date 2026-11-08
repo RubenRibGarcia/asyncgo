@@ -3,16 +3,41 @@ package asyncgo
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
 	"github.com/RubenRibGarcia/asyncgo/spec"
+)
+
+// The $ref prefixes the DSL emits and the validators resolve, plus the segment
+// every channel message reference continues with. Each prefix is a JSON Pointer
+// from the document root, so the name appended to it is escaped with
+// jsonpointer.Escape. They are shared rather than spelled out at both ends
+// because the builder that writes a reference and the validator that resolves it
+// must agree: a prefix edited in one place only would silently turn every
+// reference into a dangling one.
+const (
+	serversRefPrefix         = "#/servers/"
+	channelsRefPrefix        = "#/channels/"
+	schemasRefPrefix         = "#/components/schemas/"
+	messagesRefPrefix        = "#/components/messages/"
+	securitySchemesRefPrefix = "#/components/securitySchemes/"
+	operationTraitsRefPrefix = "#/components/operationTraits/"
+	messageTraitsRefPrefix   = "#/components/messageTraits/"
+	correlationIDsRefPrefix  = "#/components/correlationIds/"
+	repliesRefPrefix         = "#/components/replies/"
+	replyAddressesRefPrefix  = "#/components/replyAddresses/"
+
+	// channelMessagesSegment separates the channel a message $ref points at from
+	// the message's key inside it.
+	channelMessagesSegment = "/messages/"
 )
 
 // securitySchemeRef is the JSON Reference to a scheme declared via
 // SecurityScheme(...).
 func securitySchemeRef(s *securityScheme) *spec.Reference {
 	return &spec.Reference{
-		Ref: "#/components/securitySchemes/" + jsonpointer.Escape(s.name),
+		Ref: securitySchemesRefPrefix + jsonpointer.Escape(s.name),
 	}
 }
 
@@ -20,20 +45,27 @@ func securitySchemeRef(s *securityScheme) *spec.Reference {
 // OperationTraits(...).
 func operationTraitRef(t *operationTrait) *spec.Reference {
 	return &spec.Reference{
-		Ref: "#/components/operationTraits/" + jsonpointer.Escape(t.name),
+		Ref: operationTraitsRefPrefix + jsonpointer.Escape(t.name),
 	}
 }
 
 // messageTraitRef is the JSON Reference to a message trait declared via
 // MessageTraits(...).
 func messageTraitRef(t *messageTrait) *spec.Reference {
-	return &spec.Reference{Ref: "#/components/messageTraits/" + jsonpointer.Escape(t.name)}
+	return &spec.Reference{Ref: messageTraitsRefPrefix + jsonpointer.Escape(t.name)}
 }
 
 // correlationIDRef is the JSON Reference to a correlation id declared via
 // CorrelationIDs(...).
 func correlationIDRef(c *correlationID) *spec.Reference {
-	return &spec.Reference{Ref: "#/components/correlationIds/" + jsonpointer.Escape(c.name)}
+	return &spec.Reference{Ref: correlationIDsRefPrefix + jsonpointer.Escape(c.name)}
+}
+
+// refName is the component name a $ref points at: the pointer prefix removed and
+// the remaining JSON Pointer segment unescaped. Every validator resolves a $ref
+// this way, so a change to the escaping convention has one place to land.
+func refName(ref, prefix string) string {
+	return jsonpointer.Unescape(strings.TrimPrefix(ref, prefix))
 }
 
 // correlationIDFromRef hoists an inline correlation id authored with
@@ -59,24 +91,24 @@ func correlationIDFromRef(b *builder, owner string, c spec.CorrelationID) (*spec
 		comps.CorrelationIDs[name] = &value
 	}
 	return &spec.Reference{
-		Ref: "#/components/correlationIds/" + jsonpointer.Escape(name),
+		Ref: correlationIDsRefPrefix + jsonpointer.Escape(name),
 	}, nil
 }
 
 // replyRef is the JSON Reference to a reply declared via Replies(...).
 func replyRef(r *reply) *spec.Reference {
-	return &spec.Reference{Ref: "#/components/replies/" + jsonpointer.Escape(r.name)}
+	return &spec.Reference{Ref: repliesRefPrefix + jsonpointer.Escape(r.name)}
 }
 
 // replyAddressRef is the JSON Reference to a reply address declared via
 // ReplyAddresses(...).
 func replyAddressRef(a *replyAddress) *spec.Reference {
-	return &spec.Reference{Ref: "#/components/replyAddresses/" + jsonpointer.Escape(a.name)}
+	return &spec.Reference{Ref: replyAddressesRefPrefix + jsonpointer.Escape(a.name)}
 }
 
 // channelRef is the JSON Reference to a channel declared via Channels(...).
 func channelRef(ch *channel) *spec.Reference {
-	return &spec.Reference{Ref: "#/channels/" + jsonpointer.Escape(ch.address)}
+	return &spec.Reference{Ref: channelsRefPrefix + jsonpointer.Escape(ch.address)}
 }
 
 // channelMessageRef is the JSON Reference to a message carried by ch. It
@@ -84,7 +116,9 @@ func channelRef(ch *channel) *spec.Reference {
 // two agree on the message's key in the channel.
 func channelMessageRef(ch *channel, m *message) *spec.Reference {
 	return &spec.Reference{
-		Ref: "#/channels/" + jsonpointer.Escape(ch.address) + "/messages/" + jsonpointer.Escape(
+		Ref: channelsRefPrefix + jsonpointer.Escape(
+			ch.address,
+		) + channelMessagesSegment + jsonpointer.Escape(
 			messageKey(m),
 		),
 	}
@@ -122,5 +156,5 @@ func hoistMessage(
 	} else {
 		c.Messages[key] = msg
 	}
-	return &spec.Message{Ref: "#/components/messages/" + jsonpointer.Escape(key)}, nil
+	return &spec.Message{Ref: messagesRefPrefix + jsonpointer.Escape(key)}, nil
 }

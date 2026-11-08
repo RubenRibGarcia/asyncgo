@@ -7,7 +7,7 @@
 //   - a security scheme name outside the components key pattern
 //   - a channel address expression with no declared parameter
 //   - a second Send on a channel, whose map key would silently overwrite
-//   - an operation carrying a message the channel does not have
+//   - a channel address declared twice, whose second declaration is rejected
 package invalid
 
 import (
@@ -23,12 +23,11 @@ type OrderPlaced struct {
 // Catalog is an invalid catalog. The server has an empty host and the
 // order-placed channel references an undeclared server, producing a dangling
 // $ref; the remaining channels and components trip the key-pattern, address
-// expression, duplicate-action and operation-message rules.
+// expression, duplicate-action and duplicate-address rules.
 //
 // The last two need a comment each: "orders" repeats an action on one channel,
-// and "orders-shipped" is declared twice with different actions, so the second
-// declaration's message is written into the channel struct the first
-// declaration displaced.
+// and "orders-shipped" is declared twice, so its second declaration is rejected
+// and takes the operations it declares with it.
 var Catalog = asyncgo.Spec(
 	asyncgo.Info("Orders Service", "1.0.0"),
 	asyncgo.Servers(

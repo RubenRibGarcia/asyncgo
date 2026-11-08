@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
-	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/spf13/cobra"
 )
@@ -53,13 +51,9 @@ func newGenerateCmd() *cobra.Command {
 				return fmt.Errorf("generating: %w", err)
 			}
 
-			doc, n, err := discovery.Build(cmd.Context(), dir)
+			doc, n, err := buildDoc(cmd, dir, "generating")
 			if err != nil {
-				var catErrs discovery.CatalogErrors
-				if errors.As(err, &catErrs) {
-					return catErrs
-				}
-				return fmt.Errorf("generating: %w", err)
+				return err
 			}
 			out, err := selected.encode(doc)
 			if err != nil {

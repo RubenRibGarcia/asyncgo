@@ -43,14 +43,6 @@ func (s *securityScheme) apply(b *builder) error {
 	if s.s.Type == "" {
 		errs = append(errs, fmt.Errorf("securityScheme.%s.type: is required", s.name))
 	}
-	c := b.components()
-	if c.SecuritySchemes == nil {
-		c.SecuritySchemes = map[string]*spec.SecurityScheme{}
-	}
-	if _, dup := c.SecuritySchemes[s.name]; dup && s.name != "" {
-		errs = append(errs, fmt.Errorf("securityScheme.%s: duplicate name", s.name))
-	} else {
-		c.SecuritySchemes[s.name] = &s.s
-	}
+	errs = append(errs, registerComponent(b, securitySchemesMap, "securityScheme", s.name, &s.s)...)
 	return errors.Join(errs...)
 }

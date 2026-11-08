@@ -44,14 +44,6 @@ func (a *replyAddress) apply(b *builder) error {
 	if a.a.Location == "" {
 		errs = append(errs, fmt.Errorf("replyAddress.%s.location: is required", a.name))
 	}
-	c := b.components()
-	if c.ReplyAddresses == nil {
-		c.ReplyAddresses = map[string]*spec.OperationReplyAddress{}
-	}
-	if _, dup := c.ReplyAddresses[a.name]; dup && a.name != "" {
-		errs = append(errs, fmt.Errorf("replyAddress.%s: duplicate name", a.name))
-	} else {
-		c.ReplyAddresses[a.name] = &a.a
-	}
+	errs = append(errs, registerComponent(b, replyAddressesMap, "replyAddress", a.name, &a.a)...)
 	return errors.Join(errs...)
 }

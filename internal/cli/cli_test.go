@@ -418,12 +418,6 @@ func TestGenerateValidationError(t *testing.T) {
 	)
 	assert.Contains(t, err.Error(), "operation.orders.send: duplicate action")
 	assert.Contains(t, err.Error(), "channel.orders-shipped: duplicate address")
-	assert.Contains(
-		t,
-		err.Error(),
-		`operation.orders-shipped.receive: message `+
-			`"#/channels/orders-shipped/messages/OrderShipped" is not in channel "orders-shipped"`,
-	)
 }
 
 func TestCheckOutOfDate(t *testing.T) {

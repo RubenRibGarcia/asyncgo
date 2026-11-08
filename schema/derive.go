@@ -18,6 +18,12 @@
 //     "format=...", "const=...", "discriminator=...", the numeric bounds
 //     ("minItems=", "maxItems=", "minProperties=", "maxProperties="), and the
 //     flags "readOnly", "writeOnly", "uniqueItems", "deprecated".
+//     Combinator members are named as "oneOf=A|B": a bare name resolves against
+//     the declaring struct's package, and a name containing "/" is a
+//     fully-qualified pkgPath.TypeName. A semi-qualified name (pkg.Type, with no
+//     import path) is neither, so it emits a dangling $ref — use the full path.
+//     internal/discovery applies the same rule when it collects the types to
+//     hoist, and rejects a name the generated harness could not emit.
 //     Directives are separated by whitespace, so a value may contain a comma.
 //     Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
@@ -93,9 +99,7 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	if t == nil {
 		return &spec.Schema{}
 	}
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
+	t = deref(t)
 
 	// A named non-struct provider opts into the same hoisting named structs get,
 	// so a scalar or collection can carry a reusable constraint. Struct
@@ -103,16 +107,12 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	// skipped because their zero value is a nil interface, and asSchemaProvider
 	// asserts that zero value to spec.SchemaProvider.
 	if isNamed(t) && t.Kind() != reflect.Struct && t.Kind() != reflect.Interface {
-		if _, hoisted := defs[Name(t)]; hoisted {
-			return spec.Ref(Ref(t))
+		if ref := hoistedRef(t, defs); ref != "" {
+			return spec.Ref(ref)
 		}
-		if p, ok := asSchemaProvider(t); ok {
-			if custom := p.AsyncAPISchema(); custom != nil {
-				defs[Name(t)] = custom
-				return spec.Ref(Ref(t))
-			}
-			// A nil schema means "derive as usual": for a non-struct that is an
-			// inline kind-based schema, so there is nothing to hoist.
+		if custom := providerSchema(t); custom != nil {
+			defs[Name(t)] = custom
+			return spec.Ref(Ref(t))
 		}
 	}
 
@@ -164,6 +164,40 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 // name (anonymous types have neither, and cannot be hoisted).
 func isNamed(t reflect.Type) bool { return t.Name() != "" && t.PkgPath() != "" }
 
+// deref strips any pointer layers from t. Derivation looks at the element type
+// only — a pointer and its element derive the same schema — so FromType, structOf
+// and Register each start from this instead of repeating the loop.
+func deref(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
+}
+
+// hoistedRef returns the $ref to t when defs already holds its schema, and ""
+// otherwise. Both hoisting paths consult it before deriving, so a type reached
+// twice derives once.
+func hoistedRef(t reflect.Type, defs map[string]*spec.Schema) string {
+	if _, ok := defs[Name(t)]; ok {
+		return Ref(t)
+	}
+	return ""
+}
+
+// providerSchema returns the schema t declares through spec.SchemaProvider, or
+// nil when t has no provider or the provider returns nil.
+//
+// A nil result always means "derive as usual" — fillObject for a struct, the
+// kind-based schema for anything else — so both hoisting paths agree on what an
+// opt-out looks like.
+func providerSchema(t reflect.Type) *spec.Schema {
+	p, ok := asSchemaProvider(t)
+	if !ok {
+		return nil
+	}
+	return p.AsyncAPISchema()
+}
+
 // asSchemaProvider detects a SchemaProvider on t or *t, mirroring
 // encoding/json's value-then-addressable rule. Pointers are dereferenced before
 // this is called, so t is never a pointer, but it may be of any kind.
@@ -177,28 +211,24 @@ func asSchemaProvider(t reflect.Type) (spec.SchemaProvider, bool) {
 	return nil, false
 }
 
-// hoistStruct registers t in defs (once) and returns a $ref to it. The schema
-// is pre-registered before filling so recursive types terminate.
+// hoistStruct registers t in defs (once) and returns a $ref to it. The schema is
+// pre-registered before filling so recursive types terminate.
 func hoistStruct(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
-	name := Name(t)
-	if _, ok := defs[name]; ok {
-		return spec.Ref(Ref(t))
+	if ref := hoistedRef(t, defs); ref != "" {
+		return spec.Ref(ref)
 	}
 
 	s := &spec.Schema{Type: "object"}
-	defs[name] = s // pre-register for recursion termination
+	defs[Name(t)] = s // pre-register for recursion termination
 
-	var custom *spec.Schema
-	if p, ok := asSchemaProvider(t); ok {
-		custom = p.AsyncAPISchema()
-	}
-	if custom != nil {
-		s = custom
-		defs[name] = s
-	} else {
-		fillObject(s, t, defs)
+	// A provider replaces the derived schema wholesale, so the placeholder is
+	// discarded rather than filled.
+	if custom := providerSchema(t); custom != nil {
+		defs[Name(t)] = custom
+		return spec.Ref(Ref(t))
 	}
 
+	fillObject(s, t, defs)
 	return spec.Ref(Ref(t))
 }
 
@@ -220,6 +250,13 @@ func fillObject(s *spec.Schema, t reflect.Type, defs map[string]*spec.Schema) {
 	if len(embedded) == 0 {
 		s.Properties = own.Properties
 		s.Required = own.Required
+		return
+	}
+	// A struct that only composes embeds contributes no member of its own, and an
+	// empty {type: object, properties: {}} among the allOf members constrains
+	// nothing — every instance satisfies it. Omit it rather than emit noise.
+	if len(own.Properties) == 0 {
+		s.AllOf = embedded
 		return
 	}
 	s.AllOf = append(embedded, own)
@@ -245,7 +282,7 @@ func fillFields(
 
 		if f.Anonymous && !hasExplicitJSONName(f) {
 			if ft, ok := structOf(f.Type); ok {
-				if !flattening && hasFlag(f.Tag.Get("asyncapi"), "allOf") {
+				if !flattening && hasFlag(parseTag(f.Tag.Get("asyncapi")), "allOf") {
 					*embedded = append(*embedded, FromType(f.Type, defs))
 					continue
 				}
@@ -260,18 +297,18 @@ func fillFields(
 		}
 
 		prop := FromType(f.Type, defs)
-		if tag := f.Tag.Get("asyncapi"); tag != "" {
-			applyTag(prop, tag)
-			if hasFlag(tag, "required") {
+		if ds := parseTag(f.Tag.Get("asyncapi")); len(ds) > 0 {
+			applyTag(prop, ds)
+			if hasFlag(ds, "required") {
 				own.Required = append(own.Required, name)
 			}
-			if names, ok := combinatorNames(tag, "oneOf"); ok {
+			if names, ok := combinatorNames(ds, "oneOf"); ok {
 				prop.OneOf = refs(names, t)
 			}
-			if names, ok := combinatorNames(tag, "anyOf"); ok {
+			if names, ok := combinatorNames(ds, "anyOf"); ok {
 				prop.AnyOf = refs(names, t)
 			}
-			if names, ok := combinatorNames(tag, "allOf"); ok {
+			if names, ok := combinatorNames(ds, "allOf"); ok {
 				prop.AllOf = refs(names, t)
 			}
 		}
@@ -282,9 +319,7 @@ func fillFields(
 // structOf dereferences pointers and returns the struct type, or ok=false when
 // t is not a struct (possibly behind pointers).
 func structOf(t reflect.Type) (reflect.Type, bool) {
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
+	t = deref(t)
 	if t.Kind() != reflect.Struct {
 		return nil, false
 	}
