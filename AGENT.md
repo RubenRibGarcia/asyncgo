@@ -109,7 +109,8 @@ asyncgo/
 ├── go.mod / go.sum
 ├── go.work                     # multi-module workspace (root + test/data/* + test/integration + tools)
 ├── .goreleaser.yaml            # release build: cross-compile + version ldflags
-├── .github/workflows/          # CI (test.yaml) + release (release.yml)
+├── .github/workflows/          # CI (test.yaml) + release (release.yml) + site (docs.yml)
+├── site/                       # MkDocs Material project site, published to GitHub Pages
 ├── spec/                       # Typed AsyncAPI 3.1.0 object model + codecs
 ├── schema/                     # struct → JSON Schema (the "data contract" half)
 ├── cmd/asyncgo/                # thin main: build metadata + cli.Execute
@@ -336,6 +337,7 @@ All commits must follow the
 | `internal` | `internal/discovery/`, `internal/cli/`                    |
 | `test`     | `test/data/` fixtures and `test/integration/` tests       |
 | `docs`     | Project-level docs (README, AGENT.md, docs/)              |
+| `site`     | `site/` — MkDocs project site (mkdocs.yml, content/)       |
 | `deps`     | Dependency changes (`go.mod`, `go.sum`)                   |
 
 ### Examples
