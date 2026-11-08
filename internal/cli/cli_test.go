@@ -707,6 +707,17 @@ func TestWriteFileAtomic(t *testing.T) {
 		assert.Equal(t, "asyncapi.yaml", entries[0].Name())
 	})
 
+	t.Run("should_fail_when_the_target_directory_does_not_exist", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing")
+
+		require.Error(
+			t,
+			writeFileAtomic(filepath.Join(missing, "asyncapi.yaml"), []byte("x"), 0o644),
+		)
+
+		require.NoDirExists(t, missing)
+	})
+
 	t.Run("should_leave_the_target_untouched_when_the_rename_fails", func(t *testing.T) {
 		dir := t.TempDir()
 		// A non-empty directory in place of the artifact makes os.Rename fail with

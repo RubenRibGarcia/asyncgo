@@ -48,28 +48,20 @@ func resolveFormat(format string) (outputFormat, error) {
 // artifact that the go tool ignores would be a confusing bug. It also has to sit
 // in path's own directory, since os.Rename cannot cross filesystems.
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-
-	tmp, err := os.CreateTemp(dir, ".asyncgo-write-*")
+	// Reserve the name in the target's own directory: os.Rename cannot cross
+	// filesystems, and the random suffix keeps two concurrent generators from
+	// writing through the same temp file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".asyncgo-write-*")
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
-	// Best effort: after a successful rename there is nothing to remove, and a
-	// failure here must not mask the real error.
+	// The reservation only held the name; WriteFile fills it. Best effort after a
+	// successful rename, and a failure here must not mask the real error.
+	_ = tmp.Close()
 	defer func() { _ = os.Remove(tmpName) }()
 
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	// Close before renaming: on some systems the rename is what makes the contents
-	// durable, and a pending write must be flushed first.
-	if err := tmp.Close(); err != nil {
+	if err := os.WriteFile(tmpName, data, perm); err != nil {
 		return err
 	}
 	return os.Rename(tmpName, path)
