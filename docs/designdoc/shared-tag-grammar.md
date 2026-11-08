@@ -1,6 +1,6 @@
 # Design: Shared struct-tag grammar
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Created**: 2026-11-08
 - **Status updated**: 2026-11-08
 - **Scope**: `internal/discovery/`, `schema/`, `internal/taggrammar/` (new), `docs/`
@@ -217,7 +217,7 @@ passes now agree that the tag declared no name.)
 ## Rollout plan
 
 1. **Stage 0 — design** (`docs`): this document. No code.
-2. **Stage 1 — ADR** (`docs`): record the accepted decisions.
+2. **Stage 1 — ADR** (`docs`): [ADR 0007](../adr/0007-shared-tag-grammar.md) records the accepted decisions.
 3. **Stage 2 — extraction, no behaviour change** (`refactor(schema)`): add
    `internal/taggrammar`, make `schema` its first caller. `internal/discovery` is
    untouched, so no golden moves and no pass can disagree yet in a new way.
