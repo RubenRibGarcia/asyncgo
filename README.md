@@ -781,6 +781,7 @@ table is data, so asyncgo never imports the library it describes:
 | --- | --- |
 | `time.Time` | `{type: string, format: date-time}` |
 | `github.com/gofrs/uuid.UUID` | `{type: string, format: uuid}` |
+| `github.com/gofrs/uuid/v5.UUID` | `{type: string, format: uuid}` |
 | `github.com/google/uuid.UUID` | `{type: string, format: uuid}` |
 | `github.com/oklog/ulid/v2.ULID` | `{type: string, pattern: Crockford base32}` |
 | `github.com/shopspring/decimal.Decimal` | `{type: string, pattern: decimal}` |

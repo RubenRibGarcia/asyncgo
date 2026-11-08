@@ -509,6 +509,15 @@ func TestBuiltinMappings(t *testing.T) {
 			format: "uuid",
 		},
 		{
+			// v5 moved the module to the /v5 path. Lookup is exact-name, so the
+			// unsuffixed entry above does not cover it and a missing row here would
+			// silently downgrade uuid.UUID to an array of integers.
+			name:   "should_map_gofrs_uuid_v5_to_string_format_uuid",
+			fqn:    "github.com/gofrs/uuid/v5.UUID",
+			want:   "string",
+			format: "uuid",
+		},
+		{
 			name:   "should_map_google_uuid_to_string_format_uuid",
 			fqn:    "github.com/google/uuid.UUID",
 			want:   "string",
