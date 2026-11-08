@@ -494,6 +494,18 @@ asyncgo --version
 asyncgo completion bash
 ```
 
+`asyncgo check` exits **3** when the artifact is stale and **1** when the check
+could not run at all (a catalog build error, a missing artifact, an I/O failure);
+Cobra keeps **2** for usage errors such as an unknown flag. So CI can tell
+"regenerate the committed document" from "the build is broken":
+
+```bash
+asyncgo check . || case $? in
+  3) echo "asyncapi.yaml is stale: run asyncgo generate ." ;;
+  *) echo "the catalog does not build" ;;
+esac
+```
+
 The generator discovers catalogs **reachable from `main`**, then runs a small
 harness to materialize them (never executing your `main` package).
 

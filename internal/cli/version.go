@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -30,11 +31,23 @@ func resolveVersion(injected string) string {
 }
 
 // formatVersion renders the version string (without the "asyncgo " prefix),
-// appending commit/build metadata when known.
+// appending the commit and build date metadata that the build knows. Each part is
+// omitted rather than rendered empty: a `go build` without ldflags supplies a
+// commit but no date, and "(commit abc1234, built )" is worse than "(commit
+// abc1234)". A commit of "unknown" is the toolchain's placeholder for "not
+// injected" and is treated as absent.
 func formatVersion(bi BuildInfo) string {
 	v := resolveVersion(bi.Version)
+
+	var parts []string
 	if bi.Commit != "" && bi.Commit != "unknown" {
-		v += fmt.Sprintf(" (commit %s, built %s)", bi.Commit, bi.Date)
+		parts = append(parts, "commit "+bi.Commit)
+	}
+	if bi.Date != "" {
+		parts = append(parts, "built "+bi.Date)
+	}
+	if len(parts) > 0 {
+		v += " (" + strings.Join(parts, ", ") + ")"
 	}
 	return v
 }

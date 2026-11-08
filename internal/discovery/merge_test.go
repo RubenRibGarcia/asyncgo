@@ -47,6 +47,47 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
+			// Info is taken wholesale, not field by field: the first document with a
+			// Title supplies the whole section, and every later one is ignored even
+			// when it carries fields the chosen one leaves empty.
+			name: "should_take_info_from_the_first_document_with_a_title",
+			docs: []*spec.AsyncAPI{
+				docWith("", &spec.Components{}),
+				docWith("T", nil),
+				docWith("U", nil),
+			},
+			verify: func(t *testing.T, out *spec.AsyncAPI) {
+				t.Helper()
+				assert.Equal(t, "T", out.Info.Title)
+				assert.Equal(t, "1.0.0", out.Info.Version)
+			},
+		},
+		{
+			// A document with no Title contributes no Info at all — its Version does
+			// not sneak in ahead of the document that does have one.
+			name: "should_ignore_a_document_without_a_title",
+			docs: []*spec.AsyncAPI{
+				{AsyncAPI: spec.Version, Info: spec.Info{Version: "9.9.9"}},
+				docWith("T", nil),
+			},
+			verify: func(t *testing.T, out *spec.AsyncAPI) {
+				t.Helper()
+				assert.Equal(t, "T", out.Info.Title)
+				assert.Equal(t, "1.0.0", out.Info.Version)
+			},
+		},
+		{
+			name: "should_take_the_first_default_content_type",
+			docs: []*spec.AsyncAPI{
+				{AsyncAPI: spec.Version, DefaultContentType: "application/json"},
+				{AsyncAPI: spec.Version, DefaultContentType: "application/xml"},
+			},
+			verify: func(t *testing.T, out *spec.AsyncAPI) {
+				t.Helper()
+				assert.Equal(t, "application/json", out.DefaultContentType)
+			},
+		},
+		{
 			name: "should_leave_components_nil_when_no_document_has_any",
 			docs: []*spec.AsyncAPI{docWith("T", nil)},
 			verify: func(t *testing.T, out *spec.AsyncAPI) {

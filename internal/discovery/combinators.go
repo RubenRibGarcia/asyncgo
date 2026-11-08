@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -121,19 +122,14 @@ func resolveCombinatorName(name, declaringPkg string) (combinatorRef, error) {
 	return combinatorRef{ImportPath: declaringPkg, TypeName: name}, nil
 }
 
-// combinatorNamesInTag mirrors schema.combinatorNames: it returns the
-// "|"-separated type names for a combinator directive, or ok=false when the
-// directive is absent.
+// combinatorNamesInTag returns the "|"-separated type names for a combinator
+// directive, or ok=false when it is absent or carries an empty value. The grammar
+// comes from internal/taggrammar (ADR 0007), so this and schema's
+// combinatorNames cannot disagree.
 func combinatorNamesInTag(tag, key string) ([]string, bool) {
-	prefix := key + "="
-	for part := range strings.FieldsSeq(tag) {
-		if after, ok := strings.CutPrefix(part, prefix); ok {
-			raw := after
-			if raw == "" {
-				return nil, false
-			}
-			return strings.Split(raw, "|"), true
-		}
+	raw, ok := taggrammar.Value(taggrammar.Parse(tag), key)
+	if !ok || raw == "" {
+		return nil, false
 	}
-	return nil, false
+	return strings.Split(raw, "|"), true
 }

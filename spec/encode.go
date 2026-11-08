@@ -11,7 +11,15 @@ func New() *AsyncAPI {
 	return &AsyncAPI{AsyncAPI: Version}
 }
 
-// YAML serializes the document to YAML.
+// YAML serializes the document to YAML. Output is deterministic: struct fields
+// follow declaration order and the encoder sorts map keys (goccy's
+// encodeMap sorts by the key's string form), so the same document always
+// encodes to the same bytes and a committed artifact diffs cleanly in review.
+//
+// One boundary is worth knowing: a binding value decodes into map[string]any,
+// which re-encodes with sorted keys, so a document that went through a decode is
+// stable from that point on but not necessarily byte-identical to the typed
+// struct that produced it. spec.TestBindingRoundTripIsNotByteStable pins it.
 func (a *AsyncAPI) YAML() ([]byte, error) { return yaml.Marshal(a) }
 
 // JSON serializes the document to compact JSON.

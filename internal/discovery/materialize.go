@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,6 +55,22 @@ type catalogOutcome struct {
 	Errors  []string       `yaml:"errors,omitempty"`
 }
 
+// removeHarnessDir removes the transient harness directory and reports a failure
+// on w. A directory left behind is a diagnostic rather than a build failure — the
+// document was materialized either way — but it is not silence: it is written to
+// the process's stderr because the command's own output writer belongs to the
+// caller and stdout already carries the artifact messages.
+//
+// remove is a parameter so the failure path can be tested without contriving an
+// unremovable directory.
+func removeHarnessDir(tmp string, w io.Writer, remove func(string) error) {
+	if err := remove(tmp); err != nil {
+		// The diagnostic is best-effort: a writer that fails cannot be reported to
+		// itself, and the build already succeeded.
+		_, _ = fmt.Fprintf(w, "asyncgo: removing harness directory %s: %v\n", tmp, err)
+	}
+}
+
 // Materialize produces the *spec.AsyncAPI document for each catalog by running
 // a generated harness that imports the catalog packages and prints the catalog
 // values as YAML.
@@ -85,12 +102,7 @@ func Materialize(
 	if err != nil {
 		return nil, fmt.Errorf("creating harness directory: %w", err)
 	}
-	defer func() {
-		err := os.RemoveAll(tmp)
-		if err != nil {
-			fmt.Printf("failed to remove harness directory: %v\n", err)
-		}
-	}()
+	defer removeHarnessDir(tmp, os.Stderr, os.RemoveAll)
 
 	if err := os.WriteFile(
 		filepath.Join(tmp, "main.go"),

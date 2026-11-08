@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,18 +44,55 @@ func TestResolveVersion(t *testing.T) {
 }
 
 func TestFormatVersion(t *testing.T) {
-	t.Run("should_return_bare_version", func(t *testing.T) {
-		assert.Equal(t, "v1.2.3", formatVersion(BuildInfo{Version: "v1.2.3"}))
-	})
+	tests := []struct {
+		name string
+		info BuildInfo
+		want string
+	}{
+		{
+			name: "should_return_bare_version",
+			info: BuildInfo{Version: "v1.2.3"},
+			want: "v1.2.3",
+		},
+		{
+			name: "should_append_commit_and_date",
+			info: BuildInfo{
+				Version: "v1.2.3",
+				Commit:  "abc1234",
+				Date:    "2026-08-18T00:00:00Z",
+			},
+			want: "v1.2.3 (commit abc1234, built 2026-08-18T00:00:00Z)",
+		},
+		{
+			// A build that stamps the commit but not the date must not render
+			// "built " with nothing after it.
+			name: "should_omit_an_empty_date",
+			info: BuildInfo{Version: "v1.2.3", Commit: "abc1234"},
+			want: "v1.2.3 (commit abc1234)",
+		},
+		{
+			name: "should_omit_an_empty_commit",
+			info: BuildInfo{Version: "v1.2.3", Date: "2026-08-18T00:00:00Z"},
+			want: "v1.2.3 (built 2026-08-18T00:00:00Z)",
+		},
+		{
+			// "unknown" is the toolchain's placeholder for "not injected".
+			name: "should_treat_an_unknown_commit_as_absent",
+			info: BuildInfo{Version: "v1.2.3", Commit: "unknown", Date: "2026-08-18T00:00:00Z"},
+			want: "v1.2.3 (built 2026-08-18T00:00:00Z)",
+		},
+		{
+			name: "should_fall_back_to_devel_for_an_untagged_build",
+			info: BuildInfo{},
+			want: "devel",
+		},
+	}
 
-	t.Run("should_append_commit_and_date", func(t *testing.T) {
-		got := formatVersion(BuildInfo{
-			Version: "v1.2.3",
-			Commit:  "abc1234",
-			Date:    "2026-08-18T00:00:00Z",
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, formatVersion(tc.info))
 		})
-		assert.Equal(t, "v1.2.3 (commit abc1234, built 2026-08-18T00:00:00Z)", got)
-	})
+	}
 }
 
 func TestExecute(t *testing.T) {
@@ -641,4 +680,125 @@ func copyFixture(t *testing.T, name string) string {
 	}
 
 	return dst
+}
+
+// TestExitCode pins the process exit status each outcome maps to. CI tells "the
+// artifact is stale" from "the build is broken" by this number, so the mapping is
+// part of the CLI contract: 0 success, 1 failure, 3 out of date, with 2 already
+// claimed by Cobra for usage errors.
+func TestExitCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "should_return_zero_for_success", want: 0},
+		{
+			name: "should_return_three_for_an_out_of_date_artifact",
+			err:  fmt.Errorf("%s: %w; run generate", "asyncapi.yaml", ErrOutOfDate),
+			want: 3,
+		},
+		{
+			// Wrapped twice: errors.Is has to survive the layers a command adds.
+			name: "should_return_three_for_a_wrapped_out_of_date_error",
+			err:  fmt.Errorf("checking: %w", fmt.Errorf("%s: %w", "asyncapi.yaml", ErrOutOfDate)),
+			want: 3,
+		},
+		{name: "should_return_one_for_any_other_error", err: errors.New("boom"), want: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, ExitCode(tc.err))
+		})
+	}
+}
+
+// TestCheckOutOfDateSentinel pins that a stale artifact is reported as
+// ErrOutOfDate rather than as a plain error, which is what makes the exit code
+// above reachable from the command.
+func TestCheckOutOfDateSentinel(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+	require.NoError(t, execute1(t, "generate", dir))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, "asyncapi.yaml"),
+		[]byte("asyncapi: 0.0.0\n"),
+		0o644,
+	))
+
+	_, _, err := execute(t, BuildInfo{}, "check", dir)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrOutOfDate)
+	assert.Equal(t, 3, ExitCode(err))
+}
+
+// execute1 runs a command that must succeed, for tests that need a generated
+// artifact before the assertion they care about.
+func execute1(t *testing.T, args ...string) error {
+	t.Helper()
+	_, _, err := execute(t, BuildInfo{}, args...)
+	return err
+}
+
+// TestWriteFileAtomic pins what the artifact write guarantees: the target is
+// replaced, and a failed write leaves neither a partial artifact nor a temp file
+// behind. `generate` rewrites the same path on every run, so a truncated artifact
+// from a failed write would be worse than no write at all.
+func TestWriteFileAtomic(t *testing.T) {
+	t.Run("should_replace_an_existing_artifact", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "asyncapi.yaml")
+		require.NoError(t, os.WriteFile(path, []byte("old\n"), 0o644))
+
+		require.NoError(t, writeFileAtomic(path, []byte("new\n"), 0o644))
+
+		got, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, "new\n", string(got))
+	})
+
+	t.Run("should_leave_no_temp_file_behind", func(t *testing.T) {
+		dir := t.TempDir()
+
+		require.NoError(t, writeFileAtomic(filepath.Join(dir, "asyncapi.yaml"), []byte("x"), 0o644))
+
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		assert.Equal(t, "asyncapi.yaml", entries[0].Name())
+	})
+
+	t.Run("should_fail_when_the_target_directory_does_not_exist", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing")
+
+		require.Error(
+			t,
+			writeFileAtomic(filepath.Join(missing, "asyncapi.yaml"), []byte("x"), 0o644),
+		)
+
+		require.NoDirExists(t, missing)
+	})
+
+	t.Run("should_leave_the_target_untouched_when_the_rename_fails", func(t *testing.T) {
+		dir := t.TempDir()
+		// A non-empty directory in place of the artifact makes os.Rename fail with
+		// ENOTEMPTY regardless of the user running the test, so the failure path is
+		// exercised without relying on permissions.
+		path := filepath.Join(dir, "asyncapi.yaml")
+		require.NoError(t, os.Mkdir(path, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(path, "keep.yaml"), []byte("keep"), 0o644))
+
+		require.Error(t, writeFileAtomic(path, []byte("new"), 0o644))
+
+		// The previous artifact survives, and the temp file was removed rather than
+		// left beside it for the next run to trip over.
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		assert.Equal(t, "asyncapi.yaml", entries[0].Name())
+		keep, err := os.ReadFile(filepath.Join(path, "keep.yaml"))
+		require.NoError(t, err)
+		assert.Equal(t, "keep", string(keep))
+	})
 }

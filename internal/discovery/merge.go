@@ -5,6 +5,17 @@ import "github.com/RubenRibGarcia/asyncgo/spec"
 // Merge combines catalog documents into a single AsyncAPI document. Maps are
 // unioned (first occurrence wins on key collision); Info and DefaultContentType
 // are taken from the first document that defines them.
+//
+// "Defines" is narrower than it sounds for Info: the whole Info struct is taken
+// from the first document whose Title is non-empty, and a document without a
+// Title contributes nothing — even a Version, a Description or a License. There
+// is no field-wise merge, so a catalog that only sets the version is silently
+// ignored, and every other catalog's Info is dropped once one document has a
+// Title. That is deliberate (a single Info section is the only legal shape for a
+// merged document) but it is not obvious from the call site; TestMerge's
+// should_take_info_from_the_first_document_with_a_title pins it. Merging
+// field-wise — filling gaps in the chosen document from the others — is a
+// possible future change, not this one.
 func Merge(docs ...*spec.AsyncAPI) *spec.AsyncAPI {
 	out := spec.New()
 	for _, d := range docs {
