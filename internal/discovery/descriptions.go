@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"golang.org/x/tools/go/packages"
 )
@@ -172,8 +173,11 @@ func embeddedStructAST(
 	return named[tn]
 }
 
-// jsonFieldName mirrors schema.jsonName: the json struct tag drives the field
-// name, "-" skips the field, and the Go field name is the fallback.
+// jsonFieldName is the json field name of an AST field: "-" skips it, and the Go
+// field name stands when the tag names none. The grammar is shared with
+// schema.jsonName (ADR 0007); before the extraction this copy returned "" for
+// json:",omitempty", and the caller — which reads "" as json:"-" — dropped the
+// field's description.
 func jsonFieldName(field *ast.Field, fallback string) string {
 	if field.Tag == nil {
 		return fallback
@@ -182,17 +186,15 @@ func jsonFieldName(field *ast.Field, fallback string) string {
 	if err != nil {
 		return fallback
 	}
-	t := reflect.StructTag(tag).Get("json")
-	if t == "" {
-		return fallback
-	}
-	if t == "-" {
+	name, skip := taggrammar.JSONName(reflect.StructTag(tag).Get("json"))
+	switch {
+	case skip:
 		return ""
+	case name == "":
+		return fallback
+	default:
+		return name
 	}
-	if before, _, ok := strings.Cut(t, ","); ok {
-		return before
-	}
-	return t
 }
 
 func fieldDoc(field *ast.Field) string {

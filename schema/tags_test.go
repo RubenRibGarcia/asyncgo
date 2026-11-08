@@ -3,6 +3,7 @@ package schema
 import (
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -224,7 +225,7 @@ func TestApplyTag(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &spec.Schema{}
-			applyTag(s, parseTag(tc.tag))
+			applyTag(s, taggrammar.Parse(tc.tag))
 			tc.verify(t, s)
 		})
 	}
@@ -285,47 +286,9 @@ func TestCombinatorNames(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := combinatorNames(parseTag(tc.tag), tc.key)
+			got, ok := combinatorNames(taggrammar.Parse(tc.tag), tc.key)
 			assert.Equal(t, tc.wantOK, ok)
 			assert.Equal(t, tc.want, got)
-		})
-	}
-}
-
-func TestParseTag(t *testing.T) {
-	t.Run("should_split_each_part_at_its_first_equals", func(t *testing.T) {
-		assert.Equal(t, []directive{
-			{key: "required"},
-			{key: "format", value: "date-time", hasValue: true},
-			{key: "examples", value: "a=b", hasValue: true},
-			{key: "format", hasValue: true},
-		}, parseTag("required format=date-time examples=a=b format="))
-	})
-
-	t.Run("should_return_nil_for_an_empty_tag", func(t *testing.T) {
-		assert.Nil(t, parseTag(""))
-		assert.Nil(t, parseTag("   "))
-	})
-}
-
-func TestHasFlag(t *testing.T) {
-	tests := []struct {
-		name string
-		tag  string
-		flag string
-		want bool
-	}{
-		{name: "should_find_a_bare_flag", tag: "required readOnly", flag: "required", want: true},
-		{name: "should_not_find_a_value_directive", tag: "required=true", flag: "required"},
-		// "allOf" marks an embed for composition, "allOf=A" composes types; only
-		// the bare form is a flag.
-		{name: "should_not_confuse_the_combinator_with_the_flag", tag: "allOf=A", flag: "allOf"},
-		{name: "should_find_the_embed_flag", tag: "allOf", flag: "allOf", want: true},
-		{name: "should_not_find_an_absent_flag", tag: "readOnly", flag: "required"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, hasFlag(parseTag(tc.tag), tc.flag))
 		})
 	}
 }

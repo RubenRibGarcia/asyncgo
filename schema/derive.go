@@ -53,6 +53,7 @@ import (
 	"time"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
+	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
@@ -289,7 +290,8 @@ func fillFields(
 
 		if f.Anonymous && !hasExplicitJSONName(f) {
 			if ft, ok := structOf(f.Type); ok {
-				if !flattening && hasFlag(parseTag(f.Tag.Get("asyncapi")), "allOf") {
+				if !flattening &&
+					taggrammar.Flag(taggrammar.Parse(f.Tag.Get("asyncapi")), "allOf") {
 					*embedded = append(*embedded, FromType(f.Type, defs))
 					continue
 				}
@@ -304,9 +306,9 @@ func fillFields(
 		}
 
 		prop := FromType(f.Type, defs)
-		if ds := parseTag(f.Tag.Get("asyncapi")); len(ds) > 0 {
+		if ds := taggrammar.Parse(f.Tag.Get("asyncapi")); len(ds) > 0 {
 			applyTag(prop, ds)
-			if hasFlag(ds, "required") {
+			if taggrammar.Flag(ds, "required") {
 				own.Required = append(own.Required, name)
 			}
 			if names, ok := combinatorNames(ds, "oneOf"); ok {
@@ -352,20 +354,16 @@ func refs(names []string, declaring reflect.Type) []*spec.Schema {
 // back to the Go field name. A "-" tag skips the field, and an empty name
 // (json:",omitempty") falls back too, matching encoding/json.
 func jsonName(f reflect.StructField) (string, bool) {
-	tag := f.Tag.Get("json")
-	if tag == "" {
-		return f.Name, false
-	}
-	if tag == "-" {
+	name, skip := taggrammar.JSONName(f.Tag.Get("json"))
+	switch {
+	case skip:
 		return "", true
+	case name == "":
+		// The tag named no field (json:",omitempty"), so the Go name stands.
+		return f.Name, false
+	default:
+		return name, false
 	}
-	if before, _, ok := strings.Cut(tag, ","); ok {
-		if before == "" {
-			return f.Name, false
-		}
-		return before, false
-	}
-	return tag, false
 }
 
 // hasExplicitJSONName reports whether the "json" tag names the field, which

@@ -4,35 +4,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
-
-// directive is one whitespace-separated part of an asyncapi struct tag, split at
-// the first "=" into a key and its value. hasValue separates a value directive
-// (even one with an empty value, as in "format=") from a bare flag (readOnly,
-// required, allOf).
-type directive struct {
-	key      string
-	value    string
-	hasValue bool
-}
-
-// parseTag splits an asyncapi struct tag into its directives once. Every reader —
-// applyTag for the value directives, hasFlag for the bare flags, combinatorNames
-// for the member lists — works on the result, instead of each re-splitting the
-// same tag.
-func parseTag(tag string) []directive {
-	parts := strings.Fields(tag)
-	if len(parts) == 0 {
-		return nil
-	}
-	ds := make([]directive, len(parts))
-	for i, part := range parts {
-		key, value, hasValue := strings.Cut(part, "=")
-		ds[i] = directive{key: key, value: value, hasValue: hasValue}
-	}
-	return ds
-}
 
 // applyTag applies the asyncapi struct tag to the schema. Supported directives:
 //
@@ -72,10 +46,10 @@ func parseTag(tag string) []directive {
 //
 // Descriptions are not carried in the tag; the generator's discovery pass reads
 // them from the field's doc comment instead.
-func applyTag(s *spec.Schema, ds []directive) {
+func applyTag(s *spec.Schema, ds []taggrammar.Directive) {
 	for _, d := range ds {
-		if !d.hasValue {
-			switch d.key {
+		if !d.HasValue {
+			switch d.Key {
 			case "readOnly":
 				s.ReadOnly = true
 			case "writeOnly":
@@ -87,43 +61,43 @@ func applyTag(s *spec.Schema, ds []directive) {
 			}
 			continue
 		}
-		switch d.key {
+		switch d.Key {
 		case "enum":
-			if d.value != "" {
-				for e := range strings.SplitSeq(d.value, "|") {
+			if d.Value != "" {
+				for e := range strings.SplitSeq(d.Value, "|") {
 					s.Enum = append(s.Enum, e)
 				}
 			}
 		case "examples":
-			if d.value != "" {
-				s.Examples = append(s.Examples, d.value)
+			if d.Value != "" {
+				s.Examples = append(s.Examples, d.Value)
 			}
 		case "format":
-			s.Format = d.value
+			s.Format = d.Value
 		case "contentEncoding":
-			if d.value != "" {
-				s.ContentEncoding = d.value
+			if d.Value != "" {
+				s.ContentEncoding = d.Value
 			}
 		case "contentMediaType":
-			if d.value != "" {
-				s.ContentMediaType = d.value
+			if d.Value != "" {
+				s.ContentMediaType = d.Value
 			}
 		case "const":
-			if d.value != "" {
-				s.Const = d.value
+			if d.Value != "" {
+				s.Const = d.Value
 			}
 		case "discriminator":
-			if d.value != "" {
-				s.Discriminator = d.value
+			if d.Value != "" {
+				s.Discriminator = d.Value
 			}
 		case "minItems":
-			setUint(&s.MinItems, d.value)
+			setUint(&s.MinItems, d.Value)
 		case "maxItems":
-			setUint(&s.MaxItems, d.value)
+			setUint(&s.MaxItems, d.Value)
 		case "minProperties":
-			setUint(&s.MinProperties, d.value)
+			setUint(&s.MinProperties, d.Value)
 		case "maxProperties":
-			setUint(&s.MaxProperties, d.value)
+			setUint(&s.MaxProperties, d.Value)
 		}
 	}
 }
@@ -138,29 +112,13 @@ func setUint(dst **uint64, value string) {
 	*dst = &n
 }
 
-// hasFlag reports whether ds carries flag as a bare directive. A value directive
-// of the same key is not a flag: "allOf=A" composes types, "allOf" marks an
-// embedded struct for composition.
-func hasFlag(ds []directive, flag string) bool {
-	for _, d := range ds {
-		if d.key == flag && !d.hasValue {
-			return true
-		}
-	}
-	return false
-}
-
 // combinatorNames returns the "|"-separated type names for a combinator
 // directive (oneOf=/anyOf=/allOf=), or ok=false when the directive is absent or
 // has an empty value.
-func combinatorNames(ds []directive, key string) ([]string, bool) {
-	for _, d := range ds {
-		if d.key == key && d.hasValue {
-			if d.value == "" {
-				return nil, false
-			}
-			return strings.Split(d.value, "|"), true
-		}
+func combinatorNames(ds []taggrammar.Directive, key string) ([]string, bool) {
+	raw, ok := taggrammar.Value(ds, key)
+	if !ok || raw == "" {
+		return nil, false
 	}
-	return nil, false
+	return strings.Split(raw, "|"), true
 }
