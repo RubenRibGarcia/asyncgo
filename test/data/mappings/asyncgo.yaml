@@ -1,0 +1,9 @@
+# Schema mappings for this fixture: how types asyncgo does not own derive into
+# Schema Objects. Keys are fully-qualified type names (pkgPath.TypeName), so a
+# mapping works for a third-party type — and for one declared here that kind
+# derivation would get wrong: UUID is a named [16]byte.
+mappings:
+  github.com/RubenRibGarcia/asyncgo/test/data/mappings.UUID:
+    type: string
+    format: uuid
+    pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
