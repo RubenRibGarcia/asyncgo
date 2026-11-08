@@ -1,6 +1,13 @@
 // Package schema derives AsyncAPI 3.1.0 Schema Objects (a superset of JSON
 // Schema Draft 07) from Go types via reflection.
 //
+// The dialect is Draft 07, not 2019-09 or 2020-12: the specification's Schema
+// Object pins it with "$schema": "http://json-schema.org/draft-07/schema#" and
+// descends from that metaschema. The difference is not cosmetic — Draft 07
+// ignores the keywords beside a $ref, which is why an example or a constraint
+// has to be written onto the referenced component rather than next to the
+// reference (see message.PayloadExamples for the one place that bites).
+//
 // Derivation rules (per the locked design decisions):
 //
 //   - Named struct types are always hoisted into the provided defs map under
