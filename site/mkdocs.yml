@@ -1,0 +1,90 @@
+# MkDocs configuration for the asyncgo project site.
+#
+# Local:  make site-deps && make site-serve
+# CI:     .github/workflows/docs.yml runs `make site-build`, which is
+#         `mkdocs build --strict` — a broken relative link or a missing nav
+#         entry fails the build instead of shipping.
+
+site_name: asyncgo
+site_description: Generate an AsyncAPI 3.1.0 specification from Go code.
+site_url: https://rubenribgarcia.github.io/asyncgo/
+repo_url: https://github.com/RubenRibGarcia/asyncgo
+repo_name: RubenRibGarcia/asyncgo
+# docs_dir is site/content, so the default (bare `content/`) would be wrong.
+edit_uri: edit/master/site/content/
+copyright: asyncgo is MIT licensed.
+
+docs_dir: content
+site_dir: build
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.action.view
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences
+
+# Mermaid diagrams are deliberately not enabled yet: the fence needs a
+# `!!python/name:pymdownx.superfences.fence_code_format` formatter, and a strict
+# YAML linter reports that tag as unresolved (it is valid MkDocs configuration,
+# not portable YAML). Re-enable it when the first diagram lands, as:
+#
+#   - pymdownx.superfences:
+#       custom_fences:
+#         - name: mermaid
+#           class: mermaid
+#           format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/RubenRibGarcia/asyncgo
+      name: asyncgo on GitHub
+    - icon: material/language-go
+      link: https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo
+      name: asyncgo on pkg.go.dev

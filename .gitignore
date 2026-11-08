@@ -32,6 +32,10 @@ Thumbs.db
 # ASDF
 .tool-versions
 
+# MkDocs site build output and the local build virtualenv (see site/)
+site/build/
+site/.venv/
+
 # local agent scratch
 .tmp/
 

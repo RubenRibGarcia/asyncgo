@@ -1,0 +1,7 @@
+# Pinned build dependencies for the project site.
+#
+# Installed by `make site-deps` and by .github/workflows/docs.yml. Pinned so a
+# local build and the Pages build render the same output; bump deliberately.
+mkdocs==1.6.1
+mkdocs-material==9.8.1
+pymdown-extensions==13.0
