@@ -90,12 +90,14 @@ func resolveOutput(dir, output, defaultName string) (string, error) {
 	return abs, nil
 }
 
-// buildDoc materializes the catalog rooted at dir into a merged document. A
-// catalog validation failure is returned as is, so the command prints the
-// per-catalog report; any other failure is wrapped with verb, which names the
-// command in the message ("generating: ...").
-func buildDoc(cmd *cobra.Command, dir, verb string) (*spec.AsyncAPI, int, error) {
-	doc, n, err := discovery.Build(cmd.Context(), dir)
+// buildDoc materializes the catalog rooted at dir into a merged document.
+// configPath names the schema-mapping config file (empty auto-discovers
+// <dir>/asyncgo.yaml); it is forwarded verbatim, so the error naming a config file
+// the user chose is the path they typed. A catalog validation failure is returned
+// as is, so the command prints the per-catalog report; any other failure is
+// wrapped with verb, which names the command in the message ("generating: ...").
+func buildDoc(cmd *cobra.Command, dir, configPath, verb string) (*spec.AsyncAPI, int, error) {
+	doc, n, err := discovery.Build(cmd.Context(), dir, configPath)
 	if err != nil {
 		var catErrs discovery.CatalogErrors
 		if errors.As(err, &catErrs) {

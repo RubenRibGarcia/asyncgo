@@ -17,14 +17,14 @@ import (
 var ErrOutOfDate = errors.New("document is out of date")
 
 func newCheckCmd() *cobra.Command {
-	var output, format string
+	var output, format, config string
 	cmd := &cobra.Command{
 		Use:   "check [dir]",
 		Short: "Fail if the generated document is out of date",
 		Long: "Fail if the generated document is out of date.\n\n" +
 			"The document is compared byte for byte against the file `asyncgo generate` would " +
-			"write for the same --format and --output flags, so pass the same flags you generate " +
-			"with. The default is asyncapi.yaml in dir.\n\n" +
+			"write for the same --format, --output and --config flags, so pass the same flags you " +
+			"generate with. The default is asyncapi.yaml in dir.\n\n" +
 			"Exit codes:\n" +
 			"  0  the artifact is up to date\n" +
 			"  1  the check could not run (build error, missing artifact, I/O failure)\n" +
@@ -42,7 +42,7 @@ func newCheckCmd() *cobra.Command {
 				return fmt.Errorf("checking: %w", err)
 			}
 
-			doc, _, err := buildDoc(cmd, dir, "checking")
+			doc, _, err := buildDoc(cmd, dir, config, "checking")
 			if err != nil {
 				return err
 			}
@@ -73,5 +73,7 @@ func newCheckCmd() *cobra.Command {
 		StringVar(&format, "format", "yaml", "output format to check: yaml or json")
 	cmd.Flags().
 		StringVarP(&output, "output", "o", "", "output file or directory (default: <dir>/asyncapi.<format>)")
+	cmd.Flags().
+		StringVar(&config, "config", "", "schema-mapping config file (default: <dir>/asyncgo.yaml)")
 	return cmd
 }

@@ -88,7 +88,7 @@ func TestAsyncGoGenerate(t *testing.T) {
 			dir, err := filepath.Abs(filepath.Join("..", "data", name))
 			require.NoError(t, err)
 
-			doc, _, err := discovery.Build(t.Context(), dir)
+			doc, _, err := discovery.Build(t.Context(), dir, "")
 			require.NoError(t, err)
 
 			got, err := doc.YAML()

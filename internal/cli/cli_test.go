@@ -682,6 +682,93 @@ func copyFixture(t *testing.T, name string) string {
 	return dst
 }
 
+// simplePayloadFQN is the payload type of the simple fixture, which the --config
+// tests map instead of deriving.
+const simplePayloadFQN = "github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced"
+
+// writeMappingConfig writes a mapping config file and returns its path. It lives
+// outside the module on purpose: --config names a file, and the tests must not be
+// able to confuse it with the auto-discovered one.
+func writeMappingConfig(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "team.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+	return path
+}
+
+// TestConfigFlag covers --config on both commands: the named file is the only
+// mapping set in force, generate and check read it alike, and a path that does not
+// exist fails the command instead of silently mapping nothing.
+func TestConfigFlag(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
+	uuidConfig := func() string {
+		return writeMappingConfig(t, "mappings:\n  "+simplePayloadFQN+
+			":\n    type: string\n    format: uuid\n")
+	}
+
+	t.Run("should_apply_the_mappings_from_the_named_config", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+
+		out, _, err := execute(t, BuildInfo{}, "generate", dir, "--config", uuidConfig())
+		require.NoError(t, err)
+		assert.Contains(t, out, "(1 catalog(s))")
+
+		artifact, err := os.ReadFile(filepath.Join(dir, "asyncapi.yaml"))
+		require.NoError(t, err)
+		// The payload is the mapping, not the derived object it replaced.
+		assert.Contains(t, string(artifact), "format: uuid")
+		assert.NotContains(t, string(artifact), "order_id")
+	})
+
+	t.Run("should_replace_the_default_config_file", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		// A default file that would be picked up without the flag, with a marker the
+		// assertion can tell apart from the explicit file's.
+		require.NoError(t, os.WriteFile(
+			filepath.Join(dir, "asyncgo.yaml"),
+			[]byte("mappings:\n  "+simplePayloadFQN+":\n    type: string\n    format: uri\n"),
+			0o644,
+		))
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "--config", uuidConfig())
+		require.NoError(t, err)
+
+		artifact, err := os.ReadFile(filepath.Join(dir, "asyncapi.yaml"))
+		require.NoError(t, err)
+		assert.Contains(t, string(artifact), "format: uuid")
+		assert.NotContains(t, string(artifact), "format: uri")
+	})
+
+	t.Run("should_check_against_the_same_named_config", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		config := uuidConfig()
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "--config", config)
+		require.NoError(t, err)
+
+		out, _, err := execute(t, BuildInfo{}, "check", dir, "--config", config)
+		require.NoError(t, err)
+		assert.Contains(t, out, "is up to date")
+
+		// Without the flag check derives the unmapped document, so it must see the
+		// artifact as stale — proof the flag is what made the pass above succeed.
+		_, _, err = execute(t, BuildInfo{}, "check", dir)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrOutOfDate)
+	})
+
+	t.Run("should_reject_a_missing_config_file", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		missing := filepath.Join(t.TempDir(), "typo.yaml")
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "--config", missing)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "reading "+missing)
+	})
+}
+
 // TestExitCode pins the process exit status each outcome maps to. CI tells "the
 // artifact is stale" from "the build is broken" by this number, so the mapping is
 // part of the CLI contract: 0 success, 1 failure, 3 out of date, with 2 already
