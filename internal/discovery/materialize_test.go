@@ -1,7 +1,10 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -169,4 +172,31 @@ func TestHarnessTagsMatchTheDecoder(t *testing.T) {
 				"the generated struct field must match the decoder's tag")
 		})
 	}
+}
+
+// TestRemoveHarnessDir pins where a cleanup failure goes. The harness directory
+// is transient and its removal happens after the document has been materialized,
+// so the failure is a diagnostic — but it must reach the caller's stderr rather
+// than stdout (which carries the artifact messages) and it must not be silent.
+func TestRemoveHarnessDir(t *testing.T) {
+	t.Run("should_stay_silent_when_the_directory_is_removed", func(t *testing.T) {
+		var out bytes.Buffer
+
+		removeHarnessDir(t.TempDir(), &out, os.RemoveAll)
+
+		assert.Empty(t, out.String())
+	})
+
+	t.Run("should_report_a_cleanup_failure_on_the_writer", func(t *testing.T) {
+		var out bytes.Buffer
+		boom := errors.New("device busy")
+
+		removeHarnessDir("/tmp/harness", &out, func(string) error { return boom })
+
+		assert.Equal(
+			t,
+			"asyncgo: removing harness directory /tmp/harness: device busy\n",
+			out.String(),
+		)
+	})
 }
