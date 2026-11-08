@@ -474,10 +474,17 @@ func TestCombinatorNameResolution(t *testing.T) {
 		prop := obj.Properties["data"]
 		require.NotNil(t, prop)
 		require.Len(t, prop.OneOf, 2)
+		// Both members of `oneOf=UnionMemberA|UnionMemberB` resolve against the
+		// declaring struct's package, in the order they were written.
 		assert.Equal(
 			t,
 			RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"),
 			prop.OneOf[0].Ref,
+		)
+		assert.Equal(
+			t,
+			RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB"),
+			prop.OneOf[1].Ref,
 		)
 	})
 
@@ -596,16 +603,26 @@ func TestNameAndRefRequireANamedType(t *testing.T) {
 	}
 }
 
-func TestRefEscapesSlashes(t *testing.T) {
-	typ := reflect.TypeFor[Order]()
-	// Compute the expectation from the type's own package path so the test
-	// survives module renames: JSON Pointer escaping must turn "/" into "~1".
-	want := "#/components/schemas/" + strings.ReplaceAll(
-		typ.PkgPath(),
-		"/",
-		"~1",
-	) + "." + typ.Name()
-	assert.Equal(t, want, Ref(typ))
+func TestRefEscapesPointerSegments(t *testing.T) {
+	t.Run("should_escape_the_slashes_in_a_package_path", func(t *testing.T) {
+		typ := reflect.TypeFor[Order]()
+		// Compute the expectation from the type's own package path so the test
+		// survives module renames: JSON Pointer escaping must turn "/" into "~1".
+		want := "#/components/schemas/" + strings.ReplaceAll(
+			typ.PkgPath(),
+			"/",
+			"~1",
+		) + "." + typ.Name()
+		assert.Equal(t, want, Ref(typ))
+	})
+
+	t.Run("should_escape_a_tilde_before_a_slash", func(t *testing.T) {
+		// No Go type name can carry "~", so this case is reached through
+		// RefByName — the entry point a combinator directive resolves a string
+		// name with. RFC 6901 escapes "~" first: escaping "/" first would turn
+		// "~" into "~1" and then into "~01", which decodes to "~1", not "~".
+		assert.Equal(t, "#/components/schemas/x~0y~1z", RefByName("x~y/z"))
+	})
 }
 
 // withUnexported has an unexported field that must be skipped during derivation.
@@ -798,13 +815,6 @@ func TestSchemaProvider(t *testing.T) {
 				require.NotNil(t, custom)
 				assert.Equal(t, "string", custom.Type)
 				assert.Equal(t, "uuid", custom.Format)
-			},
-		},
-		{
-			name: "should_hoist_custom_schema_under_fqn",
-			typ:  reflect.TypeFor[CustomString](),
-			verify: func(t *testing.T, _ *spec.Schema, defs map[string]*spec.Schema) {
-				require.Contains(t, defs, customStringKey)
 			},
 		},
 		{

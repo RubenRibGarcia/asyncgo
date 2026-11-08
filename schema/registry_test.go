@@ -6,6 +6,7 @@ import (
 
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // restoreRegistry snapshots the package-level registry and puts it back when the
@@ -44,13 +45,20 @@ func TestRegister(t *testing.T) {
 	})
 
 	t.Run("should_be_idempotent", func(t *testing.T) {
+		const key = "github.com/RubenRibGarcia/asyncgo/schema.CustomString"
+
 		Register(CustomString{})
 		Register(CustomString{})
-		assert.Contains(
-			t,
-			registry,
-			"github.com/RubenRibGarcia/asyncgo/schema.CustomString",
-		)
+
+		// Registering twice must produce the document one registration produces,
+		// not merely leave the key present: comparing the whole schema catches a
+		// second registration that overwrote the first with something else.
+		doc := spec.New()
+		Finalize(doc)
+
+		require.NotNil(t, doc.Components)
+		require.Contains(t, doc.Components.Schemas, key)
+		assert.Equal(t, &spec.Schema{Type: "string", Format: "uuid"}, doc.Components.Schemas[key])
 	})
 }
 
