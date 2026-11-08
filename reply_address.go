@@ -33,7 +33,11 @@ type replyAddress struct {
 func ReplyAddress(name string) *replyAddress { return &replyAddress{name: name} }
 
 func (a *replyAddress) Description(d string) *replyAddress { a.a.Description = d; return a }
-func (a *replyAddress) Location(l string) *replyAddress    { a.a.Location = l; return a }
+
+// Location is the runtime expression the reply address resolves to, e.g.
+// "$message.header#/replyTo". It is required: a reply address without one
+// names no location.
+func (a *replyAddress) Location(l string) *replyAddress { a.a.Location = l; return a }
 
 func (a *replyAddress) apply(b *builder) error {
 	var errs []error

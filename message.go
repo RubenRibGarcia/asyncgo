@@ -52,11 +52,20 @@ func MessageFrom(name string, payload *spec.Schema) *message {
 	return &message{name: name, payload: payload}
 }
 
-func (m *message) Name(n string) *message          { m.name = n; return m }
-func (m *message) Title(t string) *message         { m.title = t; return m }
-func (m *message) Summary(s string) *message       { m.summary = s; return m }
-func (m *message) Description(d string) *message   { m.description = d; return m }
-func (m *message) ContentType(c string) *message   { m.contentType = c; return m }
+// Name is the message's identity, not just a label: it is the key of its
+// components.messages entry and therefore the id every $ref into the message
+// uses. Leave it unset on a MessageOf and the payload type supplies it; a
+// MessageFrom has no type to fall back on, so its name argument is required.
+func (m *message) Name(n string) *message { m.name = n; return m }
+
+func (m *message) Title(t string) *message       { m.title = t; return m }
+func (m *message) Summary(s string) *message     { m.summary = s; return m }
+func (m *message) Description(d string) *message { m.description = d; return m }
+func (m *message) ContentType(c string) *message { m.contentType = c; return m }
+
+// Headers attaches the schema of the message's headers. Nothing derives one: a
+// payload type describes the body, so headers are always authored — by hand or
+// by referencing a schema declared with Schema(...).
 func (m *message) Headers(h *spec.Schema) *message { m.headers = h; return m }
 
 // Tags attaches tags for logical grouping and categorization of the message.
