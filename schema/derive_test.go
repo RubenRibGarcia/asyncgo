@@ -494,6 +494,8 @@ func TestCombinatorNameResolution(t *testing.T) {
 }
 
 func TestFinalizeHoistsRegisteredTypes(t *testing.T) {
+	restoreRegistry(t)
+
 	t.Run("should_hoist_referenced_types_on_finalize", func(t *testing.T) {
 		Register(UnionMemberA{}, UnionMemberB{})
 		doc := spec.New()
@@ -856,6 +858,8 @@ func TestSchemaProvider(t *testing.T) {
 }
 
 func TestSchemaProviderFinalize(t *testing.T) {
+	restoreRegistry(t)
+
 	t.Run("should_honor_provider_via_finalize", func(t *testing.T) {
 		Register(CustomString{})
 		doc := spec.New()
@@ -1073,6 +1077,8 @@ type NamedProviderUnion struct {
 }
 
 func TestSchemaProviderNonStructFinalize(t *testing.T) {
+	restoreRegistry(t)
+
 	t.Run("should_hoist_registered_non_struct_provider", func(t *testing.T) {
 		Register(OrderID(""))
 		doc := spec.New()
