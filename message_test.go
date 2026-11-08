@@ -150,7 +150,10 @@ func TestMessageFrom(t *testing.T) {
 		sm, err := MessageFrom("UserSignedUp", nil).build(b)
 
 		assert.Nil(t, sm)
-		assert.EqualError(t, err, "message: nil payload type or schema")
+		// The message is named, so the error names it: a nil payload on a named
+		// message is reported against that message, not against "message" in
+		// general.
+		assert.EqualError(t, err, "message.UserSignedUp: nil payload type or schema")
 	})
 
 	t.Run("should_return_error_when_payload_type_and_schema_are_both_set", func(t *testing.T) {
@@ -164,7 +167,7 @@ func TestMessageFrom(t *testing.T) {
 
 		assert.Nil(t, sm)
 		assert.EqualError(t, err,
-			"message: payload schema and payload type are mutually exclusive")
+			"message.OrderPlaced: payload schema and payload type are mutually exclusive")
 	})
 }
 
@@ -564,7 +567,7 @@ func TestMessageValidationErrors(t *testing.T) {
 					),
 				)
 			},
-			want: "message: correlation id reference and inline correlation id are mutually exclusive",
+			want: "message.OrderPlaced: correlation id reference and inline correlation id are mutually exclusive",
 		},
 		{
 			name: "should_reject_a_message_name_outside_the_key_pattern",

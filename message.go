@@ -134,28 +134,33 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 	switch {
 	case payload != nil && m.typ != nil:
 		return nil, fmt.Errorf(
-			"message: payload schema and payload type are mutually exclusive",
+			"%s: payload schema and payload type are mutually exclusive",
+			messageErrorPath(m),
 		)
 	case payload == nil && m.typ == nil:
-		return nil, fmt.Errorf("message: nil payload type or schema")
+		return nil, fmt.Errorf("%s: nil payload type or schema", messageErrorPath(m))
 	case payload == nil:
 		payload = schema.FromType(m.typ, b.defs)
 	}
 	if m.name == "" && m.typ == nil {
-		return nil, fmt.Errorf("message: name is required for a hand-authored payload")
+		return nil, fmt.Errorf(
+			"%s: name is required for a hand-authored payload",
+			messageErrorPath(m),
+		)
 	}
 	if err := m.queuePayloadExamples(b, payload); err != nil {
 		return nil, err
 	}
 	if found := m.bindings.Validate(); len(found) > 0 {
-		return nil, fmt.Errorf("message.%s: %w", messageName(m), errors.Join(found...))
+		return nil, fmt.Errorf("%s: %w", messageErrorPath(m), errors.Join(found...))
 	}
 
 	correlationID := m.correlationID
 	switch {
 	case correlationID != nil && m.correlationIDFrom != nil:
 		return nil, fmt.Errorf(
-			"message: correlation id reference and inline correlation id are mutually exclusive",
+			"%s: correlation id reference and inline correlation id are mutually exclusive",
+			messageErrorPath(m),
 		)
 	case m.correlationIDFrom != nil:
 		ref, err := correlationIDFromRef(b, messageKey(m), *m.correlationIDFrom)
@@ -196,6 +201,10 @@ func messagePayloadType(m *message) reflect.Type {
 	return t
 }
 
+// unnamedMessage is the name a message falls back to when it has neither an
+// authored name nor a payload type to derive one from.
+const unnamedMessage = "message"
+
 // messageName is the message's Name field: the authored name, or the payload
 // type's short name when MessageOf left it unset.
 func messageName(m *message) string {
@@ -204,6 +213,17 @@ func messageName(m *message) string {
 	}
 	if t := messagePayloadType(m); t != nil && t.Name() != "" {
 		return t.Name()
+	}
+	return unnamedMessage
+}
+
+// messageErrorPath names a message in a build error: message.<name>, or the bare
+// "message" path when the builder carries neither a name nor a payload type to
+// derive one from. An unnamed message is never reported as "message.message",
+// and a named one is never reported without its name.
+func messageErrorPath(m *message) string {
+	if name := messageName(m); name != unnamedMessage {
+		return "message." + name
 	}
 	return "message"
 }
@@ -244,8 +264,8 @@ func (m *message) queuePayloadExamples(b *builder, payload *spec.Schema) error {
 	}
 	if payload.SchemaFormat != "" || payload.Schema != nil {
 		return fmt.Errorf(
-			"message.%s: examples: the payload is a multi format schema, which cannot carry JSON Schema keywords",
-			messageName(m),
+			"%s: examples: the payload is a multi format schema, which cannot carry JSON Schema keywords",
+			messageErrorPath(m),
 		)
 	}
 	if payload.Ref == "" {
