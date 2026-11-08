@@ -1,0 +1,73 @@
+asyncapi: 3.1.0
+info:
+  title: External Type Mappings
+  version: 1.0.0
+  description: Payload types shaped by asyncgo.yaml, derived aliases, and built-in mappings
+channels:
+  order-placed:
+    address: order-placed
+    messages:
+      github.com/RubenRibGarcia/asyncgo/test/data/mappings.OrderPlaced:
+        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1mappings.OrderPlaced"
+    description: Emitted when an order is placed
+operations:
+  order-placed.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-placed"
+    messages:
+    - $ref: "#/channels/order-placed/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1mappings.OrderPlaced"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/mappings.OrderPlaced:
+      type: object
+      properties:
+        created_at:
+          type: string
+          description: CreatedAt is covered by the built-in time.Time mapping.
+          format: date-time
+        customer:
+          type: string
+          description: Customer is a derived alias of UUID, inheriting its mapping.
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        id:
+          type: string
+          description: ID is the order's identifier, mapped to a UUID string by asyncgo.yaml.
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        line:
+          type: string
+          description: Line is an alias of an alias, inheriting the mapping two hops away.
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        link:
+          type: string
+          description: Link is a named pointer to UUID.
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        quantity:
+          type: integer
+          description: Quantity has no mapping and derives as an integer by kind.
+        refs:
+          type: array
+          description: Refs are the identifiers of related orders, mapped through the element type.
+          items:
+            type: string
+            format: uuid
+            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        saved:
+          type: string
+          description: Saved is a Go type alias for UUID, so reflection already sees UUID.
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+        total:
+          type: integer
+          description: "Total is a *math/big.Int, covered by a built-in mapping: encoding/json marshals\nit as a bare JSON number, where kind derivation would give an empty object."
+      required:
+      - id
+  messages:
+    github.com/RubenRibGarcia/asyncgo/test/data/mappings.OrderPlaced:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1mappings.OrderPlaced"
+      name: OrderPlaced

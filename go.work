@@ -17,6 +17,7 @@ use (
 	./test/data/bindings
 	./test/data/bindings-unlisted
 	./test/data/bytes
+	./test/data/mappings
 	./test/integration
 	./tools
 )

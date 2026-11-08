@@ -98,7 +98,7 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
 | DSL | `asyncgo.Spec`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Replies`, `Reply`, `ReplyAddresses`, `ReplyAddress`, `OperationTraits`, `OperationTrait`, `MessageTraits`, `MessageTrait`, `CorrelationIDs`, `CorrelationID`, `Channels`, `Channel`, `Operation`, `MessageOf`, `MessageFrom`, `Schemas`, `Schema`, one typed binding helper per protocol (20) plus `Binding` |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `SecurityScheme`, `OAuthFlows`, `OAuthFlow`, `Channel`, `Parameter`, `Operation`, `OperationTrait`, `OperationReply`, `OperationReplyAddress`, `Message`, `MessageTrait`, `CorrelationID`, `Schema`, `MultiFormat`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
-| CLI | `asyncgo generate [dir] [-o output]`, `asyncgo check [dir]` |
+| CLI | `asyncgo generate [dir] [-o output] [--config path]`, `asyncgo check [dir] [-o output] [--config path]` |
 
 ## Directory Structure
 
@@ -119,7 +119,7 @@ asyncgo/
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, parameters, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, parameters, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes, mappings — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
@@ -189,7 +189,8 @@ The version is the git tag — never stored in source.
 - **Testing**: `make test` must pass. The `test/integration` test is end-to-end
   and asserts three independent things for each `test/data/` fixture (`simple`,
   `allof`, `oneof`, `anyof`, `provider`, `security`, `parameters`, `reply`,
-  `traits`, `multiformat`, `derived`, `bindings`, `bindings-unlisted`, `bytes`):
+  `traits`, `multiformat`, `derived`, `bindings`, `bindings-unlisted`, `bytes`,
+  `mappings`):
 
   1. **Golden** — the generator output reproduces the committed `asyncapi.yaml`
      exactly.

@@ -140,7 +140,11 @@ func (m *message) build(b *builder) (*spec.Message, error) {
 	case payload == nil && m.typ == nil:
 		return nil, fmt.Errorf("%s: nil payload type or schema", messageErrorPath(m))
 	case payload == nil:
-		payload = schema.FromType(m.typ, b.defs)
+		// The payload schema is derived now, so Spec's validation, its auto-hoist
+		// collision check and PayloadExamples all see a complete document, and it is
+		// re-derived by schema.Finalize once every declared mapping has registered —
+		// a catalog is built before the harness can register anything.
+		payload = schema.FromTypePayload(b.doc, m.typ, b.defs)
 	}
 	if m.name == "" && m.typ == nil {
 		return nil, fmt.Errorf(

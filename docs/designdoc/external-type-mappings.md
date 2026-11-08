@@ -1,6 +1,6 @@
 # Design: External type mappings
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Created**: 2026-11-08
 - **Status updated**: 2026-11-08
 - **Scope**: `schema/`, `internal/discovery/`, `internal/cli/`
@@ -28,11 +28,19 @@ not derive schemas in-process. It discovers catalogs
 (`internal/discovery.Find`), *generates* a `main.go` harness
 (`internal/discovery/materialize.go`), compiles and runs it, and the harness
 calls `schema.Register(...)` for combinator-referenced types and
-`schema.Finalize(doc)` per document — that is where reflection and `FromType`
-run. Anything that must influence derivation has to execute inside that
-harness process, which imports only two kinds of packages: every package that
-declares a catalog variable, and every package referenced by a combinator
-directive (`new(pkg.T)` registrations).
+`schema.Finalize(doc)` per document. Anything that must influence derivation has
+to execute inside that harness process, which imports only two kinds of
+packages: every package that declares a catalog variable, and every package
+referenced by a combinator directive (`new(pkg.T)` registrations).
+
+**That process derives twice, at two different times.** A message payload is
+derived while the catalog package's own variables are initialized — `Spec(...)`
+is a package-level variable, and it calls `FromType` for each payload. The types
+`schema.Register` recorded are derived in `Finalize`. Only the second happens
+after the harness can register a mapping: a project's API mappings register in
+some package's `init`, and its `asyncgo.yaml` mappings register in the harness's
+`main()`, both after the catalog package has finished initializing. Registration
+therefore cannot be the whole story — see D10.
 
 **The existing extension point is type-owned.** `spec.SchemaProvider`
 (`AsyncAPISchema()`, see `docs/designdoc/custom-schema-providers.md`) requires
@@ -178,18 +186,34 @@ doubles as the reference example in godoc.
 Registering a second mapping for the same FQN replaces the first (idempotent,
 no panic). Ordering follows Go's own rules, which gives the three mapping
 sources a deterministic precedence within tier 1 of D2: built-ins register in
-the `schema` package `init()` (first), user API mappings register in the
-user's `init()` calls, and config-emitted registrations run in harness
-`main()` before derivation — so for the same FQN: config > API > built-in.
+the `schema` package `init()` (first), user API mappings register in an
+imported package's `init()`, and config-emitted registrations run in harness
+`main()` — so for the same FQN: config > API > built-in. Payloads derived before
+the harness reaches `main()` are re-derived by `Finalize` (D10), which is why the
+observed document honours that order rather than freezing the pre-`main()` state.
 
 **Rationale**: silent first-wins would make the config path unable to correct
 a mapping inherited from an imported package; last-wins with a deterministic
-ordering (inits → main) is predictable and documented.
+ordering (inits → main) is predictable and documented. Every tier has registered
+by the time `Finalize` derives anything, which is what makes the order observable
+in the output: a payload derived earlier in the process is re-derived there
+(D10).
 
 ### D6 — Config file: `asyncgo.yaml` at the module root, `mappings:` only
 
-Both `generate` and `check` auto-discover `<dir>/asyncgo.yaml`; no new flag in
-v1. Only a `mappings:` section is defined, whose values are whitelisted
+Both `generate` and `check` auto-discover `<dir>/asyncgo.yaml`, and both accept
+`--config <path>` to name a different file (`-c` is not taken). The flag was
+deferred in the first review and shipped once real use showed the module-root
+assumption too narrow — the same override on both commands, never on one alone:
+
+- an explicit path is resolved against the process's working directory, like
+  `-o`, and is used verbatim in errors;
+- it replaces the auto-discovered file rather than merging with it, so exactly
+  one mapping set shapes a run;
+- it must exist — only the auto-discovered file may be absent, so a typo in a CI
+  script fails the command instead of silently generating an unmapped document.
+
+Only a `mappings:` section is defined, whose values are whitelisted
 annotation/constraint keywords:
 
 ```yaml
@@ -233,9 +257,10 @@ next to the artifact it shapes.
 
 `FromType` records every FQN it resolves through the mapping registry.
 `schema.MappingWarnings()` returns mappings registered but never consulted —
-the harness folds them into its `errors` output, so a typo'd FQN in config (or
+the harness reports them on stderr, one line each, so a typo'd FQN in config (or
 a mapping declared in a package the harness never imports) is visible in
-`generate`/`check` output instead of silently ignored.
+`generate`/`check` output instead of silently ignored. They stay warnings: the
+document is materialized and the command succeeds.
 
 **Rationale**: name-keying fails silently by nature; the type may be
 third-party and absent from the module, so "does the type exist" cannot be
@@ -305,6 +330,35 @@ it dependency-free, and extending the set later is a data-only contribution.
 The list starts deliberately small: every entry needs its marshal behavior
 verified per library version, so the set grows on evidence, not popularity.
 
+### D10 — Payload schemas are derived provisionally and re-derived by `Finalize`
+
+A message payload is the one reflection-derived node a catalog computes while its
+own package variables initialize (Background). No declared mapping can be
+registered by then, so a payload derived there would miss every non-built-in
+mapping — the exact case the feature exists for, `uuid.UUID` inside a payload
+struct. Deferring the derivation outright is worse: it would move `Spec`'s
+validation, its auto-hoist collision check and `PayloadExamples` after the build,
+and leave a document without payload schemas for every caller that never
+finalizes (an in-process user, or a test asserting on the assembled document).
+
+Payload derivation therefore goes through `schema.FromTypePayload(doc, t, defs)`:
+it derives the schema now, so `Spec` stays whole, and records the derivation
+against the document. `Finalize` re-derives each recorded type with every mapping
+tier in place, rewrites the payload node's *contents* in place (the message keeps
+the pointer it always had), and replaces the components the first derivation
+hoisted — dropping the ones a mapping made obsolete, such as the component of a
+type that now derives inline. Examples already written onto the payload are
+carried across, so `PayloadExamples` survives the rewrite.
+
+**Rationale**: it is the smallest change that makes a declared mapping reach the
+payload that motivated the feature, without moving validation, collision checks or
+examples out of `Spec`, and without changing what a document looks like to a
+caller that never finalizes. The cost is deriving payloads twice, which is
+rounding error for a document generator, plus one implicit rule: `Finalize` must
+run on a catalog document before it is merged, because the record is attached to
+the document object rather than to its contents. The harness already finalizes
+each catalog before merging.
+
 ## Detailed design
 
 ### 1. `schema/mapping.go` (new)
@@ -322,42 +376,54 @@ var mappingRegistry = map[string]*spec.Schema{}
 var aliasRegistry = map[string]string{}
 
 // consulted records every FQN resolved through mappingRegistry, for
-// MappingWarnings; origin records where a mapping came from, so built-ins
+// MappingWarnings; builtins records where a mapping came from, so built-ins
 // can be excluded from warnings (D7).
 var consulted = map[string]bool{}
-var builtin = map[string]bool{}
+var builtins = map[string]bool{}
 
 func MapSchema[T any](fn func() *spec.Schema)
 func MapSchemaByName(fqn string, s *spec.Schema)
 func MapAlias(aliasFQN, baseFQN string)          // runtime form of a discovery edge
 func MapSchemaJSON(fqn, jsonSchema string) error // unmarshal into spec.Schema
 func MappingWarnings() []string                  // registered user mappings minus consulted, sorted
-func mappingFor(t reflect.Type) *spec.Schema     // D2 tiers 1 and 3; nil when unmapped
+func exactMapping(t reflect.Type) *spec.Schema   // D2 tier 1 only; nil when unmapped
+func mappingFor(t reflect.Type) *spec.Schema     // D2 tiers 1 and 3 (alias chain); nil when unmapped
 ```
 
 `MapSchema` stores the function's *result* at registration time (it is called
 once, eagerly — the purity contract makes laziness pointless, and eager
 calling surfaces impure/panicking functions at registration with a clear
-stack). `mappingFor` implements the exact-lookup-then-chain-follow of D2/D8
-with a depth guard, derefs pointers, and marks the resolved FQN consulted.
-A nil schema passed to `MapSchemaByName` panics — the config path cannot
-produce one and the API path is a programmer error.
+stack). Two lookups exist because D2 registers the provider tier *between* them:
+`exactMapping` answers tier 1 and nothing else, while `mappingFor` also follows
+the alias chain (tier 3) with a depth guard, derefs pointers, and marks the
+resolved FQN consulted. A nil schema passed to `MapSchemaByName` panics — the
+config path cannot produce one and the API path is a programmer error, and it is
+the one place the library panics deliberately: a silently ignored mapping would
+fail at derivation, far from the mistake.
+
+Payload re-derivation (D10) lives in `schema/payload.go`:
+
+```go
+func FromTypePayload(doc *spec.AsyncAPI, t reflect.Type, defs map[string]*spec.Schema) *spec.Schema
+func rederivePayloads(doc *spec.AsyncAPI) // called by Finalize
+```
 
 ### 2. `schema/derive.go` — consultation points
 
 In `FromType`, immediately after `t = deref(t)` and the nil check (D2 tier 1):
 
 ```go
-if m := mappingFor(t); m != nil {
-    return cloneSchema(m) // callers must not share the node
+if m := exactMapping(t); m != nil {
+    return m // already a copy: callers must not share the node
 }
 ```
 
-The named-non-struct provider block stays next (D2 tier 2). A second
-`mappingFor` call — the D8 alias lookup, D2 tier 3 — goes after it, before the
-`rawMessageType`/byte-slice/kind switch; `hoistStruct` gets the same
-insertion between its provider check and field derivation so a mapped
-struct-alias keeps its provider precedence. Everything else stays as-is.
+The named-non-struct provider block stays next (D2 tier 2). A `mappingFor`
+call — the D8 alias lookup, D2 tier 3 — goes after it, before the
+`rawMessageType`/byte-slice/kind switch, for every kind except a struct (a
+struct's provider is checked in `hoistStruct`, which consults `mappingFor`
+after its provider check, so a mapped struct-alias keeps its provider
+precedence). Everything else stays as-is.
 The `timeType` case and its `timeType` var are deleted; `init()` in the
 package registers the built-in:
 
@@ -380,7 +446,7 @@ In `Finalize`, before the existing `FromType` loop, for each registered name:
 ```go
 for _, name := range names {
     if s := mappingFor(registry[name]); s != nil {
-        defs[name] = cloneSchema(s) // D3: combinator $refs resolve
+        defs[name] = s // a copy already; D3: combinator $refs resolve
         continue
     }
     FromType(registry[name], defs)
@@ -390,6 +456,14 @@ for _, name := range names {
 `mappingFor` (not a direct registry hit) so a combinator directive naming an
 alias — `oneOf=OrderID` — hoists the base type's mapping under the alias's
 own FQN, and the alias FQN is marked consulted for D7.
+
+`Finalize` has a second job (D10): before that loop it calls
+`rederivePayloads(doc)`, which re-derives every payload `FromTypePayload`
+recorded, rewrites the payload node in place, replaces the components the
+payload derivation hoisted and drops the ones a mapping made obsolete. A mapped
+payload type therefore ends up inline in the message (D3) and absent from
+`components.schemas` — unless a combinator directive names it, in which case the
+loop above re-hoists it.
 
 ### 4. `internal/mappingconfig` (new) — one whitelist parser, two consumers
 
@@ -408,8 +482,10 @@ data-only change to this file plus a verification note.
 
 ### 6. `internal/discovery` — config, alias scan, and harness emission
 
-`config.go` wraps `mappingconfig.Parse` for `<dir>/asyncgo.yaml`; invalid
-config aborts generation in `buildDoc` before any harness runs.
+`build.go` reads the config through `mappingconfig.Parse` — `<dir>/asyncgo.yaml`
+by default, or the path `--config` names — and validates it before the module is
+loaded, so invalid config aborts generation before any harness runs. The reader
+lives beside `Build` because it has one caller and the rule is about load order.
 
 New `aliases.go` scans the reachable module packages (the same walk as the
 catalog scan, so no extra pass over syntax): for each `GenDecl` with `Tok ==
@@ -432,10 +508,13 @@ literals for twenty keywords (regex escaping, `[]any` for `enum`) — and the
 whitelist itself is enforced by `mappingconfig`, not by the runtime call.
 Naming the file `asyncgo.yaml` keeps it next to the artifact it shapes.
 
-### 7. `internal/cli` — no change
+### 7. `internal/cli` — one flag
 
-`generate` and `check` already funnel through `buildDoc` → discovery; the
-config is picked up there. No flags in v1 (D6).
+`generate` and `check` funnel through `buildDoc`, which forwards the `--config`
+value to `discovery.Build`; an empty value keeps the auto-discovery of D6. No
+other flag changes: `check` compares against the file `generate` would write for
+the same `--format`, `--output` and `--config`, so passing the same flags is the
+rule, and its help text says so.
 
 ## Example (before / after)
 
@@ -517,6 +596,20 @@ github.com/acme/orders.OrderPlaced:
 - **Mapped type in a combinator directive** — the directive's `$ref` resolves
   because `Finalize` hoists registered mapped types (D3); the inline use sites
   carry the same schema as the component.
+- **Mapped payload type** — a payload whose whole type is mapped derives inline
+  in the message, and the component the provisional derivation hoisted is
+  dropped when nothing else references it (D10). A combinator directive naming
+  the type re-hoists it, so the `$ref` still resolves.
+- **Payload examples** — `PayloadExamples` are written onto the schema `Spec`
+  derived; `Finalize`'s re-derivation carries them across rather than losing
+  them with the replaced node (D10). A mapping that declares its own `examples`
+  is overridden by the message's, which is the more specific declaration.
+- **In-process callers** — `Spec` derives a provisional payload; `schema.Finalize`
+  is what applies declared mappings, and each catalog document must be finalized
+  before it is merged into another.
+- **Explicit config path** — `--config` names the only mapping file read for the
+  run: a missing path is an error even when `<dir>/asyncgo.yaml` exists, and an
+  existing default file is ignored rather than merged (D6).
 - **Built-in not triggered** — a built-in mapping only fires when `FromType`
   meets a type with that exact FQN; a module that does not import the library
   sees no effect and no warning (D7 excludes built-ins).
@@ -542,9 +635,9 @@ github.com/acme/orders.OrderPlaced:
 
 1. **Stage 0 — registry and derivation** (`feat(schema)`):
    `schema/mapping.go` (exact mappings, alias registry, `mappingFor`),
-   `FromType` consultation points, `Finalize` mapped-type hoisting, built-in
-   `time.Time` mapping. Independently usable via the Go API; no discovery/CLI
-   change.
+   `FromType` consultation points, `Finalize` mapped-type hoisting, payload
+   re-derivation (`schema/payload.go`), built-in `time.Time` mapping.
+   Independently usable via the Go API; no discovery/CLI change.
 2. **Stage 1 — built-ins** (`feat(schema)`): `internal/mappingconfig`,
    embedded `builtin_mappings.yaml`, the D9 table. Zero dependencies, zero
    effect on modules not using the libraries.
@@ -556,53 +649,83 @@ github.com/acme/orders.OrderPlaced:
 5. **Stage 4 — documentation** (`docs`): README section on third-party types,
    godoc contracts on the mapping functions, entry in this doc's index flipped
    to Accepted once reviewed.
-6. **Stage 5 — deferred**: `--config` flag override, kind-based mapping
-   hooks, config sections beyond `mappings`, opt-out of alias inheritance,
-   mapping an *existing* component by `$ref` instead of an inline schema.
+6. **Stage 5 — deferred**: kind-based mapping hooks, config sections beyond
+   `mappings`, opt-out of alias inheritance, mapping an *existing* component by
+   `$ref` instead of an inline schema. (`--config` was on this list and shipped;
+   see D6.)
 
 ## Testing plan
 
-- **Stage 0** (`schema/derive_test.go`, `schema/mapping_test.go`):
+- **Stage 0** (`schema/mapping_test.go`, `schema/derive_test.go`):
   - `should_map_exact_type_inline`
   - `should_map_pointer_to_mapped_schema`
   - `should_map_transitive_slice_and_map`
+  - `should_map_inside_an_anonymous_struct`
   - `should_win_over_schema_provider`
   - `should_inline_mapped_named_struct_without_hoisting`
   - `should_hoist_registered_mapped_type_in_finalize`
   - `should_resolve_combinator_ref_to_registered_mapped_type`
   - `should_replace_mapping_on_reregistration`
+  - `should_panic_on_a_nil_schema` / `should_panic_on_an_unnamed_type`
   - `should_derive_time_as_builtin_mapping`
   - `should_override_builtin_mapping`
   - `should_derive_byte_slice_unmapped`
   - `should_clone_mapped_schema_per_consultation`
   - `should_report_mapping_warnings` (registered, never consulted)
   - `should_exclude_builtins_from_mapping_warnings`
+  - `should_warn_about_an_unused_override_of_a_builtin`
   - `should_follow_alias_chain_to_mapping`
   - `should_prefer_alias_own_mapping_over_inherited`
   - `should_follow_transitive_alias_chain`
   - `should_stop_alias_chain_at_missing_edge`
+  - `should_stop_on_a_cyclic_alias_chain`
+  - `should_prefer_a_provider_over_an_inherited_mapping`
   - `should_hoist_alias_mapping_for_combinator_ref`
-- **Stage 1** (`schema/mapping_test.go`):
+- **Stage 0, payload re-derivation** (`schema/payload_test.go`, `asyncgo_test.go`):
+  - `should_rederive_a_payload_with_the_mapping_registered_later`
+  - `should_inline_a_payload_whose_whole_type_is_mapped`
+  - `should_drop_a_component_a_mapping_made_obsolete`
+  - `should_preserve_payload_examples_on_a_hoisted_payload`
+  - `should_preserve_payload_examples_on_an_inline_payload`
+  - `should_rewrite_the_payload_node_in_place`
+  - `should_consume_the_deferred_derivation`
+  - `TestFinalizeRedrivesPayloadWithDeclaredMapping` — the same order a catalog
+    goes through, from `Spec` to `Finalize`
+- **Stage 1** (`schema/mapping_test.go`, `internal/mappingconfig`):
   - `should_load_builtin_mappings_at_init`
   - `should_map_gofrs_uuid_to_string_format_uuid`
   - `should_map_google_uuid_to_string_format_uuid`
   - `should_map_ulid_with_crockford_pattern`
   - `should_map_decimal_to_string`
-  - `should_map_big_int_to_integer`
-  - `should_reject_unknown_keyword_with_allowed_list` (mappingconfig)
-  - `should_reject_semi_qualified_mapping_name` (mappingconfig)
+  - `should_map_big_int_to_integer` — through the registry, since asyncgo does
+    not import the libraries; `should_map_big_int_through_derivation` covers a
+    real stdlib type end to end
+  - `should_reject_unknown_keyword_with_allowed_list`
+  - `should_reject_semi_qualified_mapping_name`
+  - `should_reject_nested_object` / `should_reject_a_value_that_is_not_a_schema`
+  - `should_accept_every_whitelisted_keyword`
 - **Stage 2** (`internal/discovery`):
-  - `should_parse_mappings_config`
-  - `should_emit_map_schema_json_into_harness`
-  - `should_emit_config_mapping_before_register`
-  - `should_abort_generation_on_invalid_config`
-  - `should_surface_unused_mapping_warning_in_harness_output`
+  - `should_load_mappings_from_asyncgo_yaml`
+  - `should_reject_an_invalid_config` (message names the file)
+  - `should_return_no_mappings_without_a_config_file`
+  - `should_load_mappings_from_an_explicit_path`
+  - `should_use_the_explicit_path_instead_of_the_default`
+  - `should_reject_a_missing_explicit_config`
+  - `should_emit_mappings_and_aliases_before_register`
+  - `should_report_mapping_warnings` (harness output → stderr, never fatal)
+  - `TestConfigFlag` (`internal/cli`) — generate and check read the same named
+    file, and check without it sees the artifact as stale
 - **Stage 3** (`internal/discovery`):
   - `should_emit_alias_edge_for_defined_type_declaration`
   - `should_emit_alias_edge_for_pointer_base_declaration`
+  - `should_emit_alias_edge_for_alias_of_alias`
   - `should_not_emit_edge_for_go_type_alias`
   - `should_not_emit_edge_for_predeclared_base`
   - `should_dedupe_and_sort_alias_edges`
+- **End to end** (`test/data/mappings`, the `mappings` integration fixture): a
+  projected `asyncgo.yaml` mapping, a derived alias, an alias of an alias, a Go
+  type alias, a named pointer, and the `math/big.Int` built-in in one payload,
+  asserted by the golden comparison and by `asyncapi validate` in a container.
 - **Race**: `go test ./... -race` per AGENT.md.
 
 ## Open / deferred

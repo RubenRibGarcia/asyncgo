@@ -1,0 +1,34 @@
+# Built-in schema mappings: third-party types asyncgo can derive correctly
+# without the project declaring anything, and without asyncgo importing the
+# library — a name-keyed table creates no dependency.
+#
+# Every entry is verified against the library's own encoding/json behaviour. A
+# mapping that documents a shape the library does not produce is a lie in every
+# generated document, so a new entry needs a verification note here, and a
+# library release that changes its marshal contract has to change this file.
+#
+# Users override any entry in their own asyncgo.yaml (config wins over built-in).
+#
+#   github.com/gofrs/uuid.UUID           MarshalText -> lowercase hex-and-dash
+#   github.com/google/uuid.UUID          same contract as gofrs
+#   github.com/oklog/ulid/v2.ULID        MarshalText -> 26-char Crockford base32
+#   github.com/shopspring/decimal.Decimal MarshalJSON -> JSON string by default
+#                                        (MarshalJSONWithoutQuotes = false)
+#   math/big.Int                         MarshalJSON -> bare digits as a JSON
+#                                        number (golang/go#28154); today it
+#                                        derives as an empty object
+mappings:
+  github.com/gofrs/uuid.UUID:
+    type: string
+    format: uuid
+  github.com/google/uuid.UUID:
+    type: string
+    format: uuid
+  github.com/oklog/ulid/v2.ULID:
+    type: string
+    pattern: '^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$'
+  github.com/shopspring/decimal.Decimal:
+    type: string
+    pattern: '^-?\d+(\.\d+)?$'
+  math/big.Int:
+    type: integer

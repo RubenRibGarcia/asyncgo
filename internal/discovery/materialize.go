@@ -10,9 +10,25 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/mappingconfig"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/goccy/go-yaml"
 )
+
+// Plan is everything the generated harness needs to materialize a module's
+// catalogs: the catalog variables to import, the types combinator directives
+// reference by name, the schema mappings declared in asyncgo.yaml, and the alias
+// edges derived from the module's own type declarations.
+//
+// It exists so the pieces discovery resolves statically travel to the harness as
+// one value — each is emitted into the generated program in that order, and a
+// caller cannot half-populate them by mistake.
+type Plan struct {
+	Catalogs []Catalog
+	Refs     []combinatorRef
+	Mappings []mappingconfig.Mapping
+	Aliases  []aliasEdge
+}
 
 // CatalogError groups the validation errors of a single catalog.
 type CatalogError struct {
@@ -46,6 +62,9 @@ func (e CatalogErrors) Error() string {
 // stdout; the harness defines structurally identical types (same yaml tags).
 type harnessOutput struct {
 	Catalogs []catalogOutcome `yaml:"catalogs"`
+	// Warnings are mapping diagnostics, not catalog failures: they are reported on
+	// stderr and never fail the run.
+	Warnings []string `yaml:"warnings,omitempty"`
 }
 
 type catalogOutcome struct {
@@ -86,10 +105,9 @@ func removeHarnessDir(tmp string, w io.Writer, remove func(string) error) {
 func Materialize(
 	ctx context.Context,
 	dir string,
-	cats []Catalog,
-	refs []combinatorRef,
+	plan Plan,
 ) ([]*spec.AsyncAPI, error) {
-	if len(cats) == 0 {
+	if len(plan.Catalogs) == 0 {
 		return nil, nil
 	}
 
@@ -106,7 +124,7 @@ func Materialize(
 
 	if err := os.WriteFile(
 		filepath.Join(tmp, "main.go"),
-		[]byte(harness(cats, refs)),
+		[]byte(harness(plan)),
 		0o644,
 	); err != nil {
 		return nil, fmt.Errorf("writing harness: %w", err)
@@ -125,6 +143,7 @@ func Materialize(
 	if err := yaml.Unmarshal(stdout.Bytes(), &out); err != nil {
 		return nil, fmt.Errorf("decoding harness output: %w", err)
 	}
+	reportMappingWarnings(os.Stderr, out.Warnings)
 	var docs []*spec.AsyncAPI
 	var catErrs CatalogErrors
 	for _, c := range out.Catalogs {
@@ -144,11 +163,32 @@ func Materialize(
 	return docs, nil
 }
 
+// reportMappingWarnings writes one diagnostic line per mapping that was
+// registered but never consulted, so a typo'd fully-qualified name in
+// asyncgo.yaml — or an API mapping declared in a package the harness never
+// imports — is visible in generate/check output instead of silently ignored.
+//
+// It goes to stderr, like the harness-cleanup diagnostic: stdout carries the
+// artifact messages, and a warning must not fail the run. w is a parameter so the
+// formatting is testable without capturing the process's stderr.
+func reportMappingWarnings(w io.Writer, warnings []string) {
+	for _, fqn := range warnings {
+		// Best-effort: a writer that fails cannot be reported to itself, and the
+		// document was materialized either way.
+		_, _ = fmt.Fprintf(
+			w,
+			"asyncgo: schema mapping for %s was never used: no derived type matched that name\n",
+			fqn,
+		)
+	}
+}
+
 // harness generates a main package that imports the catalog and referenced
-// packages, registers the combinator-referenced types, finalizes each catalog
-// (hoisting those types into components.schemas), and encodes each catalog
-// value as a YAML sequence on stdout.
-func harness(cats []Catalog, refs []combinatorRef) string {
+// packages, registers the config's schema mappings and the discovered alias
+// edges, registers the combinator-referenced types, finalizes each catalog
+// (hoisting those types into components.schemas), and encodes each catalog value
+// as a YAML sequence on stdout.
+func harness(plan Plan) string {
 	alias := map[string]string{} // pkg path -> import alias
 	var imports []struct{ alias, path string }
 	addImport := func(path string) string {
@@ -162,8 +202,8 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	}
 
 	type catalogEntry struct{ alias, varName, pkgPath string }
-	catEntries := make([]catalogEntry, 0, len(cats))
-	for _, c := range cats {
+	catEntries := make([]catalogEntry, 0, len(plan.Catalogs))
+	for _, c := range plan.Catalogs {
 		catEntries = append(catEntries, catalogEntry{addImport(c.PkgPath), c.VarName, c.PkgPath})
 	}
 
@@ -179,7 +219,7 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	}
 	var regGroups []regGroup
 	regIndex := map[string]int{}
-	for _, r := range refs {
+	for _, r := range plan.Refs {
 		idx, ok := regIndex[r.ImportPath]
 		if !ok {
 			idx = len(regGroups)
@@ -204,6 +244,7 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	b.WriteString(")\n\n")
 	b.WriteString("type harnessOutput struct {\n")
 	b.WriteString("\tCatalogs []catalogOutcome `yaml:\"catalogs\"`\n")
+	b.WriteString("\tWarnings []string       `yaml:\"warnings,omitempty\"`\n")
 	b.WriteString("}\n\n")
 	b.WriteString("type catalogOutcome struct {\n")
 	b.WriteString("\tPkgPath string         `yaml:\"pkgPath\"`\n")
@@ -212,6 +253,22 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	b.WriteString("\tErrors  []string       `yaml:\"errors,omitempty\"`\n")
 	b.WriteString("}\n\n")
 	b.WriteString("func main() {\n")
+
+	// Mappings register before the catalog values are touched: registration is
+	// the harness's stand-in for the project's init()-time API mappings, and
+	// config emissions run here in main() so they override both a built-in and an
+	// API mapping for the same name (last registration wins).
+	for _, m := range plan.Mappings {
+		fmt.Fprintf(
+			&b,
+			"\tif err := schema.MapSchemaJSON(%q, %q); err != nil {\n\t\tpanic(err)\n\t}\n",
+			m.FQN,
+			m.Schema,
+		)
+	}
+	for _, a := range plan.Aliases {
+		fmt.Fprintf(&b, "\tschema.MapAlias(%q, %q)\n", a.Alias, a.Base)
+	}
 
 	if len(regGroups) > 0 {
 		b.WriteString("\tschema.Register(\n")
@@ -247,6 +304,7 @@ func harness(cats []Catalog, refs []combinatorRef) string {
 	b.WriteString(
 		"\tfor _, c := range out.Catalogs {\n\t\tif c.Doc != nil {\n\t\t\tschema.Finalize(c.Doc)\n\t\t}\n\t}\n",
 	)
+	b.WriteString("\tout.Warnings = schema.MappingWarnings()\n")
 	b.WriteString(
 		"\toutBytes, err := yaml.Marshal(out)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tif _, err := os.Stdout.Write(outBytes); err != nil {\n\t\tpanic(err)\n\t}\n}\n",
 	)

@@ -50,6 +50,7 @@ var fixtures = []string{
 	"bindings",
 	"bindings-unlisted",
 	"bytes",
+	"mappings",
 }
 
 // cliUnsupported lists the fixtures the pinned AsyncAPI CLI cannot validate, with
@@ -87,7 +88,7 @@ func TestAsyncGoGenerate(t *testing.T) {
 			dir, err := filepath.Abs(filepath.Join("..", "data", name))
 			require.NoError(t, err)
 
-			doc, _, err := discovery.Build(t.Context(), dir)
+			doc, _, err := discovery.Build(t.Context(), dir, "")
 			require.NoError(t, err)
 
 			got, err := doc.YAML()

@@ -68,7 +68,7 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 }
 
 func newGenerateCmd() *cobra.Command {
-	var output, format string
+	var output, format, config string
 	cmd := &cobra.Command{
 		Use:   "generate [dir]",
 		Short: "Write asyncapi.yaml or asyncapi.json for the module rooted at dir",
@@ -84,7 +84,7 @@ func newGenerateCmd() *cobra.Command {
 				return fmt.Errorf("generating: %w", err)
 			}
 
-			doc, n, err := buildDoc(cmd, dir, "generating")
+			doc, n, err := buildDoc(cmd, dir, config, "generating")
 			if err != nil {
 				return err
 			}
@@ -107,5 +107,7 @@ func newGenerateCmd() *cobra.Command {
 		StringVar(&format, "format", "yaml", "output format: yaml or json")
 	cmd.Flags().
 		StringVarP(&output, "output", "o", "", "output file or directory (default: <dir>/asyncapi.<format>)")
+	cmd.Flags().
+		StringVar(&config, "config", "", "schema-mapping config file (default: <dir>/asyncgo.yaml)")
 	return cmd
 }

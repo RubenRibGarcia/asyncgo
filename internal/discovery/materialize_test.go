@@ -7,14 +7,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/RubenRibGarcia/asyncgo/internal/mappingconfig"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMaterializeEmptyCatalogs(t *testing.T) {
-	docs, err := Materialize(t.Context(), ".", nil, nil)
+	docs, err := Materialize(t.Context(), ".", Plan{})
 	require.NoError(t, err)
 	assert.Nil(t, docs)
 }
@@ -34,7 +36,7 @@ func TestMaterializeStopsOnCancelledContext(t *testing.T) {
 		VarName: "Catalog",
 	}}
 
-	docs, err := Materialize(ctx, dir, cats, nil)
+	docs, err := Materialize(ctx, dir, Plan{Catalogs: cats})
 	require.Error(t, err)
 	assert.Nil(t, docs)
 	assert.ErrorIs(t, err, context.Canceled)
@@ -42,7 +44,7 @@ func TestMaterializeStopsOnCancelledContext(t *testing.T) {
 
 func TestMaterializeMkdirTempError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
-	_, err := Materialize(t.Context(), dir, []Catalog{{PkgPath: "p", VarName: "V"}}, nil)
+	_, err := Materialize(t.Context(), dir, Plan{Catalogs: []Catalog{{PkgPath: "p", VarName: "V"}}})
 	require.Error(t, err)
 }
 
@@ -60,7 +62,7 @@ func TestMaterializeWrapsHarnessError(t *testing.T) {
 		VarName: "NoSuchCatalog",
 	}}
 
-	docs, err := Materialize(t.Context(), dir, cats, nil)
+	docs, err := Materialize(t.Context(), dir, Plan{Catalogs: cats})
 	require.Error(t, err)
 	assert.Nil(t, docs)
 
@@ -71,11 +73,13 @@ func TestMaterializeWrapsHarnessError(t *testing.T) {
 
 func TestHarness(t *testing.T) {
 	t.Run("should_emit_finalize_and_marshal_without_register", func(t *testing.T) {
-		src := harness(nil, nil)
+		src := harness(Plan{})
 		assert.Contains(t, src, "package main")
 		assert.Contains(t, src, "schema.Finalize")
 		assert.Contains(t, src, "yaml.Marshal")
 		assert.NotContains(t, src, "schema.Register")
+		assert.NotContains(t, src, "schema.MapSchemaJSON")
+		assert.NotContains(t, src, "schema.MapAlias")
 	})
 
 	t.Run("should_emit_imports_and_register_for_cats_and_refs", func(t *testing.T) {
@@ -88,7 +92,7 @@ func TestHarness(t *testing.T) {
 			{ImportPath: "example.com/c", TypeName: "T2"},
 			{ImportPath: "example.com/d", TypeName: "U1"},
 		}
-		src := harness(cats, refs)
+		src := harness(Plan{Catalogs: cats, Refs: refs})
 
 		assert.Contains(t, src, "schema.Register")
 		assert.Contains(t, src, `pkg0 "example.com/a"`)
@@ -106,6 +110,41 @@ func TestHarness(t *testing.T) {
 		assert.Contains(t, src, "pkg0.Cat.Doc")
 		assert.Contains(t, src, "pkg1.Cat2.ValidationErrors()")
 		assert.Contains(t, src, "pkg1.Cat2.Doc")
+	})
+
+	t.Run("should_emit_mappings_and_aliases_before_register", func(t *testing.T) {
+		src := harness(Plan{
+			Catalogs: []Catalog{{PkgPath: "example.com/a", VarName: "Cat"}},
+			Refs:     []combinatorRef{{ImportPath: "example.com/c", TypeName: "T1"}},
+			Mappings: []mappingconfig.Mapping{
+				{FQN: "example.com/x.UUID", Schema: `{"type":"string","format":"uuid"}`},
+				{FQN: "example.com/x.Qty", Schema: `{"minimum":1,"type":"integer"}`},
+			},
+			Aliases: []aliasEdge{
+				{Alias: "example.com/a.OrderID", Base: "example.com/x.UUID"},
+			},
+		})
+
+		assert.Contains(
+			t,
+			src,
+			`if err := schema.MapSchemaJSON("example.com/x.UUID", "{\"type\":\"string\",\"format\":\"uuid\"}"); err != nil {`,
+		)
+		assert.Contains(t, src,
+			`schema.MapSchemaJSON("example.com/x.Qty", "{\"minimum\":1,\"type\":\"integer\"}")`)
+		assert.Contains(t, src, `schema.MapAlias("example.com/a.OrderID", "example.com/x.UUID")`)
+
+		// Config mappings and alias edges have to run before Register/Finalize, or
+		// the registered types would derive before the mapping exists.
+		assert.Less(t, strings.Index(src, "schema.MapSchemaJSON"),
+			strings.Index(src, "schema.MapAlias"))
+		assert.Less(t, strings.Index(src, "schema.MapAlias"),
+			strings.Index(src, "schema.Register"))
+	})
+
+	t.Run("should_report_mapping_warnings", func(t *testing.T) {
+		src := harness(Plan{})
+		assert.Contains(t, src, "out.Warnings = schema.MappingWarnings()")
 	})
 }
 
@@ -154,7 +193,7 @@ func TestCatalogErrorsError(t *testing.T) {
 // failing. The test asserts the emitted source carries the exact tag lines the
 // decoder expects.
 func TestHarnessTagsMatchTheDecoder(t *testing.T) {
-	src := harness(nil, nil)
+	src := harness(Plan{})
 
 	tests := []struct {
 		name string
@@ -165,6 +204,7 @@ func TestHarnessTagsMatchTheDecoder(t *testing.T) {
 		{"varName", "VarName string         `yaml:\"varName\"`"},
 		{"doc", "Doc     *spec.AsyncAPI `yaml:\"doc,omitempty\"`"},
 		{"errors", "Errors  []string       `yaml:\"errors,omitempty\"`"},
+		{"warnings", "Warnings []string       `yaml:\"warnings,omitempty\"`"},
 	}
 	for _, tc := range tests {
 		t.Run("should_emit_the_"+tc.name+"_tag", func(t *testing.T) {
@@ -196,6 +236,35 @@ func TestRemoveHarnessDir(t *testing.T) {
 		assert.Equal(
 			t,
 			"asyncgo: removing harness directory /tmp/harness: device busy\n",
+			out.String(),
+		)
+	})
+}
+
+// TestReportMappingWarnings pins where an unused mapping surfaces and how: one
+// line per mapping on the diagnostics writer, so a typo'd
+// fully-qualified name in asyncgo.yaml is visible in generate/check output without
+// failing the run.
+func TestReportMappingWarnings(t *testing.T) {
+	t.Run("should_stay_silent_when_nothing_was_left_unused", func(t *testing.T) {
+		var out bytes.Buffer
+
+		reportMappingWarnings(&out, nil)
+
+		assert.Empty(t, out.String())
+	})
+
+	t.Run("should_report_one_line_per_unused_mapping", func(t *testing.T) {
+		var out bytes.Buffer
+
+		reportMappingWarnings(&out, []string{"example.com/a.One", "example.com/b.Two"})
+
+		assert.Equal(
+			t,
+			"asyncgo: schema mapping for example.com/a.One was never used: "+
+				"no derived type matched that name\n"+
+				"asyncgo: schema mapping for example.com/b.Two was never used: "+
+				"no derived type matched that name\n",
 			out.String(),
 		)
 	})

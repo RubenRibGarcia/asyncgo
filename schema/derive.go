@@ -40,17 +40,20 @@
 //     type's fully-qualified name as-is. Non-struct kinds are hoisted only when
 //     they carry a provider, so a plain `type ID string` stays inline.
 //   - Byte slices are base64 strings by kind, so a named `type Raw []byte`
-//     derives the same way []byte does. Only the exact time.Time maps to
-//     date-time: a type defined from time.Time is an ordinary named struct
-//     whose fields are all unexported, so it derives as an empty object unless
-//     it implements spec.SchemaProvider.
+//     derives the same way []byte does.
+//   - Declared mappings override derivation by exact type name: a mapping
+//     registered with MapSchema/MapSchemaByName (or picked up from asyncgo.yaml,
+//     or shipped built-in for a third-party type) replaces both the provider path
+//     and kind derivation for that type, and the mapped schema is inlined at every
+//     use site. time.Time derives date-time through exactly this path. A derived
+//     alias (`type OrderID uuid.UUID`) inherits the base type's mapping unless it
+//     declares its own, and a type's own provider outranks an inherited mapping.
 package schema
 
 import (
 	"encoding/json"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
 	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
@@ -58,7 +61,6 @@ import (
 )
 
 var (
-	timeType           = reflect.TypeFor[time.Time]()
 	rawMessageType     = reflect.TypeFor[json.RawMessage]()
 	schemaProviderType = reflect.TypeFor[spec.SchemaProvider]()
 )
@@ -109,6 +111,13 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	}
 	t = deref(t)
 
+	// A declared mapping outranks everything below it: the document's author is
+	// overriding both the type's own suggested default (its provider) and its Go
+	// kind. The returned node is already a copy, so use sites cannot share it.
+	if m := exactMapping(t); m != nil {
+		return m
+	}
+
 	// A named non-struct provider opts into the same hoisting named structs get,
 	// so a scalar or collection can carry a reusable constraint. Struct
 	// providers are intercepted in hoistStruct instead. Interface kinds are
@@ -124,9 +133,16 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 		}
 	}
 
+	// An inherited mapping — the aliases of D8 — ranks below a provider, so a
+	// mapped struct alias consults it inside hoistStruct, after that provider
+	// check. Every other kind has no provider left to consult and resolves here.
+	if t.Kind() != reflect.Struct {
+		if m := mappingFor(t); m != nil {
+			return m
+		}
+	}
+
 	switch t {
-	case timeType:
-		return &spec.Schema{Type: "string", Format: "date-time"}
 	case rawMessageType:
 		return &spec.Schema{}
 	}
@@ -233,6 +249,14 @@ func hoistStruct(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	// discarded rather than filled.
 	if custom := providerSchema(t); custom != nil {
 		defs[Name(t)] = custom
+		return spec.Ref(Ref(t))
+	}
+
+	// A mapping inherited through the alias chain (D8) ranks below the provider
+	// just checked and above field derivation: `type Money2 SomeMappedStruct`
+	// derives SomeMappedStruct's mapping under its own name.
+	if m := mappingFor(t); m != nil {
+		defs[Name(t)] = m
 		return spec.Ref(Ref(t))
 	}
 
