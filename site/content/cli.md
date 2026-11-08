@@ -14,6 +14,15 @@ committed document no longer matches your code, and `version` / `completion` /
 
 `--help` works on every command, and `--version` on the root.
 
+!!! note "Invoking the CLI"
+
+    The examples on this page call the bare `asyncgo` binary installed with
+    `go install`. If you pinned the CLI as a module tool, prefix every command
+    with `go tool` — `go tool asyncgo generate .` — and apply the same prefix to
+    the transcripts below. Flags, exit codes and output are identical.
+    [Getting started](getting-started.md#alternative-pin-the-cli-as-a-module-tool)
+    has the setup.
+
 ## `asyncgo generate`
 
 ```console

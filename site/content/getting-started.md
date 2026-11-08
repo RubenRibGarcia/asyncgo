@@ -29,6 +29,35 @@ not that something is broken.
     on every version tag and attaches them to the GitHub release. Until the first
     version is tagged, use `go install` as above.
 
+### Alternative: pin the CLI as a module tool
+
+If your module's `go.mod` declares `go 1.24` or newer, you can skip the `PATH`
+step and let Go manage the CLI instead:
+
+```bash
+go get -tool github.com/RubenRibGarcia/asyncgo/cmd/asyncgo@latest
+```
+
+That adds a `tool` directive to your `go.mod`:
+
+```go
+tool github.com/RubenRibGarcia/asyncgo/cmd/asyncgo
+```
+
+Commit `go.mod` and `go.sum`, then invoke the CLI through the directive — note the
+`go tool` prefix on every command:
+
+```bash
+$ go tool asyncgo version
+asyncgo v0.0.0-20261108234906-108b5f3370eb (built unknown)
+```
+
+Unlike a `go install` binary, the tool build reports the pinned module version
+rather than `devel`. The trade-offs: the version is reviewed and updated in
+`go.mod` like any other dependency (no separate upgrade step, no `PATH` setup),
+and CI runs the exact same version without fetching `@latest` at build time.
+In exchange, the CLI becomes a module dependency of your module.
+
 ## 2. Declare a catalog
 
 Add a file to your module that declares a catalog — a package-level variable of
@@ -82,6 +111,8 @@ From the module root:
 
 ```bash
 asyncgo generate .
+# or, if you installed via the tool directive:
+go tool asyncgo generate .
 ```
 
 ```console
@@ -101,6 +132,8 @@ exactly the file `generate` would have written.
 
 ```bash
 asyncgo check .
+# or, if you installed via the tool directive:
+go tool asyncgo check .
 ```
 
 ```console
@@ -118,7 +151,12 @@ the full table and the shell idiom for branching on it.
 ```
 
 Pin a released version (`@v0.1.0`) once one is published rather than tracking
-`@latest`.
+`@latest`. With a committed `tool` directive, the same step resolves the version
+from your `go.mod` — no `@latest` lookup, no version pin:
+
+```yaml
+- run: go tool asyncgo check .
+```
 
 `-v` narrates what the command did — useful when the check says *stale* and you
 want to know which settings it used; `-vv` adds per-package detail and a timing
