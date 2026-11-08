@@ -92,17 +92,10 @@ wrote /home/you/orders/asyncapi.yaml (1 catalog(s))
 Commit the result. It is the artifact — reviewed in pull requests like any other
 code, and diffed by `asyncgo check` like any other generated file.
 
-| Flag | Effect |
-| --- | --- |
-| `[dir]` | Module root to load. Defaults to `.` |
-| `--format` `yaml`\|`json` | Encoding of the output. Defaults to `yaml` |
-| `-o`, `--output` | Output file, or an existing directory (trailing slash) to write `asyncapi.<format>` into |
-| `--config` | Schema-mapping file. Defaults to `<dir>/asyncgo.yaml` |
-
-`-o` names the destination, `--format` picks the encoding: `-o spec.yaml --format json`
-writes JSON to `spec.yaml`. Pass the **same** `--format`, `--output` and `--config`
-flags to `check` that you pass to `generate` — it compares against exactly the file
-`generate` would have written.
+The full flag list — `--format`, `-o`/`--output`, `--config` — is on [CLI](cli.md).
+One rule matters here: pass the **same** `--format`, `--output` and `--config`
+flags to `check` that you pass to `generate`, because `check` compares against
+exactly the file `generate` would have written.
 
 ## 4. Fail CI when the artifact is stale
 
@@ -115,18 +108,10 @@ $ asyncgo check .
 /home/you/orders/asyncapi.yaml is up to date
 ```
 
-The exit code is the contract:
-
-| Code | Meaning |
-| --- | --- |
-| `0` | The committed artifact is up to date |
-| `1` | The check could not run — a catalog build error, a missing artifact, an I/O failure |
-| `2` | Usage error — an unknown flag, too many arguments (Cobra's own convention) |
-| `3` | The artifact is out of date — regenerate it |
-
-Splitting `1` from `3` is the point: a stale document means "run
-`asyncgo generate .`", a non-zero `1` means "your catalog does not build". A
-workflow can tell the two apart:
+The exit code is the contract: `check` exits **3** when the artifact is stale and
+**1** when the check could not run at all, so CI can tell "regenerate the committed
+document" from "the build is broken". The [CLI reference](cli.md#asyncgo-check) has
+the full table and the shell idiom for branching on it.
 
 ```yaml
 - run: go run github.com/RubenRibGarcia/asyncgo/cmd/asyncgo@latest check .
@@ -135,31 +120,17 @@ workflow can tell the two apart:
 Pin a released version (`@v0.1.0`) once one is published rather than tracking
 `@latest`.
 
-`-v` explains what the command did — useful when the check says *stale* and you
-want to know which settings it used:
-
-```console
-$ asyncgo generate . -v
-asyncgo: +0.000s config: no asyncgo.yaml found, using built-in mappings only
-asyncgo: +0.000s load: loading packages in /home/you/orders...
-asyncgo: +0.120s load: 2 packages, 1 main package in 119.433ms
-asyncgo: +0.120s catalogs: 1 catalog found in 15µs
-asyncgo: +0.120s harness: materializing 1 catalog...
-asyncgo: +0.370s harness: 1 catalog valid, 0 errors in 250.55ms
-asyncgo: +0.371s merge: 1 channel, 1 server, 1 schema, 0 collisions in 41µs
-asyncgo: +0.371s encode: yaml, 930 B in 768µs
-asyncgo: +0.372s write: /home/you/orders/asyncapi.yaml in 211µs
-wrote /home/you/orders/asyncapi.yaml (1 catalog(s))
-```
-
-`-vv` adds per-package and per-field detail.
+`-v` narrates what the command did — useful when the check says *stale* and you
+want to know which settings it used; `-vv` adds per-package detail and a timing
+recap. [CLI](cli.md#verbose-logging) has the transcripts.
 
 ## Next
 
-- **[Schema derivation rules](https://github.com/RubenRibGarcia/asyncgo#schema-derivation-rules)**
-  — how Go types, `json` tags and `asyncapi` tags become schema.
-- **[Protocol bindings](https://github.com/RubenRibGarcia/asyncgo#protocol-bindings)**
-  — the typed binding builders, protocol by protocol.
-- **[Custom schema providers](https://github.com/RubenRibGarcia/asyncgo#custom-schema-providers)**
-  and **[third-party types](https://github.com/RubenRibGarcia/asyncgo#third-party-types-and-declared-mappings)**
-  — teaching `asyncgo` about types it cannot derive.
+- **[Concepts](concepts.md)** — the two touchpoints in detail, message identity,
+  channel parameters, servers on a channel.
+- **[Schema derivation](schema.md)** — how Go types, `json` tags and `asyncapi`
+  tags become schema, and the `allOf`/`oneOf`/`anyOf` composition.
+- **[Protocol bindings](bindings.md)** — the typed binding builders, protocol by
+  protocol.
+- **[Custom types](custom-types.md)** — teaching `asyncgo` about types it cannot
+  derive.

@@ -36,6 +36,15 @@ Thumbs.db
 site/build/
 site/.venv/
 
+# The Project section is assembled from docs/ at build time (site/hooks/assemble.py)
+site/content/project/adr/
+site/content/project/designdoc/
+site/content/project/asyncapi-3.1.0-coverage.md
+
+# Python bytecode from the site build hook
+__pycache__/
+*.pyc
+
 # local agent scratch
 .tmp/
 

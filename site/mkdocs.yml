@@ -53,6 +53,30 @@ theme:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Guide:
+      - Concepts: concepts.md
+      - Schema derivation: schema.md
+      - Custom types: custom-types.md
+      - Protocol bindings: bindings.md
+      - Features: features.md
+  - CLI: cli.md
+  - Reference: reference/index.md
+  - Project:
+      - Overview: project/index.md
+      - AsyncAPI 3.1.0 coverage: project/asyncapi-3.1.0-coverage.md
+      # The two entries below are placeholders: hooks/assemble.py copies the
+      # ADRs, design docs and coverage matrix out of docs/ and replaces each
+      # with one nav entry per file, so adding a record needs no edit here.
+      - ADRs: project/adr/README.md
+      - Design docs: project/designdoc/README.md
+
+hooks:
+  - hooks/assemble.py
+
+# Rebuild when the development-process records change (watch paths are relative
+# to this file).
+watch:
+  - ../docs
 
 plugins:
   - search

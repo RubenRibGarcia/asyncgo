@@ -115,7 +115,7 @@ once, however many places reference it.
 
 <div class="grid cards" markdown>
 
--   **Schema derivation**
+-   **[Schema derivation](schema.md)**
 
     ---
 
@@ -123,28 +123,28 @@ once, however many places reference it.
     `format`, `contentEncoding`, `oneOf`/`anyOf`, and the draft-07 keywords —
     derived, not hand-written.
 
--   **20 protocol bindings**
+-   **[20 protocol bindings](bindings.md)**
 
     ---
 
     Typed builders for every protocol in the 3.1.0 spec's binding set, from
     Kafka to WebSockets. Unknown keys are a compile error, not a typo in YAML.
 
--   **Request/reply, traits, security**
+-   **[Request/reply, traits, security](features.md)**
 
     ---
 
     Reply channels and addresses, reusable operation and message traits, and
     security schemes with typed requirement objects.
 
--   **Multi-format schemas**
+-   **[Multi-format schemas](features.md#multi-format-schemas-avro-protobuf)**
 
     ---
 
     Avro and Protobuf schema objects alongside JSON Schema, for the payloads
     that are not JSON.
 
--   **`asyncgo check` for CI**
+-   **[`asyncgo check` for CI](cli.md#asyncgo-check)**
 
     ---
 
@@ -152,7 +152,7 @@ once, however many places reference it.
     dedicated exit code for a stale artifact — so "regenerate the spec" is a
     distinct failure from "the build is broken".
 
--   **Third-party types**
+-   **[Third-party types](custom-types.md#third-party-types-and-declared-mappings)**
 
     ---
 
@@ -166,6 +166,7 @@ once, however many places reference it.
 
 - **[Getting started](getting-started.md)** — install the CLI, declare a catalog,
   generate, and wire `asyncgo check` into CI.
-- **[The README](https://github.com/RubenRibGarcia/asyncgo#readme)** — the full
-  reference today: bindings, traits, providers, and the derivation rules. It is
-  being migrated into this site page by page.
+- **[Concepts](concepts.md)** — message identity, channel parameters, and the
+  pieces the catalog is built from.
+- **[Project](project/index.md)** — the ADRs and design docs behind these
+  decisions, plus the AsyncAPI 3.1.0 [coverage assessment](project/asyncapi-3.1.0-coverage.md).
