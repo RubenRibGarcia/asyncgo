@@ -156,6 +156,28 @@ This process applies to major features and big changes. Small, routine changes
 (e.g. bug fixes, minor refactors) don't require a design doc or ADR — use
 judgment, and refer to the canonical files above when unsure.
 
+### Keep the site in sync with the public API
+
+The project site at https://rubenribgarcia.github.io/asyncgo/ (sources in
+`site/content/`, built by `.github/workflows/docs.yml`) *is* public
+interface documentation. Whenever the public interface changes — exported
+symbols in the root `asyncgo` package or in `spec/`, CLI commands and flags, or
+the generated AsyncAPI output — check the site and bring it up to date in the
+same change:
+
+- Update the affected pages: `getting-started.md`, `concepts.md`, `schema.md`,
+  `custom-types.md`, `bindings.md`, `features.md`, `cli.md`, and the
+  `reference/index.md` symbol index.
+- A new page must also be added to `nav:` in `site/mkdocs.yml`;
+  `mkdocs build --strict` fails on a page missing from the nav.
+- ADRs and design docs need no site edit: `site/hooks/assemble.py` copies
+  `docs/` into the Project section on every build.
+- Verify with `make site-build` — exactly what CI runs. The docs workflow
+  builds on every pull request touching `site/**` or `docs/**` and only deploys
+  from `master`.
+
+A merged public-API change with stale site pages is an incomplete change.
+
 ## Release
 
 Releases follow [semantic versioning](https://semver.org/). A release is made
