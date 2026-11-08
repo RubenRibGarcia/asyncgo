@@ -42,18 +42,55 @@ func TestResolveVersion(t *testing.T) {
 }
 
 func TestFormatVersion(t *testing.T) {
-	t.Run("should_return_bare_version", func(t *testing.T) {
-		assert.Equal(t, "v1.2.3", formatVersion(BuildInfo{Version: "v1.2.3"}))
-	})
+	tests := []struct {
+		name string
+		info BuildInfo
+		want string
+	}{
+		{
+			name: "should_return_bare_version",
+			info: BuildInfo{Version: "v1.2.3"},
+			want: "v1.2.3",
+		},
+		{
+			name: "should_append_commit_and_date",
+			info: BuildInfo{
+				Version: "v1.2.3",
+				Commit:  "abc1234",
+				Date:    "2026-08-18T00:00:00Z",
+			},
+			want: "v1.2.3 (commit abc1234, built 2026-08-18T00:00:00Z)",
+		},
+		{
+			// A build that stamps the commit but not the date must not render
+			// "built " with nothing after it.
+			name: "should_omit_an_empty_date",
+			info: BuildInfo{Version: "v1.2.3", Commit: "abc1234"},
+			want: "v1.2.3 (commit abc1234)",
+		},
+		{
+			name: "should_omit_an_empty_commit",
+			info: BuildInfo{Version: "v1.2.3", Date: "2026-08-18T00:00:00Z"},
+			want: "v1.2.3 (built 2026-08-18T00:00:00Z)",
+		},
+		{
+			// "unknown" is the toolchain's placeholder for "not injected".
+			name: "should_treat_an_unknown_commit_as_absent",
+			info: BuildInfo{Version: "v1.2.3", Commit: "unknown", Date: "2026-08-18T00:00:00Z"},
+			want: "v1.2.3 (built 2026-08-18T00:00:00Z)",
+		},
+		{
+			name: "should_fall_back_to_devel_for_an_untagged_build",
+			info: BuildInfo{},
+			want: "devel",
+		},
+	}
 
-	t.Run("should_append_commit_and_date", func(t *testing.T) {
-		got := formatVersion(BuildInfo{
-			Version: "v1.2.3",
-			Commit:  "abc1234",
-			Date:    "2026-08-18T00:00:00Z",
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, formatVersion(tc.info))
 		})
-		assert.Equal(t, "v1.2.3 (commit abc1234, built 2026-08-18T00:00:00Z)", got)
-	})
+	}
 }
 
 func TestExecute(t *testing.T) {
