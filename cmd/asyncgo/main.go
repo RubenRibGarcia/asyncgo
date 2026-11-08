@@ -23,6 +23,7 @@ func main() {
 	bi := cli.BuildInfo{Version: version, Commit: commit, Date: date}
 	if err := cli.Execute(os.Args[1:], bi); err != nil {
 		fmt.Fprintln(os.Stderr, "asyncgo:", err)
-		os.Exit(1)
+		// 0 success, 1 failure, 2 usage (Cobra), 3 out of date — see cli.ExitCode.
+		os.Exit(cli.ExitCode(err))
 	}
 }

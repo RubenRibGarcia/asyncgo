@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -678,6 +680,66 @@ func copyFixture(t *testing.T, name string) string {
 	}
 
 	return dst
+}
+
+// TestExitCode pins the process exit status each outcome maps to. CI tells "the
+// artifact is stale" from "the build is broken" by this number, so the mapping is
+// part of the CLI contract: 0 success, 1 failure, 3 out of date, with 2 already
+// claimed by Cobra for usage errors.
+func TestExitCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "should_return_zero_for_success", want: 0},
+		{
+			name: "should_return_three_for_an_out_of_date_artifact",
+			err:  fmt.Errorf("%s: %w; run generate", "asyncapi.yaml", ErrOutOfDate),
+			want: 3,
+		},
+		{
+			// Wrapped twice: errors.Is has to survive the layers a command adds.
+			name: "should_return_three_for_a_wrapped_out_of_date_error",
+			err:  fmt.Errorf("checking: %w", fmt.Errorf("%s: %w", "asyncapi.yaml", ErrOutOfDate)),
+			want: 3,
+		},
+		{name: "should_return_one_for_any_other_error", err: errors.New("boom"), want: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, ExitCode(tc.err))
+		})
+	}
+}
+
+// TestCheckOutOfDateSentinel pins that a stale artifact is reported as
+// ErrOutOfDate rather than as a plain error, which is what makes the exit code
+// above reachable from the command.
+func TestCheckOutOfDateSentinel(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+	require.NoError(t, execute1(t, "generate", dir))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, "asyncapi.yaml"),
+		[]byte("asyncapi: 0.0.0\n"),
+		0o644,
+	))
+
+	_, _, err := execute(t, BuildInfo{}, "check", dir)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrOutOfDate)
+	assert.Equal(t, 3, ExitCode(err))
+}
+
+// execute1 runs a command that must succeed, for tests that need a generated
+// artifact before the assertion they care about.
+func execute1(t *testing.T, args ...string) error {
+	t.Helper()
+	_, _, err := execute(t, BuildInfo{}, args...)
+	return err
 }
 
 // TestWriteFileAtomic pins what the artifact write guarantees: the target is

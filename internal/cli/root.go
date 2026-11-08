@@ -25,6 +25,22 @@ func Execute(args []string, bi BuildInfo) error {
 	return root.Execute()
 }
 
+// ExitCode maps a command error to the process exit status. Zero is success, 1 is
+// any failure the command could not classify, and ErrOutOfDate is 3 — a stale
+// artifact is a different outcome from a broken one, and CI needs to tell them
+// apart. Cobra has already claimed 2 for usage errors (an unknown flag, too many
+// arguments), so the codes stay disjoint.
+func ExitCode(err error) int {
+	switch {
+	case err == nil:
+		return 0
+	case errors.Is(err, ErrOutOfDate):
+		return 3
+	default:
+		return 1
+	}
+}
+
 func newRootCmd(bi BuildInfo) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "asyncgo",
