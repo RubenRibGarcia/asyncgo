@@ -18,17 +18,16 @@ import (
 // field name -> doc-comment text.
 type descriptions map[string]map[string]string
 
-// extractDescriptions walks the reachable packages' syntax and collects the doc
+// extractDescriptions walks the scannable packages' syntax and collects the doc
 // comment of every exported struct field, keyed by the same schema name and
 // JSON field name the reflection-based derivation emits. It mirrors
 // schema.fillObject's field rules: unexported fields and json:"-" are skipped,
 // json tags drive the field name, and anonymous embedded structs are flattened
 // into their parent.
-func extractDescriptions(pkgs []*packages.Package, reachable map[string]bool) descriptions {
+func extractDescriptions(pkgs []*packages.Package) descriptions {
 	named := map[*types.TypeName]*ast.StructType{}
 	walkStructTypes(
 		pkgs,
-		reachable,
 		func(pkg *packages.Package, ts *ast.TypeSpec, st *ast.StructType) {
 			if obj := pkg.TypesInfo.Defs[ts.Name]; obj != nil {
 				if tn, ok := obj.(*types.TypeName); ok {
@@ -41,7 +40,6 @@ func extractDescriptions(pkgs []*packages.Package, reachable map[string]bool) de
 	out := descriptions{}
 	walkStructTypes(
 		pkgs,
-		reachable,
 		func(pkg *packages.Package, ts *ast.TypeSpec, st *ast.StructType) {
 			obj := pkg.TypesInfo.Defs[ts.Name]
 			tn, ok := obj.(*types.TypeName)
@@ -54,15 +52,14 @@ func extractDescriptions(pkgs []*packages.Package, reachable map[string]bool) de
 	return out
 }
 
-// walkStructTypes calls fn for every named struct type declared in a reachable
+// walkStructTypes calls fn for every named struct type declared in a scannable
 // package.
 func walkStructTypes(
 	pkgs []*packages.Package,
-	reachable map[string]bool,
 	fn func(pkg *packages.Package, ts *ast.TypeSpec, st *ast.StructType),
 ) {
 	for _, pkg := range pkgs {
-		if !reachable[pkg.ID] {
+		if !scannable(pkg) {
 			continue
 		}
 		for _, file := range pkg.Syntax {

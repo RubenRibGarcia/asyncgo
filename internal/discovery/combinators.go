@@ -24,7 +24,7 @@ type combinatorRef struct {
 // combinatorKeys are the tag directives that name combinator member types.
 var combinatorKeys = []string{"oneOf", "anyOf", "allOf"}
 
-// collectCombinatorRefs walks the reachable structs and collects the named
+// collectCombinatorRefs walks the scannable structs and collects the named
 // types referenced by combinator directives, applying the same name-resolution
 // rule as schema.refs: a name containing "/" is a fully-qualified name
 // (pkgPath.TypeName); otherwise it is resolved against the declaring package.
@@ -33,15 +33,11 @@ var combinatorKeys = []string{"oneOf", "anyOf", "allOf"}
 // A reference the generated harness cannot emit as `new(alias.TypeName)` is an
 // error naming the offending tag, rather than a Go syntax error surfacing as an
 // opaque `exit status 1` from the harness build.
-func collectCombinatorRefs(
-	pkgs []*packages.Package,
-	reachable map[string]bool,
-) ([]combinatorRef, error) {
+func collectCombinatorRefs(pkgs []*packages.Package) ([]combinatorRef, error) {
 	seen := map[combinatorRef]bool{}
 	var refErr error
 	walkStructTypes(
 		pkgs,
-		reachable,
 		func(pkg *packages.Package, _ *ast.TypeSpec, st *ast.StructType) {
 			for _, field := range st.Fields.List {
 				if field.Tag == nil || refErr != nil {

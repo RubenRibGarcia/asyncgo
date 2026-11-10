@@ -89,7 +89,7 @@ func TestCollectCombinatorRefs(t *testing.T) {
 		pkgs, err := load(t.Context(), dir)
 		require.NoError(t, err)
 
-		refs, err := collectCombinatorRefs(pkgs, reachableFromMain(pkgs))
+		refs, err := collectCombinatorRefs(pkgs)
 		require.NoError(t, err)
 
 		const pkg = "github.com/RubenRibGarcia/asyncgo/test/data/oneof"

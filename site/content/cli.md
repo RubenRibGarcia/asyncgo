@@ -93,10 +93,16 @@ esac
 
 ## Discovery and configuration
 
-The generator discovers catalogs **reachable from `main`**, then runs a small
+The generator discovers catalogs across the module's packages, then runs a small
 harness to materialize them — it never executes your `main` package. Both commands
 read schema mappings from `asyncgo.yaml` in the module root, or from the file
 `--config` names; see [Custom types](custom-types.md#third-party-types-and-declared-mappings).
+
+Scope is the module, not the import graph: a catalog is generated whether or not a
+`main` package imports it (a `main` package imports no catalog at all ⇒ a warning,
+not a missing catalog). Package `main` itself is excluded, because the harness
+cannot import a program. A module with several catalogs merges them into one
+document, and a key two catalogs both define is reported as a collision.
 
 ## Verbose logging
 
@@ -107,7 +113,7 @@ per-package detail and a timing recap.
 $ asyncgo generate . -v
 asyncgo: +0.000s config: no asyncgo.yaml found, using built-in mappings only
 asyncgo: +0.000s load: loading packages in /home/you/orders...
-asyncgo: +0.120s load: 2 packages, 1 main package in 119.433ms
+asyncgo: +0.120s load: 2 packages, 2 imported by a main in 119.433ms
 asyncgo: +0.120s catalogs: 1 catalog found in 15µs
 asyncgo: +0.120s harness: materializing 1 catalog...
 asyncgo: +0.370s harness: 1 catalog valid, 0 errors in 250.55ms
@@ -127,7 +133,7 @@ asyncgo: +0.081s harness: writing harness program to .../_asyncgo-harness-251665
 asyncgo: +0.206s descriptions: applied 1 field descriptions across 1 schemas
 asyncgo: recap
   config        32µs
-  load       80.907ms  2 packages, 1 main package
+  load       80.907ms  2 packages, 2 imported by a main
   catalogs       5µs  1 catalog found
   harness   125.348ms  1 catalog valid, 0 errors
   merge         17µs  1 channel, 1 server, 1 schema, 0 collisions
