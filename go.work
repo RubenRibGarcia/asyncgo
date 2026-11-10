@@ -2,22 +2,22 @@ go 1.26.8
 
 use (
 	.
-	./test/data/simple
 	./test/data/allof
-	./test/data/oneof
 	./test/data/anyof
-	./test/data/provider
-	./test/data/security
-	./test/data/invalid
-	./test/data/reply
-	./test/data/parameters
-	./test/data/traits
-	./test/data/multiformat
-	./test/data/derived
 	./test/data/bindings
 	./test/data/bindings-unlisted
 	./test/data/bytes
+	./test/data/derived
+	./test/data/invalid
 	./test/data/mappings
+	./test/data/multiformat
+	./test/data/oneof
+	./test/data/parameters
+	./test/data/provider
+	./test/data/reply
+	./test/data/security
+	./test/data/simple
+	./test/data/traits
 	./test/integration
 	./tools
 )
