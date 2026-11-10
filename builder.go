@@ -34,6 +34,46 @@ type builder struct {
 type SpecResult struct {
 	Doc *spec.AsyncAPI
 	Err error
+
+	// Name is the document name set by Named. It labels this catalog's own
+	// document and, when generate writes into a directory, its filename. It is
+	// empty when the catalog declares no name, in which case the generator
+	// derives one from the declaring package and variable.
+	Name string
+}
+
+// Named sets the catalog's document name and returns the same result, so it
+// chains directly off Spec:
+//
+//	var Orders = asyncgo.Spec(...).Named("orders")
+//
+// The name is what `asyncgo generate -o docs/` writes this catalog's document
+// as — docs/orders.asyncapi.yaml — so it is the one place a multi-catalog module
+// chooses its filenames instead of accepting the derived default
+// (<package>.<variable>). An empty name clears an earlier one, restoring the
+// derived name.
+//
+// It is a method rather than an Item because it labels a catalog that is already
+// assembled: a bare Name among Info, Servers and Channels would read as if it
+// named a component.
+func (r *SpecResult) Named(name string) *SpecResult {
+	r.Name = name
+	if err := validateDocumentName(name); err != nil {
+		r.Err = errors.Join(r.Err, err)
+	}
+	return r
+}
+
+// validateDocumentName reports a name that cannot label a document. The grammar
+// is the component-key pattern, which is also what makes the name safe as a
+// filename stem: no separator, no traversal, no character that needs escaping
+// in a path. An empty name is not a violation — it means "no explicit name",
+// which generate replaces with the derived one.
+func validateDocumentName(name string) error {
+	if name == "" || componentKeyPattern.MatchString(name) {
+		return nil
+	}
+	return fmt.Errorf("document name %q must match %s", name, componentKeyPatternSrc)
 }
 
 // ValidationErrors returns the individual validation errors that Err joins, or
