@@ -170,44 +170,83 @@ func TestResolveOutput(t *testing.T) {
 		output      string
 		defaultName string
 		want        string
+		wantMode    outputMode
 	}{
 		{
 			name:        "should_default_to_dir_asyncapi_yaml",
 			defaultName: "asyncapi.yaml",
 			want:        filepath.Join(dir, "asyncapi.yaml"),
+			wantMode:    modeFile,
 		},
 		{
 			name:        "should_default_to_dir_asyncapi_json",
 			defaultName: "asyncapi.json",
 			want:        filepath.Join(dir, "asyncapi.json"),
+			wantMode:    modeFile,
 		},
 		{
-			name:        "should_join_default_filename_for_trailing_separator",
-			output:      "out/",
-			defaultName: "asyncapi.yaml",
-			want:        filepath.Join("out", "asyncapi.yaml"),
+			// The trailing separator is the whole distinction between one merged
+			// document and one document per catalog, so it resolves to the directory
+			// itself rather than to a default file inside it.
+			name:     "should_resolve_a_trailing_separator_to_the_directory",
+			output:   "out/",
+			want:     absPath(t, "out"),
+			wantMode: modeDir,
 		},
 		{
-			name:        "should_join_json_default_filename_for_trailing_separator",
-			output:      "out/",
-			defaultName: "asyncapi.json",
-			want:        filepath.Join("out", "asyncapi.json"),
+			name:     "should_resolve_a_trailing_os_separator_to_the_directory",
+			output:   "out" + string(os.PathSeparator),
+			want:     absPath(t, "out"),
+			wantMode: modeDir,
 		},
 		{
 			name:        "should_absolutize_explicit_file_whatever_its_extension",
 			output:      "custom.yaml",
 			defaultName: "asyncapi.json",
 			want:        absPath(t, "custom.yaml"),
+			wantMode:    modeFile,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := resolveOutput(dir, tc.output, tc.defaultName)
+			got, mode, err := resolveOutput(dir, tc.output, tc.defaultName)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantMode, mode)
 		})
 	}
+}
+
+func TestArtifactName(t *testing.T) {
+	t.Run("should_carry_the_asyncapi_infix", func(t *testing.T) {
+		assert.Equal(t, "orders.asyncapi.yaml", artifactName("orders", "yaml"))
+		assert.Equal(t, "orders.asyncapi.json", artifactName("orders", "json"))
+	})
+
+	t.Run("should_match_exactly_the_names_it_writes", func(t *testing.T) {
+		// check adopts files by pattern and calls the ones nothing claims orphans,
+		// so the pattern and the writer must not drift apart.
+		for _, format := range []string{"yaml", "json"} {
+			matched, err := filepath.Match(artifactPattern(format), artifactName("a.b", format))
+			require.NoError(t, err)
+			assert.True(
+				t,
+				matched,
+				"%s must match %s",
+				artifactName("a.b", format),
+				artifactPattern(format),
+			)
+
+			other := "yaml"
+			if format == "yaml" {
+				other = "json"
+			}
+			matched, err = filepath.Match(artifactPattern(other), artifactName("a.b", format))
+			require.NoError(t, err)
+			assert.False(t, matched, "a %s artifact must not be adopted by a %s run", format, other)
+		}
+	})
 }
 
 func TestResolveFormat(t *testing.T) {
@@ -331,11 +370,11 @@ func TestGenerateArtifact(t *testing.T) {
 			},
 		},
 		{
-			name: "should_treat_a_trailing_separator_as_a_directory",
+			name: "should_write_one_document_per_catalog_for_a_directory",
 			args: func(t *testing.T, dir string) ([]string, string) {
 				outDir := t.TempDir()
 				args := []string{"generate", "-o", outDir + string(os.PathSeparator), dir}
-				return args, filepath.Join(outDir, "asyncapi.yaml")
+				return args, filepath.Join(outDir, "simple.Catalog.asyncapi.yaml")
 			},
 		},
 		{
@@ -377,7 +416,7 @@ func TestGenerateArtifact(t *testing.T) {
 					"--format",
 					"json",
 				}
-				return args, filepath.Join(outDir, "asyncapi.json")
+				return args, filepath.Join(outDir, "simple.Catalog.asyncapi.json")
 			},
 		},
 		{
@@ -445,6 +484,223 @@ func TestGenerateArtifact(t *testing.T) {
 			}
 		})
 	}
+}
+
+// addSecondCatalog writes a second catalog into its own package inside the
+// fixture module. Discovery scope is the module (ADR 0010), so this is what makes
+// the copy multi-catalog, without adding a committed fixture that the integration
+// golden test would also have to cover. name is the document name the catalog
+// declares, or "" for none.
+func addSecondCatalog(t *testing.T, dir, name string) {
+	t.Helper()
+
+	pkgDir := filepath.Join(dir, "extra")
+	require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+
+	named := ""
+	if name != "" {
+		named = fmt.Sprintf(".Named(%q)", name)
+	}
+	body := fmt.Sprintf(`package extra
+
+import "github.com/RubenRibGarcia/asyncgo"
+
+type Pinged struct {
+	ID string %s
+}
+
+var Catalog = asyncgo.Spec(
+	asyncgo.Info("Extra Service", "2.0.0"),
+	asyncgo.Channels(
+		asyncgo.Channel("pinged").
+			Send(asyncgo.Operation().Message(asyncgo.MessageOf(Pinged{}).Name("Pinged"))),
+	),
+)%s
+`, "`json:\"id\" asyncapi:\"required\"`", named)
+
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "catalog.go"), []byte(body), 0o644))
+}
+
+// writeArtifact writes body to path, creating no directories: every caller aims
+// at a temp dir it just made.
+func writeArtifact(t *testing.T, path, body string) {
+	t.Helper()
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
+}
+
+// readArtifact reads path as a string.
+func readArtifact(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return string(content)
+}
+
+// TestGeneratePerCatalog covers directory mode: an -o with a trailing separator
+// writes one document per catalog instead of merging them, which is what lets a
+// multi-catalog module commit a correct document for each one.
+func TestGeneratePerCatalog(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
+	t.Run("should_write_one_document_per_catalog", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		addSecondCatalog(t, dir, "")
+		outDir := t.TempDir()
+
+		stdout, _, err := execute(t, BuildInfo{}, "generate", dir, "-o", outDir+"/")
+		require.NoError(t, err)
+
+		simple := filepath.Join(outDir, "simple.Catalog.asyncapi.yaml")
+		extra := filepath.Join(outDir, "extra.Catalog.asyncapi.yaml")
+		assert.Contains(t, stdout, "wrote "+simple)
+		assert.Contains(t, stdout, "wrote "+extra)
+		require.FileExists(t, simple)
+		require.FileExists(t, extra)
+
+		// Each document keeps its own Info and only its own channels: the merge
+		// drops the second catalog's title, which is the whole point of the mode.
+		assert.Contains(t, readArtifact(t, simple), "title: Orders Service")
+		assert.Contains(t, readArtifact(t, extra), "title: Extra Service")
+		assert.Contains(t, readArtifact(t, extra), "pinged")
+		assert.NotContains(t, readArtifact(t, extra), "order-placed")
+		assert.NotContains(t, readArtifact(t, simple), "pinged")
+	})
+
+	t.Run("should_use_the_declared_name", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		addSecondCatalog(t, dir, "audit")
+		outDir := t.TempDir()
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "-o", outDir+"/")
+		require.NoError(t, err)
+
+		require.FileExists(t, filepath.Join(outDir, "audit.asyncapi.yaml"))
+		require.NoFileExists(t, filepath.Join(outDir, "extra.Catalog.asyncapi.yaml"))
+	})
+
+	t.Run("should_reject_two_catalogs_that_share_a_name", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		// The derived stem is <package>.<variable>, so this collides with the
+		// simple fixture's own Catalog.
+		addSecondCatalog(t, dir, "simple.Catalog")
+		outDir := t.TempDir()
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "-o", outDir+"/")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `duplicate document name "simple.Catalog"`)
+		// Nothing is written: the whole set is validated and encoded before the
+		// first file, so a failure cannot leave a half-written directory behind.
+		written, err := filepath.Glob(filepath.Join(outDir, "*.asyncapi.yaml"))
+		require.NoError(t, err)
+		assert.Empty(t, written)
+	})
+
+	t.Run("should_encode_every_document_as_json", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		outDir := t.TempDir()
+
+		_, _, err := execute(
+			t, BuildInfo{}, "generate", dir, "-o", outDir+"/", "--format", "json",
+		)
+		require.NoError(t, err)
+
+		content := readArtifact(t, filepath.Join(outDir, "simple.Catalog.asyncapi.json"))
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal([]byte(content), &decoded))
+		assert.Equal(t, "3.1.0", decoded["asyncapi"])
+	})
+
+	t.Run("should_leave_the_merged_default_untouched", func(t *testing.T) {
+		dir := copySimpleFixture(t)
+		addSecondCatalog(t, dir, "")
+		outDir := t.TempDir()
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "-o", outDir+"/")
+		require.NoError(t, err)
+
+		require.NoFileExists(t, filepath.Join(dir, "asyncapi.yaml"))
+	})
+}
+
+// TestCheckPerCatalog covers the directory-mode verdict: one exit code for the
+// whole artifact set, with stale, missing and orphan documents all reported.
+func TestCheckPerCatalog(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
+	// prepare generates a two-catalog module's artifact set into a temp dir.
+	prepare := func(t *testing.T) (dir, outDir string) {
+		t.Helper()
+		dir = copySimpleFixture(t)
+		addSecondCatalog(t, dir, "")
+		outDir = t.TempDir()
+
+		_, _, err := execute(t, BuildInfo{}, "generate", dir, "-o", outDir+"/")
+		require.NoError(t, err)
+		return dir, outDir
+	}
+
+	t.Run("should_pass_when_every_document_matches", func(t *testing.T) {
+		dir, outDir := prepare(t)
+
+		stdout, _, err := execute(t, BuildInfo{}, "check", dir, "-o", outDir+"/")
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "2 document(s) up to date")
+	})
+
+	t.Run("should_fail_when_one_document_is_stale", func(t *testing.T) {
+		dir, outDir := prepare(t)
+		writeArtifact(t, filepath.Join(outDir, "simple.Catalog.asyncapi.yaml"), "asyncapi: 0.0.0\n")
+
+		_, _, err := execute(t, BuildInfo{}, "check", dir, "-o", outDir+"/")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrOutOfDate, "a stale document keeps CI on one exit code")
+		assert.Contains(t, err.Error(), "simple.Catalog.asyncapi.yaml")
+	})
+
+	t.Run("should_fail_when_a_document_is_missing", func(t *testing.T) {
+		dir, outDir := prepare(t)
+		require.NoError(t, os.Remove(filepath.Join(outDir, "extra.Catalog.asyncapi.yaml")))
+
+		_, _, err := execute(t, BuildInfo{}, "check", dir, "-o", outDir+"/")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrOutOfDate)
+		assert.Contains(t, err.Error(), "extra.Catalog.asyncapi.yaml")
+	})
+
+	t.Run("should_fail_on_an_orphan_artifact", func(t *testing.T) {
+		dir, outDir := prepare(t)
+		writeArtifact(t, filepath.Join(outDir, "deleted.asyncapi.yaml"), "asyncapi: 3.1.0\n")
+
+		_, _, err := execute(t, BuildInfo{}, "check", dir, "-o", outDir+"/")
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrOutOfDate)
+		assert.Contains(t, err.Error(), "deleted.asyncapi.yaml")
+	})
+
+	t.Run("should_ignore_yaml_asyncgo_never_wrote", func(t *testing.T) {
+		dir, outDir := prepare(t)
+		// Attribution comes from the filename. Adopting unrelated YAML would fail CI
+		// on a file nobody generated.
+		writeArtifact(t, filepath.Join(outDir, "architecture.yaml"), "not: asyncapi\n")
+
+		_, _, err := execute(t, BuildInfo{}, "check", dir, "-o", outDir+"/")
+		require.NoError(t, err)
+	})
+
+	t.Run("should_report_the_orphan_as_a_finding_with_verbose", func(t *testing.T) {
+		dir, outDir := prepare(t)
+		writeArtifact(t, filepath.Join(outDir, "deleted.asyncapi.yaml"), "asyncapi: 3.1.0\n")
+
+		_, stderr, err := execute(t, BuildInfo{}, "check", dir, "-o", outDir+"/", "-v")
+
+		require.Error(t, err)
+		assert.Contains(t, stderr, "orphan")
+		assert.Contains(t, stderr, "deleted.asyncapi.yaml")
+	})
 }
 
 // fixtureArgs returns command arguments that run against a fresh copy of the
