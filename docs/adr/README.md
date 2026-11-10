@@ -60,3 +60,5 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | [0007](0007-shared-tag-grammar.md) | Share the struct-tag grammar between the two passes | accepted | 2026-11-08 | 2026-11-08 |
 | [0008](0008-external-type-mappings.md) | Derive third-party types from declared, name-keyed mappings | accepted | 2026-11-08 | 2026-11-08 |
 | [0009](0009-verbose-cli-logging.md) | Narrate CLI runs with a repeatable verbose flag | accepted | 2026-11-08 | 2026-11-08 |
+| [0010](0010-catalog-scope-is-the-module.md) | Scope catalog discovery to the module, not the main import graph | accepted | 2026-11-10 | 2026-11-10 |
+| [0011](0011-per-catalog-documents.md) | Emit one document per catalog when the destination is a directory | accepted | 2026-11-10 | 2026-11-10 |

@@ -39,13 +39,48 @@ type Options struct {
 }
 
 // Build loads the module's catalogs in dir, materializes them into documents,
-// applies comment-derived field descriptions, and merges the result. It returns
-// the merged document and the number of catalogs found. The whole run —
-// including the harness subprocess it spawns — is bounded by ctx.
+// applies comment-derived field descriptions, and merges the result into one
+// document. It returns the merged document and the number of catalogs found. The
+// whole run — including the harness subprocess it spawns — is bounded by ctx.
+//
+// It is the single-document mode. A caller that wants one document per catalog
+// calls BuildAll and skips the merge, which is lossy by design: Merge is
+// first-wins, so a second catalog's Info never reaches the result.
 //
 // opts.Config names the schema-mapping config file (see Options); the discovery
 // it triggers is reported through opts.Log.
 func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, error) {
+	log := logging.OrQuiet(opts.Log)
+
+	docs, err := BuildAll(ctx, dir, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	mergeLog, mergeDone := logging.Step(log, "merge")
+	doc, collisions := Merge(docs...)
+	mergeDone(
+		mergedSummary(doc, len(collisions)),
+		"channels", len(doc.Channels),
+		"servers", len(doc.Servers),
+		"schemas", schemaCount(doc),
+		"collisions", len(collisions),
+	)
+	// Collisions are a correctness fact — the merged document is lossy for one of
+	// the catalogs — so they are reported as findings, not as debug detail.
+	logging.ReportFindings(mergeLog, collisionFindings(collisions))
+	return doc, len(docs), nil
+}
+
+// BuildAll loads the module's catalogs in dir and materializes each into its own
+// document, applying comment-derived field descriptions. It returns one Document
+// per catalog, in discovery order, and never merges: a caller that needs a
+// single document merges the result itself (see Build).
+//
+// Everything Build documents about ctx and opts applies here too; the difference
+// is only that the merge stage, and the collisions it resolves, are the caller's
+// business.
+func BuildAll(ctx context.Context, dir string, opts Options) ([]Document, error) {
 	log := logging.OrQuiet(opts.Log)
 
 	// The config is read and validated first: a typo'd mapping name is a build error
@@ -53,14 +88,14 @@ func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, 
 	// not a panic inside a generated program, and not hidden behind a slower failure.
 	mappings, err := loadMappingConfig(dir, opts.Config, log)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	loadLog, loadDone := logging.Step(log, "load")
 	loadLog.Info("loading packages in " + dir + "...")
 	pkgs, err := load(ctx, dir)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	imported := importedByMain(pkgs)
 	loadDone(
@@ -72,7 +107,7 @@ func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, 
 	catLog, catDone := logging.Step(log, "catalogs")
 	cats := scanCatalogs(pkgs)
 	if len(cats) == 0 {
-		return nil, 0, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"no AsyncAPI catalogs (*asyncgo.SpecResult vars) found in %s",
 			dir,
 		)
@@ -83,7 +118,7 @@ func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, 
 
 	refs, err := collectCombinatorRefs(pkgs)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	aliases := collectAliasEdges(pkgs)
 	logRefs(logging.Tag(log, "refs"), refs, aliases)
@@ -95,26 +130,22 @@ func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, 
 		Aliases:  aliases,
 	}, opts)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
+	}
+	// The declaring file is a source location, not a value, so the harness cannot
+	// report it. Materialize returns documents in plan order, which is cats order.
+	for i := range docs {
+		if i < len(cats) {
+			docs[i].Catalog.File = cats[i].File
+		}
 	}
 
-	mergeLog, mergeDone := logging.Step(log, "merge")
-	doc, collisions := Merge(pairCatalogs(cats, docs)...)
-	mergeDone(
-		mergedSummary(doc, len(collisions)),
-		"channels", len(doc.Channels),
-		"servers", len(doc.Servers),
-		"schemas", schemaCount(doc),
-		"collisions", len(collisions),
-	)
-	// Collisions are a correctness fact — the merged document is lossy for one of
-	// the catalogs — so they are reported as findings, not as debug detail.
-	logging.ReportFindings(mergeLog, collisionFindings(collisions))
-
 	descriptions := extractDescriptions(pkgs)
-	applyDescriptions(doc, descriptions)
+	for _, d := range docs {
+		applyDescriptions(d.Doc, descriptions)
+	}
 	logDescriptions(logging.Tag(log, "descriptions"), descriptions)
-	return doc, len(cats), nil
+	return docs, nil
 }
 
 // count renders "1 catalog" or "2 catalogs". Every closing sentence in the log
@@ -212,22 +243,6 @@ func logDescriptions(log *slog.Logger, descriptions descriptions) {
 		"applied %d field descriptions across %d schemas",
 		fields, len(descriptions),
 	))
-}
-
-// pairCatalogs zips the discovered catalogs with their materialized documents.
-// Materialize returns documents in catalog order and only when every catalog
-// materialized, so the two slices line up; the guard keeps a mismatched length
-// from panicking if that ever stops being true.
-func pairCatalogs(cats []Catalog, docs []*spec.AsyncAPI) []Document {
-	pairs := make([]Document, 0, len(docs))
-	for i, d := range docs {
-		cat := Catalog{}
-		if i < len(cats) {
-			cat = cats[i]
-		}
-		pairs = append(pairs, Document{Catalog: cat, Doc: d})
-	}
-	return pairs
 }
 
 // mergedSummary is the merge stage's closing sentence: what the document ended up

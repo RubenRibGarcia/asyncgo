@@ -82,8 +82,10 @@ func TestFindMaterializeMerge(t *testing.T) {
 	docs, err := Materialize(t.Context(), dir, Plan{Catalogs: cats}, Options{})
 	require.NoError(t, err)
 	require.Len(t, docs, 1)
+	assert.Equal(t, cats[0].PkgPath, docs[0].Catalog.PkgPath)
+	assert.Equal(t, cats[0].VarName, docs[0].Catalog.VarName)
 
-	merged, collisions := Merge(pairCatalogs(cats, docs)...)
+	merged, collisions := Merge(docs...)
 	assert.Empty(t, collisions, "one catalog cannot collide with itself")
 	assert.Equal(t, "Orders Service", merged.Info.Title)
 
@@ -95,6 +97,42 @@ func TestFindMaterializeMerge(t *testing.T) {
 	const key = "github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced"
 	require.Contains(t, merged.Components.Schemas, key)
 	assert.Len(t, merged.Components.Schemas[key].Required, 2)
+}
+
+func TestCatalogStem(t *testing.T) {
+	tests := []struct {
+		name string
+		cat  Catalog
+		want string
+	}{
+		{
+			name: "should_use_the_declared_name",
+			cat:  Catalog{PkgPath: "example.com/acme/orders", VarName: "Catalog", Name: "orders"},
+			want: "orders",
+		},
+		{
+			name: "should_derive_from_package_and_variable",
+			cat:  Catalog{PkgPath: "example.com/acme/orders", VarName: "Catalog"},
+			want: "orders.Catalog",
+		},
+		{
+			name: "should_use_only_the_last_path_element",
+			cat:  Catalog{PkgPath: "example.com/acme/billing/orders", VarName: "Events"},
+			want: "orders.Events",
+		},
+		{
+			name: "should_fall_back_to_the_variable_without_a_package_path",
+			cat:  Catalog{VarName: "Catalog"},
+			want: "Catalog",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.cat.Stem())
+			assert.NotContains(t, tc.cat.Stem(), "/", "a stem must be safe as a filename")
+		})
+	}
 }
 
 func TestLoadErrors(t *testing.T) {

@@ -270,25 +270,3 @@ func TestSchemaCount(t *testing.T) {
 		assert.Equal(t, 2, schemaCount(doc))
 	})
 }
-
-func TestPairCatalogs(t *testing.T) {
-	t.Run("should_pair_each_document_with_its_catalog", func(t *testing.T) {
-		cats := []Catalog{{PkgPath: "a", VarName: "A"}, {PkgPath: "b", VarName: "B"}}
-		docs := []*spec.AsyncAPI{spec.New(), spec.New()}
-
-		pairs := pairCatalogs(cats, docs)
-
-		require.Len(t, pairs, 2)
-		assert.Equal(t, cats[0], pairs[0].Catalog)
-		assert.Equal(t, cats[1], pairs[1].Catalog)
-	})
-
-	t.Run("should_tolerate_more_catalogs_than_documents", func(t *testing.T) {
-		cats := []Catalog{{PkgPath: "a", VarName: "A"}, {PkgPath: "b", VarName: "B"}}
-
-		pairs := pairCatalogs(cats, []*spec.AsyncAPI{spec.New()})
-
-		require.Len(t, pairs, 1)
-		assert.Equal(t, cats[0], pairs[0].Catalog)
-	})
-}

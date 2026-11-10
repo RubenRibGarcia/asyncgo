@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
 	"github.com/RubenRibGarcia/asyncgo/internal/logging"
@@ -37,13 +39,16 @@ func newCheckCmd() *cobra.Command {
 			"The document is compared byte for byte against the file `asyncgo generate` would " +
 			"write for the same --format, --output and --config flags, so pass the same flags you " +
 			"generate with. The default is asyncapi.yaml in dir.\n\n" +
+			"A directory destination (an -o value with a trailing separator) checks the whole " +
+			"artifact set: one document per catalog, plus any *.asyncapi.<format> file no " +
+			"catalog claims. The set produces one verdict, so CI keeps branching on one code.\n\n" +
 			"With -v, a stale artifact is reported as one finding per differing section key, so " +
 			"CI says what changed instead of only that something did.\n\n" +
 			"Exit codes:\n" +
-			"  0  the artifact is up to date\n" +
-			"  1  the check could not run (build error, missing artifact, I/O failure)\n" +
+			"  0  the artifact(s) are up to date\n" +
+			"  1  the check could not run (build error, missing artifact in file mode, I/O failure)\n" +
 			"  2  usage error (unknown flag, too many arguments)\n" +
-			"  3  the artifact is out of date — regenerate it",
+			"  3  the artifact set is out of date — regenerate it",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selected, err := resolveFormat(format)
@@ -51,69 +56,221 @@ func newCheckCmd() *cobra.Command {
 				return err
 			}
 
-			log := logging.FromContext(cmd.Context())
-
 			dir, err := resolveDir(args)
 			if err != nil {
 				return fmt.Errorf("checking: %w", err)
 			}
 
-			doc, _, err := buildDoc(
-				cmd,
-				dir,
-				discovery.Options{Config: config, Log: log},
-				"checking",
-			)
-			if err != nil {
-				return err
-			}
-
-			_, encodeDone := logging.Step(log, "encode")
-			got, err := selected.encode(doc)
-			if err != nil {
-				return fmt.Errorf("encoding document: %w", err)
-			}
-			encodeDone(
-				format+", "+formatSize(len(got)),
-				"format", format,
-				"bytes", len(got),
-			)
-
-			path, err := resolveOutput(dir, output, selected.defaultName)
+			path, mode, err := resolveOutput(dir, output, selected.defaultName)
 			if err != nil {
 				return fmt.Errorf("checking: %w", err)
 			}
 
-			checkLog, checkDone := logging.Step(log, "check")
-			want, err := os.ReadFile(path)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return fmt.Errorf("%s not found; run `asyncgo generate` first", path)
-				}
-				return fmt.Errorf("reading %s: %w", path, err)
+			opts := discovery.Options{
+				Config: config,
+				Log:    logging.FromContext(cmd.Context()),
 			}
-
-			// The error text and exit code stay exactly as they were; the findings are
-			// the verbose detail behind it, so CI keeps parsing one familiar line.
-			if findings, equal := compareArtifact(path, want, got, format, checkLog); !equal {
-				checkLog.Info(path+" is out of date", "path", path)
-				logging.ReportFindings(checkLog, findings)
-				return fmt.Errorf("%s: %w; run `asyncgo generate`", path, ErrOutOfDate)
+			if mode == modeDir {
+				return checkPerCatalog(cmd, dir, path, format, selected, opts)
 			}
-
-			checkDone("byte for byte", "bytes", len(got))
-			logging.Recap(log)
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s is up to date\n", path)
-			return nil
+			return checkMerged(cmd, dir, path, format, selected, opts)
 		},
 	}
 	cmd.Flags().
 		StringVar(&format, "format", "yaml", "output format to check: yaml or json")
 	cmd.Flags().
-		StringVarP(&output, "output", "o", "", "output file or directory (default: <dir>/asyncapi.<format>)")
+		StringVarP(&output, "output", "o", "", "output file, or a directory (trailing separator) for one document per catalog (default: <dir>/asyncapi.<format>)")
 	cmd.Flags().
 		StringVar(&config, "config", "", "schema-mapping config file (default: <dir>/asyncgo.yaml)")
 	return cmd
+}
+
+// checkMerged verifies the module's single merged document against path.
+func checkMerged(
+	cmd *cobra.Command,
+	dir, path, format string,
+	selected outputFormat,
+	opts discovery.Options,
+) error {
+	log := logging.FromContext(cmd.Context())
+
+	doc, _, err := buildDoc(cmd, dir, opts, "checking")
+	if err != nil {
+		return err
+	}
+
+	_, encodeDone := logging.Step(log, "encode")
+	got, err := selected.encode(doc)
+	if err != nil {
+		return fmt.Errorf("encoding document: %w", err)
+	}
+	encodeDone(
+		format+", "+formatSize(len(got)),
+		"format", format,
+		"bytes", len(got),
+	)
+
+	checkLog, checkDone := logging.Step(log, "check")
+	want, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%s not found; run `asyncgo generate` first", path)
+		}
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	// The error text and exit code stay exactly as they were; the findings are
+	// the verbose detail behind it, so CI keeps parsing one familiar line.
+	if findings, equal := compareArtifact(path, want, got, format, checkLog); !equal {
+		checkLog.Info(path+" is out of date", "path", path)
+		logging.ReportFindings(checkLog, findings)
+		return fmt.Errorf("%s: %w; run `asyncgo generate`", path, ErrOutOfDate)
+	}
+
+	checkDone("byte for byte", "bytes", len(got))
+	logging.Recap(log)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s is up to date\n", path)
+	return nil
+}
+
+// maxNamedArtifacts caps how many filenames the directory-mode verdict lists. A
+// regenerated directory can have dozens, and the first few name the change; the
+// findings behind -v carry the rest.
+const maxNamedArtifacts = 3
+
+// checkPerCatalog verifies every artifact a directory generate would write, plus
+// the absence of artifacts no catalog claims.
+//
+// The whole set produces one verdict and one exit code: a directory is
+// regenerated as a unit, so CI needs to know that the set drifted, not to
+// triage it file by file. The three failure classes are a stale file, an
+// expected file that is absent (a catalog added since the last generate), and an
+// orphan — an *.asyncapi.<format> file no catalog claims, which appears when a
+// catalog is deleted or renamed.
+func checkPerCatalog(
+	cmd *cobra.Command,
+	dir, outDir, format string,
+	selected outputFormat,
+	opts discovery.Options,
+) error {
+	log := logging.FromContext(cmd.Context())
+
+	docs, err := buildDocs(cmd, dir, opts, "checking")
+	if err != nil {
+		return err
+	}
+	artifacts, err := encodeArtifacts(docs, outDir, format, selected, log)
+	if err != nil {
+		return err
+	}
+
+	checkLog, checkDone := logging.Step(log, "check")
+	expected := make(map[string]bool, len(artifacts))
+	findings := make([]logging.Finding, 0, len(artifacts))
+	stale := make([]string, 0, len(artifacts))
+	for _, a := range artifacts {
+		expected[filepath.Base(a.path)] = true
+		want, err := os.ReadFile(a.path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				stale = append(stale, filepath.Base(a.path))
+				findings = append(findings, logging.Finding{
+					Path:  a.path,
+					Where: "document",
+					What:  "missing",
+					Why:   "no committed artifact for a discovered catalog",
+				})
+				continue
+			}
+			return fmt.Errorf("reading %s: %w", a.path, err)
+		}
+		if f, equal := compareArtifact(a.path, want, a.data, format, checkLog); !equal {
+			checkLog.Info(a.path+" is out of date", "path", a.path)
+			findings = append(findings, f...)
+			stale = append(stale, filepath.Base(a.path))
+		}
+	}
+
+	orphans, err := artifactOrphans(outDir, format, expected)
+	if err != nil {
+		return fmt.Errorf("scanning %s: %w", outDir, err)
+	}
+	for _, path := range orphans {
+		stale = append(stale, filepath.Base(path))
+		findings = append(findings, logging.Finding{
+			Path:  path,
+			Where: "document",
+			What:  "orphan",
+			Why:   "no catalog claims it; delete it, or restore the catalog that produced it",
+		})
+	}
+
+	if len(stale) > 0 {
+		logging.ReportFindings(checkLog, findings)
+		return fmt.Errorf(
+			"%s: %w (%s); run `asyncgo generate`",
+			outDir, ErrOutOfDate, staleSummary(stale),
+		)
+	}
+
+	checkDone(
+		fmt.Sprintf("%d document(s) match", len(artifacts)),
+		"documents", len(artifacts),
+	)
+	logging.Recap(log)
+	_, _ = fmt.Fprintf(
+		cmd.OutOrStdout(), "%s: %d document(s) up to date\n", outDir, len(artifacts),
+	)
+	return nil
+}
+
+// artifactOrphans lists the files in outDir that claim to be this format's
+// artifacts but that no catalog claims.
+//
+// It reads the directory rather than globbing it: outDir is a path the user
+// typed, and filepath.Glob would read a bracket in a directory name as a pattern.
+// The adoption rule is still artifactPattern, so the set check adopts and the set
+// generate writes cannot drift apart.
+func artifactOrphans(outDir, format string, expected map[string]bool) ([]string, error) {
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		return nil, err
+	}
+	pattern := artifactPattern(format)
+	var orphans []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || expected[name] {
+			continue
+		}
+		matched, err := filepath.Match(pattern, name)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			orphans = append(orphans, filepath.Join(outDir, name))
+		}
+	}
+	return orphans, nil
+}
+
+// staleSummary names what needs attention without dumping every path. Sorted, so
+// the same drift always reads the same way.
+func staleSummary(stale []string) string {
+	sorted := append([]string(nil), stale...)
+	sort.Strings(sorted)
+	if len(sorted) <= maxNamedArtifacts {
+		return fmt.Sprintf(
+			"%d document(s) need attention: %s",
+			len(sorted), strings.Join(sorted, ", "),
+		)
+	}
+	return fmt.Sprintf(
+		"%d document(s) need attention: %s and %d more",
+		len(sorted),
+		strings.Join(sorted[:maxNamedArtifacts], ", "),
+		len(sorted)-maxNamedArtifacts,
+	)
 }
 
 // compareArtifact reports whether want is what generate would write, and when it

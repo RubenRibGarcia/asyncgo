@@ -81,24 +81,57 @@ func resolveDir(args []string) (string, error) {
 	return abs, nil
 }
 
-// resolveOutput computes the destination path for the generated document. An
-// empty output defaults to <dir>/<defaultName>; a trailing path separator writes
-// defaultName inside the given directory; any other value is treated as the
-// exact output file path (made absolute). The default filename carries the
-// selected output format (asyncapi.yaml or asyncapi.json); an explicit path is
-// honored verbatim, whatever its extension.
-func resolveOutput(dir, output, defaultName string) (string, error) {
+// outputMode is the document model a destination selects. It is derived from
+// the shape of the -o value and nothing else, so generate and check cannot
+// disagree about how many documents a run covers.
+type outputMode int
+
+const (
+	// modeFile writes one merged document to the resolved path. This is the
+	// default and the behaviour every existing invocation gets.
+	modeFile outputMode = iota
+	// modeDir writes one document per catalog into the resolved directory, each
+	// named from its catalog.
+	modeDir
+)
+
+// resolveOutput computes the destination of a run and the document model it
+// selects. An empty output defaults to <dir>/<defaultName> and one merged
+// document; a trailing path separator means that directory and one document per
+// catalog; any other value is the exact output file path (made absolute), again
+// one merged document.
+//
+// The trailing separator is the whole distinction, so it is resolved in one
+// place and reported back to both commands. -o names a destination and --format
+// picks the encoding: an explicit file path is honored verbatim, whatever its
+// extension.
+func resolveOutput(dir, output, defaultName string) (string, outputMode, error) {
 	if output == "" {
-		return filepath.Join(dir, defaultName), nil
-	}
-	if strings.HasSuffix(output, string(os.PathSeparator)) || strings.HasSuffix(output, "/") {
-		return filepath.Join(output, defaultName), nil
+		return filepath.Join(dir, defaultName), modeFile, nil
 	}
 	abs, err := filepath.Abs(output)
 	if err != nil {
-		return "", fmt.Errorf("resolving output %q: %w", output, err)
+		return "", modeFile, fmt.Errorf("resolving output %q: %w", output, err)
 	}
-	return abs, nil
+	if strings.HasSuffix(output, string(os.PathSeparator)) || strings.HasSuffix(output, "/") {
+		return abs, modeDir, nil
+	}
+	return abs, modeFile, nil
+}
+
+// artifactName is the filename one catalog's document is written as in
+// directory mode. The "asyncapi" infix is load-bearing: it is what lets check
+// tell its own artifacts from any other YAML in the directory, so an unrelated
+// docs/architecture.yaml is never mistaken for a stale document and an artifact
+// whose catalog was deleted is never silently unverified.
+func artifactName(stem, format string) string {
+	return stem + ".asyncapi." + format
+}
+
+// artifactPattern matches the artifacts of one format: exactly the files check
+// adopts, and therefore the only files it can report as orphans.
+func artifactPattern(format string) string {
+	return "*.asyncapi." + format
 }
 
 // buildDoc materializes the catalog rooted at dir into a merged document. opts
@@ -115,11 +148,34 @@ func buildDoc(
 ) (*spec.AsyncAPI, int, error) {
 	doc, n, err := discovery.Build(cmd.Context(), dir, opts)
 	if err != nil {
-		var catErrs discovery.CatalogErrors
-		if errors.As(err, &catErrs) {
-			return nil, 0, catErrs
-		}
-		return nil, 0, fmt.Errorf("%s: %w", verb, err)
+		return nil, 0, buildDocError(err, verb)
 	}
 	return doc, n, nil
+}
+
+// buildDocs materializes every catalog rooted at dir into its own document,
+// without merging. It is buildDoc's counterpart for directory mode and shares
+// its error mapping, so a catalog validation report reads the same either way.
+func buildDocs(
+	cmd *cobra.Command,
+	dir string,
+	opts discovery.Options,
+	verb string,
+) ([]discovery.Document, error) {
+	docs, err := discovery.BuildAll(cmd.Context(), dir, opts)
+	if err != nil {
+		return nil, buildDocError(err, verb)
+	}
+	return docs, nil
+}
+
+// buildDocError maps a discovery failure to what the command should print: a
+// catalog validation report is returned as is, and every other failure is
+// wrapped with verb, which names the command in the message ("generating: ...").
+func buildDocError(err error, verb string) error {
+	var catErrs discovery.CatalogErrors
+	if errors.As(err, &catErrs) {
+		return catErrs
+	}
+	return fmt.Errorf("%s: %w", verb, err)
 }
