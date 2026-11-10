@@ -128,6 +128,19 @@ wrote /home/you/orders/asyncapi.yaml (1 catalog(s))
 Commit the result. It is the artifact — reviewed in pull requests like any other
 code, and diffed by `asyncgo check` like any other generated file.
 
+If the module declares more than one catalog and you would rather commit one
+document per catalog than their merge, aim `-o` at a directory instead:
+
+```bash
+asyncgo generate . -o docs/
+# wrote /home/you/orders/docs/orders.asyncapi.yaml
+# wrote /home/you/orders/docs/payments.asyncapi.yaml
+```
+
+Each document is then built from its own catalog, keeps its own `info`, and is
+named from the catalog (`.Named("orders")`) or from where it is declared. See
+[one document per catalog](cli.md#one-document-per-catalog).
+
 The full flag list — `--format`, `-o`/`--output`, `--config` — is on [CLI](cli.md).
 One rule matters here: pass the **same** `--format`, `--output` and `--config`
 flags to `check` that you pass to `generate`, because `check` compares against

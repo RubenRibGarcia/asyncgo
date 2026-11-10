@@ -11,7 +11,6 @@ committed document no longer matches your code, and `version` / `completion` /
 | `asyncgo version` | Print the asyncgo version |
 | `asyncgo completion <shell>` | Print a shell completion script |
 | `asyncgo help` | Built-in help for any command |
-
 `--help` works on every command, and `--version` on the root.
 
 !!! note "Invoking the CLI"
@@ -33,7 +32,7 @@ $ asyncgo generate [dir] [flags]
 | --- | --- |
 | `[dir]` | Module root to load. Defaults to `.` |
 | `--format` `yaml`\|`json` | Encoding of the output. Defaults to `yaml` |
-| `-o`, `--output` | Output file, or an existing directory (trailing slash) to write `asyncapi.<format>` into. Defaults to `<dir>/asyncapi.<format>` |
+| `-o`, `--output` | Output file, **or a directory** (trailing separator) to write one document per catalog into. Defaults to `<dir>/asyncapi.<format>` |
 | `--config` | Schema-mapping file. Defaults to `<dir>/asyncgo.yaml` |
 
 ```bash
@@ -43,11 +42,13 @@ asyncgo generate .
 # write asyncapi.json instead (2-space indented, newline-terminated)
 asyncgo generate . --format json
 
-# write to a custom location (a file path, or a directory with a trailing slash)
+# write to a custom file
 asyncgo generate . -o ./docs/asyncapi.yaml
-asyncgo generate . -o ./docs/ --format json    # -> ./docs/asyncapi.json
 
-# an explicit -o path wins whatever its extension: --format picks the encoding
+# one document per catalog, into a directory
+asyncgo generate . -o ./docs/
+
+# an explicit -o file wins whatever its extension: --format picks the encoding
 asyncgo generate . -o ./docs/spec.yaml --format json
 
 # read schema mappings from a file other than <dir>/asyncgo.yaml
@@ -56,6 +57,53 @@ asyncgo generate . --config ./ci/mappings.yaml
 
 `-o` names the destination, `--format` picks the encoding: `-o spec.yaml --format json`
 writes JSON to `spec.yaml`. A directory passed to `-o` must already exist.
+
+### One document per catalog
+
+A **file** destination writes one merged document for the whole module — every
+catalog in it, with the first definition winning where two catalogs define the
+same key. That is the default and the right shape when the module describes one
+topology.
+
+A **directory** destination writes one document *per catalog*, inside it:
+
+```console
+$ asyncgo generate . -o docs/
+wrote /home/you/orders/docs/orders.asyncapi.yaml
+wrote /home/you/orders/docs/payments.asyncapi.yaml
+```
+
+The filename carries the catalog's document name:
+
+| Name | Filename |
+| --- | --- |
+| `<package>.<variable>` (derived default) | `orders.Catalog.asyncapi.yaml` |
+| `.Named("orders")` | `orders.asyncapi.yaml` |
+
+The `asyncapi` infix is what lets `check` tell its own artifacts from any other
+YAML in the directory. Each document is built from its own catalog alone, so it
+keeps its own `info` — the merge, by contrast, takes `info` from the first
+catalog that defines a title and drops the rest.
+
+Give a catalog an explicit name so the filename does not depend on where the
+variable lives:
+
+```go
+var Orders = asyncgo.Spec(
+	asyncgo.Info("Orders Service", "1.0.0"),
+	// ...
+).Named("orders")
+```
+
+The name must match `^[\w\d.\-_]+$`, which is also what makes it safe as a
+filename. Two catalogs resolving to the same name are an error, and nothing is
+written: the whole set is validated and encoded before the first file.
+
+!!! warning "A trailing separator selects the mode"
+
+    `-o docs` and `-o docs/` are different: the first names a file, the second a
+    directory. Directory mode prints one `wrote` line per file, so the mode a run
+    actually took is visible at default verbosity.
 
 ## `asyncgo check`
 
@@ -74,12 +122,39 @@ $ asyncgo check .
 /home/you/orders/asyncapi.yaml is up to date
 ```
 
+With a directory destination it checks the whole artifact set — the same
+one-document-per-catalog files `generate . -o docs/` would write:
+
+```console
+$ asyncgo check . -o docs/
+/home/you/orders/docs: 2 document(s) up to date
+```
+
+One verdict covers the set, so CI keeps branching on a single code. Three failure
+classes report as exit 3, and `-v` names each one:
+
+| Class | What it means |
+| --- | --- |
+| **stale** | The file differs from what the catalog generates now |
+| **missing** | A catalog has no committed document yet — it was added since the last `generate` |
+| **orphan** | A `*.asyncapi.<format>` file no catalog claims — its catalog was deleted or renamed |
+
+An orphan is why the filenames carry the `asyncapi` infix: only files matching
+`*.asyncapi.<format>` are adopted, so an unrelated `docs/architecture.yaml` is
+never mistaken for a stale document, and an artifact whose catalog is gone is
+never silently unverified.
+
 | Exit code | Meaning |
 | --- | --- |
-| `0` | The artifact is up to date |
-| `1` | The check could not run — a catalog build error, a missing artifact, an I/O failure |
+| `0` | The artifact(s) are up to date |
+| `1` | The check could not run — a catalog build error, an I/O failure, or (file mode only) a missing artifact |
 | `2` | Usage error — an unknown flag, too many arguments (Cobra's own convention) |
-| `3` | The artifact is out of date — regenerate it |
+| `3` | The artifact set is out of date — regenerate it |
+
+A missing artifact is exit 1 only in **file** mode, where you named the one path
+to compare and its absence is a setup mistake. In directory mode the file set is
+derived by `asyncgo`, so an absent member is a statement about the committed set
+and reports as 3.
 
 Splitting `1` from `3` is the point, so CI can tell "regenerate the committed
 document" from "the build is broken":
@@ -101,8 +176,12 @@ read schema mappings from `asyncgo.yaml` in the module root, or from the file
 Scope is the module, not the import graph: a catalog is generated whether or not a
 `main` package imports it (a `main` package imports no catalog at all ⇒ a warning,
 not a missing catalog). Package `main` itself is excluded, because the harness
-cannot import a program. A module with several catalogs merges them into one
-document, and a key two catalogs both define is reported as a collision.
+cannot import a program.
+
+A module with several catalogs is written as one merged document by default, and
+a key two catalogs both define is reported as a collision. Pass a directory to
+`-o` to get one document per catalog instead — see
+[one document per catalog](#one-document-per-catalog).
 
 ## Verbose logging
 

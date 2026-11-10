@@ -43,6 +43,24 @@ var Catalog = asyncgo.Spec(
 `MessageOf` *references* your struct rather than duplicating the shape, so the
 schema cannot drift from the data contract.
 
+### Naming a document
+
+One module can hold several catalogs. By default they are merged into a single
+document; passing a directory to `-o` writes one document per catalog instead,
+and the filename comes from the catalog:
+
+```go
+var Orders = asyncgo.Spec(
+	asyncgo.Info("Orders Service", "1.0.0"),
+	// ...
+).Named("orders")   // -> docs/orders.asyncapi.yaml
+```
+
+Without `.Named`, the name is `<package>.<variable>` — `orders.Catalog` for a
+`Catalog` declared in package `orders`. The name must be filename-safe
+(`^[\w\d.\-_]+$`) and unique across the module; see
+[one document per catalog](cli.md#one-document-per-catalog).
+
 ## Messages
 
 Every message is hoisted into `components.messages`. The channel's `messages`

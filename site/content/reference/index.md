@@ -31,6 +31,12 @@ Top-level functions passed to `asyncgo.Spec(...)`.
 | [`MessageTraits`](https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo#MessageTraits) | `components.messageTraits` |
 | [`CorrelationIDs`](https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo#CorrelationIDs) | `components.correlationIds` |
 
+`Spec` returns a `*SpecResult`; one method on it matters to the CLI:
+
+| Symbol | Does |
+| --- | --- |
+| [`SpecResult.Named`](https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo#SpecResult.Named) | Names the catalog's document — the filename `generate -o docs/` writes it as. Without it the name is `<package>.<variable>` |
+
 ## Builders
 
 Each builder returns a handle that the next setter in the chain takes. Most setters
