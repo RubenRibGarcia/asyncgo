@@ -14,7 +14,7 @@ func TestExtractDescriptionsSimple(t *testing.T) {
 
 	pkgs, err := load(t.Context(), dir)
 	require.NoError(t, err)
-	desc := extractDescriptions(pkgs, reachableFromMain(pkgs))
+	desc := extractDescriptions(pkgs)
 
 	const key = "github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced"
 	require.Contains(t, desc, key)
@@ -27,7 +27,7 @@ func TestExtractDescriptionsAllOf(t *testing.T) {
 
 	pkgs, err := load(t.Context(), dir)
 	require.NoError(t, err)
-	desc := extractDescriptions(pkgs, reachableFromMain(pkgs))
+	desc := extractDescriptions(pkgs)
 
 	const key = "github.com/RubenRibGarcia/asyncgo/test/data/allof.OrderPlaced"
 	require.Contains(t, desc, key)

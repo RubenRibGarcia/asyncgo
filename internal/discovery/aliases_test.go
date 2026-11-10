@@ -19,7 +19,7 @@ func TestCollectAliasEdges(t *testing.T) {
 	pkgs, err := load(t.Context(), dir)
 	require.NoError(t, err)
 
-	edges := collectAliasEdges(pkgs, reachableFromMain(pkgs))
+	edges := collectAliasEdges(pkgs)
 
 	t.Run("should_emit_alias_edge_for_defined_type_declaration", func(t *testing.T) {
 		assert.Contains(t, edges, aliasEdge{

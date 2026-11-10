@@ -18,8 +18,8 @@ that is the topology.
 go install github.com/RubenRibGarcia/asyncgo/cmd/asyncgo@latest
 ```
 
-Declare a payload struct and a catalog — a package-level variable reachable from
-`main`:
+Declare a payload struct and a catalog — a package-level variable in your
+module:
 
 ```go
 package orders

@@ -9,14 +9,14 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// aliasEdge is one `type X Y` declaration found in a reachable package: Alias is
+// aliasEdge is one `type X Y` declaration found in a scannable package: Alias is
 // declared as Base. Both are fully-qualified names.
 type aliasEdge struct {
 	Alias string // pkgPath.TypeName of the declared type
 	Base  string // pkgPath.TypeName of the type it was declared from
 }
 
-// collectAliasEdges walks the named types declared in the reachable packages and
+// collectAliasEdges walks the named types declared in the scannable packages and
 // returns one edge per derived type, deduplicated and sorted by alias.
 //
 // Derivation needs these edges because reflection cannot walk the declared-from
@@ -33,10 +33,10 @@ type aliasEdge struct {
 // Declarations inside third-party packages are not scanned — only module packages
 // are loaded — so a chain that crosses into a dependency stops there. That is the
 // documented limit of alias inheritance.
-func collectAliasEdges(pkgs []*packages.Package, reachable map[string]bool) []aliasEdge {
+func collectAliasEdges(pkgs []*packages.Package) []aliasEdge {
 	seen := map[aliasEdge]bool{}
 	for _, pkg := range pkgs {
-		if !reachable[pkg.ID] {
+		if !scannable(pkg) {
 			continue
 		}
 		for _, file := range pkg.Syntax {

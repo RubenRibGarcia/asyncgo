@@ -250,7 +250,7 @@ library's differentiating feature and the area with the deepest coverage.
 
 | Capability | Status | Where |
 | --- | --- | --- |
-| Catalog discovery (`*asyncgo.SpecResult` vars reachable from `main`) | ✅ | `internal/discovery/discover.go` (`go/packages`) |
+| Catalog discovery (`*asyncgo.SpecResult` vars across the module's packages) | ✅ | `internal/discovery/discover.go` (`go/packages`) |
 | Field descriptions from AST doc comments | ✅ | `internal/discovery/descriptions.go` |
 | Harness generation + `go run` materialization | ✅ | `internal/discovery/materialize.go` |
 | YAML round-trip to preserve integer binding values | ✅ | `internal/discovery/materialize.go` |

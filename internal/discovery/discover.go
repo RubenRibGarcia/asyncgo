@@ -1,7 +1,8 @@
 // Package discovery locates AsyncAPI catalogs (exported package-level
-// variables of type *asyncgo.SpecResult) in a Go module, restricted to
-// packages reachable from a main package, and materializes them into
-// documents.
+// variables of type *asyncgo.SpecResult) in a Go module and materializes them
+// into documents. A document describes the module, not one of its binaries, so
+// every package in the module is in scope — see scannable for the one
+// exclusion.
 package discovery
 
 import (
@@ -60,24 +61,35 @@ func load(ctx context.Context, dir string) ([]*packages.Package, error) {
 	return pkgs, nil
 }
 
+// scannable reports whether pkg's declarations can reach a document. Package
+// main is the only exclusion: it is a program, not an importable package, so the
+// materializing harness could not import it — a catalog or a
+// combinator-referenced type declared there would fail the harness build instead
+// of appearing in the document.
+//
+// Whether a main package imports pkg is deliberately not part of this test. A
+// catalog is the module's declared topology, so it is in scope whether or not
+// some binary happens to import it; narrowing on the import graph made adding a
+// cmd/ directory silently delete catalogs from the document. Build reports the
+// mismatch as a warning instead.
+func scannable(pkg *packages.Package) bool { return pkg.Name != "main" }
+
 // Find discovers exported package-level variables of type *asyncgo.SpecResult
-// in the module rooted at dir, restricted to packages reachable from a main
-// package. If the module has no main package, all module packages are
-// considered.
+// in the packages of the module rooted at dir.
 func Find(ctx context.Context, dir string) ([]Catalog, error) {
 	pkgs, err := load(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	return scanCatalogs(pkgs, reachableFromMain(pkgs)), nil
+	return scanCatalogs(pkgs), nil
 }
 
-// scanCatalogs returns catalog variables declared in the reachable packages,
+// scanCatalogs returns catalog variables declared in the scannable packages,
 // sorted by package path then variable name.
-func scanCatalogs(pkgs []*packages.Package, reachable map[string]bool) []Catalog {
+func scanCatalogs(pkgs []*packages.Package) []Catalog {
 	var out []Catalog
 	for _, pkg := range pkgs {
-		if !reachable[pkg.ID] {
+		if !scannable(pkg) {
 			continue
 		}
 		for _, file := range pkg.Syntax {
@@ -142,10 +154,13 @@ func isSpecResult(t types.Type) bool {
 		obj.Name() == specResultType.Name()
 }
 
-// reachableFromMain returns the set of package IDs reachable from any main
-// package by following imports within the loaded set. If no main package
-// exists, all loaded packages are considered reachable.
-func reachableFromMain(pkgs []*packages.Package) map[string]bool {
+// importedByMain returns the import paths reachable from any main package by
+// following imports within the loaded set. It is advisory only: it answers "which
+// packages does a binary ship?" so Build can tell the user that a catalog is not
+// wired into anything. It does not select what discovery scans, and a module with
+// no main package yields an empty set — absence means "no binary here", not "no
+// catalogs here", which is why the caller checks for mains separately.
+func importedByMain(pkgs []*packages.Package) map[string]bool {
 	byID := make(map[string]*packages.Package, len(pkgs))
 	var mains []*packages.Package
 	for _, p := range pkgs {
@@ -155,20 +170,13 @@ func reachableFromMain(pkgs []*packages.Package) map[string]bool {
 		}
 	}
 
-	reach := make(map[string]bool)
-	if len(mains) == 0 {
-		for _, p := range pkgs {
-			reach[p.ID] = true
-		}
-		return reach
-	}
-
+	imported := make(map[string]bool, len(pkgs))
 	var visit func(p *packages.Package)
 	visit = func(p *packages.Package) {
-		if p == nil || reach[p.ID] {
+		if p == nil || imported[p.PkgPath] {
 			return
 		}
-		reach[p.ID] = true
+		imported[p.PkgPath] = true
 		for _, imp := range p.Imports {
 			if _, ok := byID[imp.ID]; ok {
 				visit(imp)
@@ -178,5 +186,5 @@ func reachableFromMain(pkgs []*packages.Package) map[string]bool {
 	for _, m := range mains {
 		visit(m)
 	}
-	return reach
+	return imported
 }

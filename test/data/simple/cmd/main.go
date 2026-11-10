@@ -1,7 +1,7 @@
-// Package main is the runnable entry point for the simple fixture. It exists
-// so the discovery reachability walk has a main package to start from, which
-// exercises the from-main reachability path without changing the generated
-// document.
+// Package main is the runnable entry point for the simple fixture. It exists so
+// the discovery tests can prove a main package does not narrow the document:
+// TestBuildIgnoresMainImportGraph compares this module against a copy whose main
+// imports nothing, and both must generate the same asyncapi.yaml.
 package main
 
 import (

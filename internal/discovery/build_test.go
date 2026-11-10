@@ -47,6 +47,57 @@ func TestBuildBadDir(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestWarnCatalogsOutsideMain pins the one advisory the widened scope owes the
+// user: a catalog nothing imports is still generated, and saying so rules out the
+// "my catalog vanished" reading the old reachability filter produced. A module
+// with no main package gets no warning — every catalog would trip it, and no
+// binary exists to import anything.
+func TestWarnCatalogsOutsideMain(t *testing.T) {
+	const pkg = "example.com/mod/catalog"
+	cat := Catalog{PkgPath: pkg, VarName: "Catalog"}
+
+	tests := []struct {
+		name     string
+		imported map[string]bool
+		hasMain  bool
+		want     string
+	}{
+		{
+			name:     "should_warn_when_no_main_package_imports_the_catalog",
+			imported: map[string]bool{"example.com/mod/other": true},
+			hasMain:  true,
+			want:     pkg + ".Catalog is not imported by any main package",
+		},
+		{
+			name:     "should_stay_quiet_when_a_main_package_imports_the_catalog",
+			imported: map[string]bool{pkg: true},
+			hasMain:  true,
+		},
+		{
+			name:     "should_stay_quiet_when_the_module_has_no_main_package",
+			imported: map[string]bool{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			warnCatalogsOutsideMain(
+				logging.New(&buf, logging.Quiet),
+				[]Catalog{cat},
+				tt.imported,
+				tt.hasMain,
+			)
+
+			if tt.want == "" {
+				assert.Empty(t, buf.String())
+				return
+			}
+			assert.Contains(t, buf.String(), tt.want)
+		})
+	}
+}
+
 func TestBuildRejectsInvalidConfig(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(

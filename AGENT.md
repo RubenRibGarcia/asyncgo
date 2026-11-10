@@ -16,8 +16,9 @@ or `asyncapi.json` with `generate --format json` — from two touchpoints:
 2. **A typed, declarative catalog** (topology) — channels, operations, servers,
    and bindings declared once through a fluent DSL.
 
-The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
-`main`, materializes them, and emits (or verifies) the committed artifact.
+The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs across the
+module's packages, materializes them, and emits (or verifies) the committed
+artifact.
 
 ## Architecture
 
@@ -41,8 +42,8 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
         │
 ┌───────▼─────────────────────────────────────────────────┐
 │         internal/discovery + internal/cli               │
-│  1. go/packages: find *spec.AsyncAPI vars reachable     │
-│     from main (static, no execution)                    │
+│  1. go/packages: find *spec.AsyncAPI vars across the    │
+│     module's packages (static, no execution)            │
 │  2. Generate a harness that imports catalog packages    │
 │     and prints them as YAML (runs init only)            │
 │  3. Merge catalogs       │
@@ -90,6 +91,15 @@ The CLI (`asyncgo generate` / `asyncgo check`) discovers catalogs reachable from
    leak: a `SpecResult` living in `spec/` with a root alias would make catalog
    recognition depend on an alias staying in step with the DSL's real return type.
    Keep the edge, keep it here, and keep it the only one.
+
+7. **Scope is the module, not the import graph** — every package under `./...` is
+   scanned, minus package `main` itself (a program cannot be imported by the
+   harness). A catalog does **not** have to be imported by a `main` package: the
+   document describes the module, and narrowing on the import graph meant that
+   adding a `cmd/` directory could silently delete catalogs from the artifact.
+   When a `main` package exists but imports no catalog, `Build` warns and
+   generates anyway. A module with several catalogs merges them all, and a key
+   two catalogs both define is reported as a collision (first catalog wins).
 
 ## Public API
 

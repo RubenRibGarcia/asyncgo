@@ -38,10 +38,10 @@ type Options struct {
 	Log *slog.Logger
 }
 
-// Build loads the catalogs reachable from main in dir, materializes them into
-// documents, applies comment-derived field descriptions, and merges the result.
-// It returns the merged document and the number of catalogs found. The whole
-// run — including the harness subprocess it spawns — is bounded by ctx.
+// Build loads the module's catalogs in dir, materializes them into documents,
+// applies comment-derived field descriptions, and merges the result. It returns
+// the merged document and the number of catalogs found. The whole run —
+// including the harness subprocess it spawns — is bounded by ctx.
 //
 // opts.Config names the schema-mapping config file (see Options); the discovery
 // it triggers is reported through opts.Log.
@@ -62,35 +62,30 @@ func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, 
 	if err != nil {
 		return nil, 0, err
 	}
-	reachable := reachableFromMain(pkgs)
+	imported := importedByMain(pkgs)
 	loadDone(
-		count(len(pkgs), "package")+", "+count(countMains(pkgs), "main package"),
+		fmt.Sprintf("%s, %d imported by a main", count(len(pkgs), "package"), len(imported)),
 		"packages", len(pkgs),
-		"mains", countMains(pkgs),
-		"reachable", len(reachable),
+		"importedByMain", len(imported),
 	)
-	// A package outside the main reachability graph is a common surprise: its
-	// catalogs exist but are not in the document.
-	if skipped := len(pkgs) - len(reachable); skipped > 0 {
-		loadLog.Info(count(skipped, "package") + " not reachable from main skipped")
-	}
 
 	catLog, catDone := logging.Step(log, "catalogs")
-	cats := scanCatalogs(pkgs, reachable)
+	cats := scanCatalogs(pkgs)
 	if len(cats) == 0 {
 		return nil, 0, fmt.Errorf(
-			"no AsyncAPI catalogs (*asyncgo.SpecResult vars) reachable from main in %s",
+			"no AsyncAPI catalogs (*asyncgo.SpecResult vars) found in %s",
 			dir,
 		)
 	}
 	catDone(count(len(cats), "catalog")+" found", "catalogs", len(cats))
 	logCatalogs(catLog, dir, cats)
+	warnCatalogsOutsideMain(catLog, cats, imported, countMains(pkgs) > 0)
 
-	refs, err := collectCombinatorRefs(pkgs, reachable)
+	refs, err := collectCombinatorRefs(pkgs)
 	if err != nil {
 		return nil, 0, err
 	}
-	aliases := collectAliasEdges(pkgs, reachable)
+	aliases := collectAliasEdges(pkgs)
 	logRefs(logging.Tag(log, "refs"), refs, aliases)
 
 	docs, err := Materialize(ctx, dir, Plan{
@@ -116,7 +111,7 @@ func Build(ctx context.Context, dir string, opts Options) (*spec.AsyncAPI, int, 
 	// the catalogs — so they are reported as findings, not as debug detail.
 	logging.ReportFindings(mergeLog, collisionFindings(collisions))
 
-	descriptions := extractDescriptions(pkgs, reachable)
+	descriptions := extractDescriptions(pkgs)
 	applyDescriptions(doc, descriptions)
 	logDescriptions(logging.Tag(log, "descriptions"), descriptions)
 	return doc, len(cats), nil
@@ -132,8 +127,9 @@ func count(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
-// countMains counts the main packages in pkgs. A module with none has every
-// package considered reachable, which the load summary makes visible.
+// countMains counts the main packages in pkgs. Whether a module has a binary at
+// all decides which warning is honest: a library with no main cannot have a
+// catalog "imported by main", so warnCatalogsOutsideMain stays quiet.
 func countMains(pkgs []*packages.Package) int {
 	mains := 0
 	for _, p := range pkgs {
@@ -142,6 +138,33 @@ func countMains(pkgs []*packages.Package) int {
 		}
 	}
 	return mains
+}
+
+// warnCatalogsOutsideMain reports a catalog that no main package imports.
+//
+// It is a warning rather than a gate: the catalog is in the document either way,
+// because the document describes the module and a library module has no binary to
+// import anything. The warning exists because the opposite reading — "my catalog
+// silently vanished" — is exactly what the old reachable-from-main filter
+// produced, and it is worth one line to rule out. hasMain suppresses it for a
+// module with no main package at all, where every catalog would trip it.
+func warnCatalogsOutsideMain(
+	log *slog.Logger,
+	cats []Catalog,
+	imported map[string]bool,
+	hasMain bool,
+) {
+	if !hasMain {
+		return
+	}
+	for _, c := range cats {
+		if imported[c.PkgPath] {
+			continue
+		}
+		log.Warn(
+			c.String() + " is not imported by any main package; it is still generated",
+		)
+	}
 }
 
 // logCatalogs reports each catalog's declaring file at Debug, so a wrong or
