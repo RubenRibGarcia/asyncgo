@@ -11,6 +11,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"path"
 	"reflect"
 	"sort"
 
@@ -23,11 +24,35 @@ type Catalog struct {
 	PkgPath string // import path of the package declaring the variable
 	VarName string // exported variable name
 	File    string // absolute path of the file declaring it, for diagnostics
+	// Name is the document name the catalog declares with asyncgo.Spec(...).Named,
+	// known only once the harness has evaluated the value. Empty means the catalog
+	// declares no name and Stem derives one.
+	Name string
 }
 
 // String renders the catalog as pkgPath.VarName, which is how every diagnostic
 // names one.
 func (c Catalog) String() string { return c.PkgPath + "." + c.VarName }
+
+// Stem is the catalog's document name: the name declared with Named when there
+// is one, otherwise "<declaring package basename>.<variable name>" — Catalog in
+// package orders becomes "orders.Catalog".
+//
+// It is never empty and never contains a path separator, so it is safe as a
+// filename stem. Deriving it from the catalog rather than from how many catalogs
+// the module holds is deliberate: a count-derived name (asyncapi.yaml for one,
+// <name>.asyncapi.yaml for several) would rename an existing artifact the moment
+// a second catalog appeared, breaking both the committed file and check.
+func (c Catalog) Stem() string {
+	if c.Name != "" {
+		return c.Name
+	}
+	base := path.Base(c.PkgPath)
+	if base == "." || base == "/" {
+		return c.VarName
+	}
+	return base + "." + c.VarName
+}
 
 // specResultType is the identity of *asyncgo.SpecResult, derived from the real
 // type so it stays correct if the module path changes.

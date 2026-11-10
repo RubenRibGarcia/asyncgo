@@ -72,6 +72,7 @@ type harnessOutput struct {
 type catalogOutcome struct {
 	PkgPath string         `yaml:"pkgPath"`
 	VarName string         `yaml:"varName"`
+	Name    string         `yaml:"name,omitempty"`
 	Doc     *spec.AsyncAPI `yaml:"doc,omitempty"`
 	Errors  []string       `yaml:"errors,omitempty"`
 }
@@ -110,12 +111,17 @@ func removeHarnessDir(tmp string, log *slog.Logger, keep bool, remove func(strin
 // Running the harness executes only package init functions of the catalog
 // packages (never the main package, which is not importable); the catalog
 // values themselves are already-built DSL results.
+// Materialize materializes every catalog in plan into its own document. It
+// returns one Document per valid catalog, in plan order, carrying the identity
+// the harness reported — which is the only place the catalog's declared document
+// name is known, since a name is a value produced by the DSL rather than a
+// declaration the static scan can read.
 func Materialize(
 	ctx context.Context,
 	dir string,
 	plan Plan,
 	opts Options,
-) ([]*spec.AsyncAPI, error) {
+) ([]Document, error) {
 	if len(plan.Catalogs) == 0 {
 		return nil, nil
 	}
@@ -169,7 +175,7 @@ func Materialize(
 		return nil, fmt.Errorf("decoding harness output: %w", err)
 	}
 	reportMappingWarnings(log, out.Warnings)
-	var docs []*spec.AsyncAPI
+	var docs []Document
 	var catErrs CatalogErrors
 	for _, c := range out.Catalogs {
 		if len(c.Errors) > 0 {
@@ -180,7 +186,10 @@ func Materialize(
 			})
 			continue
 		}
-		docs = append(docs, c.Doc)
+		docs = append(docs, Document{
+			Catalog: Catalog{PkgPath: c.PkgPath, VarName: c.VarName, Name: c.Name},
+			Doc:     c.Doc,
+		})
 	}
 	// The stage closes even when a catalog is invalid: the harness did run, and the
 	// counts are what make the failure report below legible.
@@ -280,6 +289,7 @@ func harness(plan Plan) string {
 	b.WriteString("type catalogOutcome struct {\n")
 	b.WriteString("\tPkgPath string         `yaml:\"pkgPath\"`\n")
 	b.WriteString("\tVarName string         `yaml:\"varName\"`\n")
+	b.WriteString("\tName    string         `yaml:\"name,omitempty\"`\n")
 	b.WriteString("\tDoc     *spec.AsyncAPI `yaml:\"doc,omitempty\"`\n")
 	b.WriteString("\tErrors  []string       `yaml:\"errors,omitempty\"`\n")
 	b.WriteString("}\n\n")
@@ -316,7 +326,14 @@ func harness(plan Plan) string {
 	b.WriteString("\tout := harnessOutput{}\n")
 	for _, e := range catEntries {
 		fmt.Fprintf(&b, "\t{\n")
-		fmt.Fprintf(&b, "\t\tc := catalogOutcome{PkgPath: %q, VarName: %q}\n", e.pkgPath, e.varName)
+		fmt.Fprintf(
+			&b,
+			"\t\tc := catalogOutcome{PkgPath: %q, VarName: %q, Name: %s.%s.Name}\n",
+			e.pkgPath,
+			e.varName,
+			e.alias,
+			e.varName,
+		)
 		fmt.Fprintf(
 			&b,
 			"\t\tif errs := %s.%s.ValidationErrors(); len(errs) > 0 {\n",
