@@ -297,7 +297,7 @@ a pre-1.0 surface, kept loud by `TestParameterFieldsMatchSpec` and
 `TestEncodeChannelParameters`, which assert both the field set and that no
 `schema` key can reach the wire.
 
-`Schema.Example` was a second deviation until [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18): 3.1.0's Schema Object defines only the Draft-07 `examples` array, never a singular `example`. The field and its `asyncapi:"example=…"` directive were removed rather than deprecated, which was a breaking change to a pre-1.0 surface — see [ADR 0006](adr/0006-schema-keywords.md). Because `applyTag` ignores an unrecognised directive, a stale `example=` tag is now silently dropped; making that loud is tracked as follow-up work in the design doc (O2).
+`Schema.Example` was a second deviation until [#18](https://github.com/RubenRibGarcia/asyncgo/issues/18): 3.1.0's Schema Object defines only the Draft-07 `examples` array, never a singular `example`. The field and its `asyncapi:"example=…"` directive were removed rather than deprecated, which was a breaking change to a pre-1.0 surface — see [ADR 0006](adr/0006-schema-keywords.md). A stale `example=` tag is not tolerated silently: the static tag pass rejects any directive outside the closed vocabulary, so it fails generation with `unknown directive "example"; did you mean "examples"?` (design doc O2).
 
 The 3.1.0 `security` field is `[[Security Scheme Object | Reference Object]]` —
 an array of schemes or `$ref`s, and 3.1.0 defines no Security Requirement

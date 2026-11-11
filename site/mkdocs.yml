@@ -60,7 +60,9 @@ nav:
       - Protocol bindings: bindings.md
       - Features: features.md
   - CLI: cli.md
-  - Reference: reference/index.md
+  - Reference:
+      - API index: reference/index.md
+      - Struct tags: reference/struct-tags.md
   - Project:
       - Overview: project/index.md
       - AsyncAPI 3.1.0 coverage: project/asyncapi-3.1.0-coverage.md

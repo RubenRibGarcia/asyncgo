@@ -83,6 +83,12 @@ protocol binding structs and the closed vocabularies.
 | [`schema.MapSchemaByName`](https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo/schema#MapSchemaByName) | The name-keyed form, which is what `asyncgo.yaml` compiles to |
 | [`schema.Finalize`](https://pkg.go.dev/github.com/RubenRibGarcia/asyncgo/schema#Finalize) | Apply mappings to a document built in process, as the CLI does |
 
+## Struct tags
+
+Payloads are derived from Go types, and [`json` and `asyncapi` struct tags](struct-tags.md)
+are the only two tags `asyncgo` reads. That page is the directive reference: every
+flag, every value directive, the combinators, and the spellings that are rejected.
+
 ## CLI
 
 See [CLI](../cli.md) for flags, exit codes and verbose logging.
