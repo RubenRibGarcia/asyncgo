@@ -111,6 +111,14 @@ written: the whole set is validated and encoded before the first file.
 write for the same `--format`, `--output` and `--config` flags — so pass the same
 flags you generate with. The default is `asyncapi.yaml` in `dir`.
 
+| Flag | Effect |
+| --- | --- |
+| `[dir]` | Module root to load. Defaults to `.` |
+| `--format` `yaml`\|`json` | Encoding to compare. Defaults to `yaml` |
+| `-o`, `--output` | File to compare, **or a directory** (trailing separator) to check the whole artifact set |
+| `--config` | Schema-mapping file. Defaults to `<dir>/asyncgo.yaml` |
+| `--diff` | Print the value changes between the committed document and the generated one |
+
 ```bash
 # fail CI when asyncapi.yaml is out of date (check verifies asyncapi.yaml only)
 asyncgo check .
@@ -165,6 +173,39 @@ asyncgo check . || case $? in
   *) echo "the catalog does not build" ;;
 esac
 ```
+
+### Seeing what changed
+
+`--diff` explains a stale artifact as the **value changes** between the committed
+document and the one `generate` would write — one entry per added, removed or
+changed key:
+
+```console
+$ asyncgo check . --diff
+  /home/you/orders/asyncapi.yaml: channels.order-placed: added ({5 keys})
+  /home/you/orders/asyncapi.yaml: channels.order-renamed: removed ({5 keys})
+asyncgo: /home/you/orders/asyncapi.yaml: document is out of date; run `asyncgo generate`
+```
+
+The comparison is over keys and values, not text, so it reads the same for a YAML
+and a JSON artifact — including a YAML file checked with `--format json`. It
+prints at default verbosity (`--diff` is the request, so `-v` is not needed) and
+replaces the per-section `-v` findings for the same failure, so the drift is
+reported once.
+
+Each entry names the key path, the change, and the value. Two details keep the
+report readable:
+
+- A value too large for one line is summarised (`{5 keys}`, `[12 items]`) rather
+  than cut mid-way, and a long report stops at 50 entries per document with an
+  `and N more change(s)` line.
+- An artifact that no longer parses reports the first differing byte offset, and
+  one whose values all match — reindented, reordered, or carrying YAML anchors —
+  reports `values match, encoding differs` instead of printing nothing.
+
+In directory mode each stale document gets its own diff. A **missing** artifact
+and an **orphan** keep their one-line finding, because there is no second
+document to compare them against.
 
 ## Discovery and configuration
 

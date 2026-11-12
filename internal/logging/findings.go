@@ -84,6 +84,36 @@ func ReportFindings(log *slog.Logger, findings []Finding) {
 	h.writeFindings(findings)
 }
 
+// ReportDiff writes the value changes behind an out-of-date artifact, indented
+// the same way as findings and in the same shape.
+//
+// It is the ungated counterpart of ReportFindings: `--diff` is the user asking
+// for this detail, so the entries print at default verbosity too, whereas drift
+// findings are `-v` narration. Entries are grouped by path with a stable sort, so
+// each document keeps the order its diff produced (sorted by key) and a
+// truncation notice stays at the end of its own block instead of sorting into
+// the middle of it.
+func ReportDiff(log *slog.Logger, findings []Finding) {
+	if len(findings) == 0 {
+		return
+	}
+	sort.SliceStable(findings, func(i, j int) bool {
+		return findings[i].Path < findings[j].Path
+	})
+
+	h, ok := log.Handler().(*handler)
+	if !ok {
+		// Unknown handler: degrade to one record per entry, at a level the default
+		// verbosity admits, so a caller that swapped the handler still sees the
+		// detail it explicitly asked for.
+		for _, f := range findings {
+			log.Warn(f.String())
+		}
+		return
+	}
+	h.writeFindings(findings)
+}
+
 // writeFindings renders the indented block in one write, so the block cannot be
 // interleaved with a concurrent record.
 func (h *handler) writeFindings(findings []Finding) {
