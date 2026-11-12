@@ -37,6 +37,9 @@ declarations. Nothing here needs a hand-written schema.
   `schema.MapSchema`; a type you do not own can be mapped without a wrapper — see
   [Custom types](custom-types.md).
 
+The directive reference — every flag, every value directive, the combinators and
+the spellings that are rejected — is [Struct tags](reference/struct-tags.md).
+
 ## Schema composition
 
 Go struct composition maps onto the JSON Schema combinators `allOf`, `oneOf`, and

@@ -116,6 +116,10 @@ func BuildAll(ctx context.Context, dir string, opts Options) ([]Document, error)
 	logCatalogs(catLog, dir, cats)
 	warnCatalogsOutsideMain(catLog, cats, imported, countMains(pkgs) > 0)
 
+	if err := checkDirectives(pkgs); err != nil {
+		return nil, err
+	}
+
 	refs, err := collectCombinatorRefs(pkgs)
 	if err != nil {
 		return nil, err

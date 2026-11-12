@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
@@ -289,6 +291,173 @@ func TestCombinatorNames(t *testing.T) {
 			got, ok := combinatorNames(taggrammar.Parse(tc.tag), tc.key)
 			assert.Equal(t, tc.wantOK, ok)
 			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// minimalTags is one legal spelling per directive, and therefore the vocabulary
+// the package promises to honour. It is a third copy on purpose: DirectiveKeys and
+// applyTag's switch are the other two, and TestDirectiveVocabularyMatchesDerivation
+// is what fails when they drift apart — the same drift guard ADR 0007 legislated
+// for the grammar, applied to the vocabulary.
+var minimalTags = map[string]string{
+	"allOf":            "allOf=A|B",
+	"anyOf":            "anyOf=A|B",
+	"const":            "const=x",
+	"contentEncoding":  "contentEncoding=base64",
+	"contentMediaType": "contentMediaType=image/png",
+	"deprecated":       "deprecated",
+	"discriminator":    "discriminator=kind",
+	"enum":             "enum=a|b",
+	"examples":         "examples=x",
+	"format":           "format=date-time",
+	"maxItems":         "maxItems=1",
+	"maxProperties":    "maxProperties=1",
+	"minItems":         "minItems=1",
+	"minProperties":    "minProperties=1",
+	"oneOf":            "oneOf=A|B",
+	"readOnly":         "readOnly",
+	"required":         "required",
+	"uniqueItems":      "uniqueItems",
+	"writeOnly":        "writeOnly",
+}
+
+func TestDirectiveKeys(t *testing.T) {
+	want := make([]string, 0, len(minimalTags))
+	for key := range minimalTags {
+		want = append(want, key)
+	}
+	sort.Strings(want)
+
+	assert.Equal(t, want, DirectiveKeys())
+}
+
+// TestDirectiveVocabularyMatchesDerivation fails when the vocabulary and the code
+// that reads it disagree — a key added to one and not the other, which would make
+// CheckTag reject a working directive or accept a dead one.
+func TestDirectiveVocabularyMatchesDerivation(t *testing.T) {
+	// required and the three combinators are applied by fillFields, not applyTag.
+	callerApplied := map[string]bool{
+		"required": true,
+		"oneOf":    true,
+		"anyOf":    true,
+		"allOf":    true,
+	}
+
+	for _, key := range DirectiveKeys() {
+		t.Run("should_handle_"+key, func(t *testing.T) {
+			tag := minimalTags[key]
+			require.Empty(t, CheckTag(tag), "the vocabulary must accept its own spelling")
+
+			s := &spec.Schema{}
+			applyTag(s, taggrammar.Parse(tag))
+			applied := !reflect.DeepEqual(*s, spec.Schema{})
+
+			assert.Equal(t, !callerApplied[key], applied,
+				"%q applied by applyTag = %v", key, applied)
+		})
+	}
+}
+
+func TestCheckTag(t *testing.T) {
+	tests := []struct {
+		name string
+		tag  string
+		// want is one substring per expected error; nil means the tag is clean.
+		want []string
+	}{
+		{
+			name: "should_accept_an_empty_tag",
+			tag:  "",
+		},
+		{
+			name: "should_accept_a_json_only_tag",
+			tag:  "",
+		},
+		{
+			name: "should_accept_every_known_directive_at_once",
+			tag: "required readOnly writeOnly uniqueItems deprecated " +
+				"enum=draft|sent examples=1,000 format=date-time " +
+				"contentEncoding=base64 contentMediaType=image/png const=fixed " +
+				"discriminator=kind minItems=1 maxItems=9 minProperties=1 " +
+				"maxProperties=9 oneOf=A|B anyOf=A allOf=A",
+		},
+		{
+			// allOf is the one directive legal in both forms: bare composes an
+			// embedded struct, valued names the member types.
+			name: "should_accept_allOf_bare_and_with_a_value",
+			tag:  "allOf",
+		},
+		{
+			name: "should_accept_a_value_containing_a_comma",
+			tag:  "examples=1,000",
+		},
+		{
+			name: "should_suggest_the_closest_directive",
+			tag:  "requird",
+			want: []string{`unknown directive "requird"; did you mean "required"?`},
+		},
+		{
+			// The removed singular still suggests its replacement rather than
+			// silently disappearing.
+			name: "should_suggest_examples_for_the_removed_singular",
+			tag:  "example=x",
+			want: []string{`did you mean "examples"?`},
+		},
+		{
+			name: "should_list_the_vocabulary_when_nothing_is_close",
+			tag:  "zzz=x",
+			want: []string{`unknown directive "zzz"; want one of allOf, anyOf, const`},
+		},
+		{
+			// The old spelling, and the likeliest migration failure.
+			name: "should_name_the_whitespace_rule_for_a_comma_separated_tag",
+			tag:  "required,examples=x",
+			want: []string{`"required,examples": directives are separated by spaces, not commas`},
+		},
+		{
+			name: "should_reject_a_value_on_a_flag",
+			tag:  "readOnly=true",
+			want: []string{`"readOnly" is a flag and takes no value`},
+		},
+		{
+			name: "should_reject_a_directive_without_a_value",
+			tag:  "oneOf",
+			want: []string{`"oneOf" requires a value`},
+		},
+		{
+			name: "should_reject_an_empty_value",
+			tag:  "format=",
+			want: []string{`"format" has an empty value`},
+		},
+		{
+			name: "should_reject_an_empty_list_entry",
+			tag:  "oneOf=A|",
+			want: []string{`"oneOf" has an empty entry`},
+		},
+		{
+			name: "should_reject_a_directive_with_no_name",
+			tag:  "=x",
+			want: []string{"directive has no name"},
+		},
+		{
+			name: "should_report_every_violation_not_only_the_first",
+			tag:  "requird readOnly=true format=",
+			want: []string{
+				`unknown directive "requird"`,
+				`"readOnly" is a flag and takes no value`,
+				`"format" has an empty value`,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := CheckTag(tc.tag)
+			require.Len(t, errs, len(tc.want))
+			for i, want := range tc.want {
+				assert.Contains(t, errs[i].Error(), want)
+			}
 		})
 	}
 }

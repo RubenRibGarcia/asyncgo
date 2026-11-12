@@ -141,12 +141,11 @@ model emit non-conformant output — a §7 deviation with no upside once `Exampl
 exists — and two fields expressing one idea invites picking the wrong one. This
 is a breaking change, taken deliberately while the library is pre-1.0.
 
-**Consequence, accepted knowingly**: `applyTag` ignores an unrecognised
-directive, so a catalog still carrying `asyncapi:"example=x"` is silently
-dropped — no error, no warning. Mapping `example=` onto `examples=` was the
-alternative and was rejected because it keeps the deprecated spelling alive.
-Making unknown directives loud (O2) is the real fix for the whole class; until
-then a test pins the silent ignore so it stays deliberate and visible.
+**Consequence**: a catalog still carrying `asyncapi:"example=x"` fails
+`generate` and `check` with a located error — `unknown directive "example"; did
+you mean "examples"?` — rather than dropping it silently (O2, implemented).
+Mapping `example=` onto `examples=` was the alternative and was rejected because
+it keeps the deprecated spelling alive.
 
 ### D3 — Keyword-to-field names
 
@@ -216,13 +215,19 @@ lowercase because it is one word. `examples=` is **repeatable** rather than
 `|`-separated so an example containing `|` is expressible, unlike `enum=`.
 Directives are separated by whitespace — `asyncapi:"required examples=1,000"` —
 so a value may contain a comma but not a space. A legacy comma-separated tag is
-one unrecognized directive and sets nothing; O2 is where loud parsing would land.
+rejected and named as such: `"required,examples": directives are separated by
+spaces, not commas`.
 
-**A malformed value is ignored.** `minItems=abc` sets nothing. `applyTag` has no
-error channel and the whole derivation chain is error-free, so surfacing this
-would mean threading errors through `FromType` — a much larger change than the
-issue warrants. This matches the parser's existing behavior for an unknown
-directive. It is a documented limitation, not a silent default (O2).
+**A malformed value is ignored; a malformed directive is not.** `minItems=abc`
+still sets nothing: `applyTag` has no error channel and the derivation chain is
+error-free, so the numeric value itself is not validated (O2a). What *is*
+validated, by the static pass in `internal/discovery` before the harness is
+built, is the vocabulary and its shape: an unknown or misspelt directive, a flag
+carrying a value, a value directive with no value or an empty one, and an empty
+member in a `|`-separated list are all catalog build errors naming file, line and
+column. `schema.CheckTag` is the single arbiter, and
+`TestDirectiveVocabularyMatchesDerivation` fails when it and `applyTag` drift
+apart (O2).
 
 **Rationale**: Only keywords whose value is expressible in a tag string, or
 derivable from a Go type, belong here. `if`/`then`/`else`, `contains`,
@@ -425,7 +430,7 @@ merge at `doc.go:63` — the same pattern as `validateServerRefs`.
 type OrderPlaced struct {
 	Kind   string   `json:"kind"   asyncapi:"required const=OrderPlaced"`
 	Items  []string `json:"items"  asyncapi:"minItems=1 maxItems=10 uniqueItems examples=sku-1 examples=sku-2"`
-	Note   string   `json:"note"   asyncapi:"deprecated writeOnly maxLength=140"`
+	Note   string   `json:"note"   asyncapi:"deprecated writeOnly examples=none"`
 	Secret string   `json:"secret" asyncapi:"readOnly"`
 }
 
@@ -483,9 +488,10 @@ components:
   not the number/boolean. A tag cannot express the type; use
   `spec.SchemaProvider` for typed constants. Documented.
 - **`additionalItems` without tuple `items`** — emitted and inert (D10).
-- **A stale `asyncapi:"example=…"` tag** — the directive is gone (D2), so it is
-  silently ignored like any unknown directive. Nothing is emitted and nothing is
-  reported; O2 is the fix for the whole class. A test pins this.
+- **A stale `asyncapi:"example=…"` tag** — the directive is gone (D2), and the
+  static pass rejects it with `unknown directive "example"; did you mean
+  "examples"?` rather than ignoring it. `TestCheckTag` and
+  `TestCheckDirectives` pin the message and the position.
 - **A document using none of the 23 keywords** — byte-identical output; the
   integration golden fixtures are the proof.
 
@@ -544,11 +550,16 @@ follow-up commit on the same PR.
 - **O1 — tuple-form `items`.** Widen `Items` to a union/array so
   `additionalItems` has meaning. Needs the same "one struct, sorted-key
   round-trip" reasoning as the Multi Format decision.
-- **O2 — tag value validation.** Surface `minItems=abc` — and a directive that
-  no longer exists, such as the removed `example=` (D2) — as a
-  discovery/generator error rather than ignoring it. Requires an error channel
-  through `FromType`/`fillFields`/`applyTag`, or a static tag-lint pass in
-  `internal/discovery`.
+- **O2 — tag vocabulary validation.** Implemented. `schema.CheckTag` validates
+the closed vocabulary and each directive's arity, and the static pass in
+`internal/discovery` reports every violation as a located catalog build error
+(`file:line:col`) before the harness is built, so `generate` and `check` exit 1
+instead of emitting a document that silently lacks a constraint. Deliberately
+unchanged: the reflection pass stays lenient, because it also runs in process
+where no static pass has run.
+- **O2a — tag value parsing.** Still open. `minItems=abc` sets nothing, because
+the vocabulary check validates presence and shape, not whether the value parses
+as the keyword's type. Catch it the same way if a catalog ever depends on it.
 - **O4 — presence-aware `Const`/`Default`.** Apply the B8 fix to both
   any-valued fields so `const: false` and `default: 0` survive.
 - **O5 — derive structural keywords.** `if=Type`, `contains=Type`,

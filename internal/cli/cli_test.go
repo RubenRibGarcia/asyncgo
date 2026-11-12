@@ -865,6 +865,40 @@ func TestGenerateValidationError(t *testing.T) {
 	assert.Contains(t, err.Error(), "channel.orders-shipped: duplicate address")
 }
 
+// TestGenerateRejectsAnUnknownDirective is the end-to-end form of the static tag
+// pass: a misspelt directive used to derive a document that silently lacked the
+// constraint its author meant to add. It has to reach the CLI as a located build
+// error — not as a document, and not as exit 3, which would tell CI to regenerate
+// a catalog that is broken rather than stale.
+func TestGenerateRejectsAnUnknownDirective(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	dir := copySimpleFixture(t)
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, "typo.go"),
+		[]byte("package simple\n\n"+
+			"// TagTypo carries a misspelt directive.\n"+
+			"type TagTypo struct {\n"+
+			"\tAmount string `json:\"amount\" asyncapi:\"requird\"`\n"+
+			"}\n"),
+		0o644,
+	))
+
+	for _, cmd := range []string{"generate", "check"} {
+		t.Run(cmd, func(t *testing.T) {
+			_, _, err := execute(t, BuildInfo{}, cmd, dir)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "typo.go:5:", "the error names the position")
+			assert.Contains(
+				t,
+				err.Error(),
+				`asyncapi:"requird": unknown directive "requird"; did you mean "required"?`,
+			)
+			assert.Equal(t, 1, ExitCode(err), "a broken catalog is exit 1, not 3")
+		})
+	}
+}
+
 // TestCheckFormatAndOutput covers the flags check shares with generate: without
 // them, check could only ever verify a yaml document written to the default
 // path, and always failed against json or a custom -o.
