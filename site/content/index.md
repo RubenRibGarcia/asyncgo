@@ -150,7 +150,8 @@ once, however many places reference it.
 
     Byte-for-byte comparison against what `generate` would write, with a
     dedicated exit code for a stale artifact — so "regenerate the spec" is a
-    distinct failure from "the build is broken".
+    distinct failure from "the build is broken". `--diff` then names the keys
+    and values that changed, for a YAML or a JSON artifact alike.
 
 -   **[Third-party types](custom-types.md#third-party-types-and-declared-mappings)**
 

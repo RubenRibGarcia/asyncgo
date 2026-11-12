@@ -180,6 +180,22 @@ from your `go.mod` — no `@latest` lookup, no version pin:
 want to know which settings it used; `-vv` adds per-package detail and a timing
 recap. [CLI](cli.md#verbose-logging) has the transcripts.
 
+When the check does fail, `--diff` prints the **value changes** between the
+committed document and the one `generate` would write — one entry per added,
+removed or changed key. It needs no `-v`, and it reads the same for a YAML and a
+JSON artifact alike:
+
+```console
+$ asyncgo check . --diff
+  /home/you/orders/asyncapi.yaml: channels.order-placed: added ({5 keys})
+  /home/you/orders/asyncapi.yaml: channels.order-renamed: removed ({5 keys})
+asyncgo: /home/you/orders/asyncapi.yaml: document is out of date; run `asyncgo generate`
+```
+
+[Seeing what changed](cli.md#seeing-what-changed) covers the report cap and the
+two fallbacks — an artifact that no longer parses, and one where only the
+encoding changed.
+
 ## Next
 
 - **[Concepts](concepts.md)** — the two touchpoints in detail, message identity,
