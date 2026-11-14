@@ -247,6 +247,70 @@ func TestReportFindings(t *testing.T) {
 
 		assert.Empty(t, out.String())
 	})
+
+	t.Run("should_degrade_to_records_for_an_unknown_handler", func(t *testing.T) {
+		var out bytes.Buffer
+		plain := slog.New(slog.NewTextHandler(&out, nil))
+
+		logging.ReportFindings(plain, []logging.Finding{{Where: "channels.c", What: "missing"}})
+		logging.ReportDiff(plain, []logging.Finding{{Where: "channels.d", What: "added"}})
+
+		assert.Contains(t, out.String(), "channels.c: missing")
+		assert.Contains(t, out.String(), "channels.d: added")
+	})
+}
+
+// TestReportDiff pins the difference from ReportFindings that makes --diff
+// usable without -v: the entries print at default verbosity, and each document's
+// own order survives the sort so a truncation notice ends its block.
+func TestReportDiff(t *testing.T) {
+	t.Run("should_print_at_quiet", func(t *testing.T) {
+		var out bytes.Buffer
+
+		logging.ReportDiff(logging.New(&out, logging.Quiet), []logging.Finding{
+			{
+				Path:  "asyncapi.yaml",
+				Where: "channels.c",
+				What:  "added",
+				Why:   `{"address":"orders"}`,
+			},
+		})
+
+		assert.Equal(
+			t,
+			`  asyncapi.yaml: channels.c: added ({"address":"orders"})`+"\n",
+			out.String(),
+			"--diff is an explicit request, so it must not need -v",
+		)
+	})
+
+	t.Run("should_group_by_path_and_keep_each_documents_order", func(t *testing.T) {
+		var out bytes.Buffer
+
+		logging.ReportDiff(logging.New(&out, logging.Quiet), []logging.Finding{
+			{Path: "b.yaml", Where: "x", What: "changed"},
+			{Path: "a.yaml", Where: "z", What: "changed"},
+			{Path: "a.yaml", Where: "a", What: "changed"},
+			{Path: "a.yaml", Where: "document", What: "and 1 more change"},
+		})
+
+		assert.Equal(
+			t,
+			"  a.yaml: z: changed\n"+
+				"  a.yaml: a: changed\n"+
+				"  a.yaml: document: and 1 more change\n"+
+				"  b.yaml: x: changed\n",
+			out.String(),
+		)
+	})
+
+	t.Run("should_print_nothing_for_an_empty_report", func(t *testing.T) {
+		var out bytes.Buffer
+
+		logging.ReportDiff(logging.New(&out, logging.Quiet), nil)
+
+		assert.Empty(t, out.String())
+	})
 }
 
 // firstLine and lastLine read the ends of a multi-line capture.

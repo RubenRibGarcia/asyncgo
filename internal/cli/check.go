@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
+	"github.com/RubenRibGarcia/asyncgo/internal/docdiff"
 	"github.com/RubenRibGarcia/asyncgo/internal/logging"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/goccy/go-yaml"
@@ -30,8 +31,14 @@ var ErrOutOfDate = errors.New("document is out of date")
 // first ten name the change; the rest would bury the report.
 const maxFindingsPerSection = 10
 
+// maxDiffChanges caps how many value changes --diff prints per artifact. Raising
+// it above the section cap is deliberate: a value diff is a targeted request,
+// and one schema rename can legitimately touch dozens of keys.
+const maxDiffChanges = 50
+
 func newCheckCmd() *cobra.Command {
 	var output, format, config string
+	var showDiff bool
 	cmd := &cobra.Command{
 		Use:   "check [dir]",
 		Short: "Fail if the generated document is out of date",
@@ -44,6 +51,11 @@ func newCheckCmd() *cobra.Command {
 			"catalog claims. The set produces one verdict, so CI keeps branching on one code.\n\n" +
 			"With -v, a stale artifact is reported as one finding per differing section key, so " +
 			"CI says what changed instead of only that something did.\n\n" +
+			"With --diff, it is reported as the value changes between the committed document and " +
+			"the one generate would write: one entry per added, removed or changed key. The " +
+			"comparison is over keys and values rather than text, so it reads the same for a " +
+			"YAML and a JSON artifact — including a YAML file checked with --format json — and " +
+			"it prints without -v.\n\n" +
 			"Exit codes:\n" +
 			"  0  the artifact(s) are up to date\n" +
 			"  1  the check could not run (build error, missing artifact in file mode, I/O failure)\n" +
@@ -71,9 +83,9 @@ func newCheckCmd() *cobra.Command {
 				Log:    logging.FromContext(cmd.Context()),
 			}
 			if mode == modeDir {
-				return checkPerCatalog(cmd, dir, path, format, selected, opts)
+				return checkPerCatalog(cmd, dir, path, format, selected, opts, showDiff)
 			}
-			return checkMerged(cmd, dir, path, format, selected, opts)
+			return checkMerged(cmd, dir, path, format, selected, opts, showDiff)
 		},
 	}
 	cmd.Flags().
@@ -82,6 +94,8 @@ func newCheckCmd() *cobra.Command {
 		StringVarP(&output, "output", "o", "", "output file, or a directory (trailing separator) for one document per catalog (default: <dir>/asyncapi.<format>)")
 	cmd.Flags().
 		StringVar(&config, "config", "", "schema-mapping config file (default: <dir>/asyncgo.yaml)")
+	cmd.Flags().
+		BoolVar(&showDiff, "diff", false, "print the value changes between the committed document and the one generate would write")
 	return cmd
 }
 
@@ -91,6 +105,7 @@ func checkMerged(
 	dir, path, format string,
 	selected outputFormat,
 	opts discovery.Options,
+	showDiff bool,
 ) error {
 	log := logging.FromContext(cmd.Context())
 
@@ -123,7 +138,10 @@ func checkMerged(
 	// the verbose detail behind it, so CI keeps parsing one familiar line.
 	if findings, equal := compareArtifact(path, want, got, format, checkLog); !equal {
 		checkLog.Info(path+" is out of date", "path", path)
-		logging.ReportFindings(checkLog, findings)
+		if showDiff {
+			findings = diffFindings(checkLog, path, want, got, format)
+		}
+		reportFindings(checkLog, findings, showDiff)
 		return fmt.Errorf("%s: %w; run `asyncgo generate`", path, ErrOutOfDate)
 	}
 
@@ -152,6 +170,7 @@ func checkPerCatalog(
 	dir, outDir, format string,
 	selected outputFormat,
 	opts discovery.Options,
+	showDiff bool,
 ) error {
 	log := logging.FromContext(cmd.Context())
 
@@ -186,7 +205,14 @@ func checkPerCatalog(
 		}
 		if f, equal := compareArtifact(a.path, want, a.data, format, checkLog); !equal {
 			checkLog.Info(a.path+" is out of date", "path", a.path)
-			findings = append(findings, f...)
+			if showDiff {
+				findings = append(
+					findings,
+					diffFindings(checkLog, a.path, want, a.data, format)...,
+				)
+			} else {
+				findings = append(findings, f...)
+			}
 			stale = append(stale, filepath.Base(a.path))
 		}
 	}
@@ -206,7 +232,7 @@ func checkPerCatalog(
 	}
 
 	if len(stale) > 0 {
-		logging.ReportFindings(checkLog, findings)
+		reportFindings(checkLog, findings, showDiff)
 		return fmt.Errorf(
 			"%s: %w (%s); run `asyncgo generate`",
 			outDir, ErrOutOfDate, staleSummary(stale),
@@ -307,30 +333,197 @@ func compareArtifact(
 	return sectionFindings(path, stale, fresh), false
 }
 
-// decodeArtifact parses an artifact with the decoder matching the format it was
-// written in.
+// decodeArtifact parses an artifact into the typed document. Like
+// decodeDocument it tolerates an artifact whose encoding is not the one --format
+// selected, because -o picks the file and --format picks the encoding: a YAML
+// file checked with `--format json` should still be readable, not fall back to a
+// byte offset because the JSON decoder rejected it.
 func decodeArtifact(data []byte, format string) (*spec.AsyncAPI, error) {
-	doc := &spec.AsyncAPI{}
+	first, second := decodeArtifactYAML, decodeArtifactJSON
 	if format == "json" {
-		return doc, json.Unmarshal(data, doc)
+		first, second = decodeArtifactJSON, decodeArtifactYAML
 	}
-	return doc, yaml.Unmarshal(data, doc)
+	doc, err := first(data)
+	if err == nil {
+		return doc, nil
+	}
+	if other, otherErr := second(data); otherErr == nil {
+		return other, nil
+	}
+	// Report the failure the requested decoder produced: it names the format the
+	// user asked to check.
+	return nil, err
+}
+
+func decodeArtifactYAML(data []byte) (*spec.AsyncAPI, error) {
+	doc := &spec.AsyncAPI{}
+	if err := yaml.Unmarshal(data, doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+func decodeArtifactJSON(data []byte) (*spec.AsyncAPI, error) {
+	doc := &spec.AsyncAPI{}
+	if err := json.Unmarshal(data, doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+// reportFindings writes the collected findings with the reporter the run asked
+// for. --diff is an explicit request, so its entries print at default verbosity;
+// the -v findings keep their existing gate.
+func reportFindings(log *slog.Logger, findings []logging.Finding, showDiff bool) {
+	if showDiff {
+		logging.ReportDiff(log, findings)
+		return
+	}
+	logging.ReportFindings(log, findings)
+}
+
+// diffFindings explains a stale artifact as the value changes between the
+// committed document and the one generate would write, one finding per added,
+// removed or changed key.
+//
+// It decodes both sides as generic documents rather than typed ones: the walk
+// needs to see values and keys the typed model does not carry, and the two sides
+// may not even share an encoding. An artifact that does not decode at all gets
+// the byte offset instead, since that is the only honest location left.
+func diffFindings(
+	log *slog.Logger,
+	path string,
+	want, got []byte,
+	format string,
+) []logging.Finding {
+	before, err := decodeDocument(want, format)
+	if err != nil {
+		log.Debug("artifact does not decode as a document: " + err.Error())
+		return []logging.Finding{byteOffsetFinding(path, want, got)}
+	}
+	after, err := decodeDocument(got, format)
+	if err != nil {
+		// The generated document always decodes; failing here is a bug in the
+		// encoder, not a stale artifact, so say nothing rather than mislead.
+		log.Debug("generated document does not decode: " + err.Error())
+		return nil
+	}
+
+	changes := docdiff.Changes(before, after)
+	if len(changes) == 0 {
+		// Byte equality failed but every value matched: the encoding differs.
+		return []logging.Finding{encodingOnlyFinding(path, want, got)}
+	}
+
+	findings := make([]logging.Finding, 0, len(changes)+1)
+	for i, c := range changes {
+		if i == maxDiffChanges {
+			findings = append(findings, logging.Finding{
+				Path:  path,
+				Where: "document",
+				What:  fmt.Sprintf("and %d more change(s)", len(changes)-i),
+			})
+			break
+		}
+		findings = append(findings, changeFinding(path, c))
+	}
+	return findings
+}
+
+// changeFinding renders one value change in the finding shape, so a diff entry
+// and a drift entry read the same way.
+func changeFinding(path string, c docdiff.Change) logging.Finding {
+	where := c.Path
+	if where == "" {
+		where = "document"
+	}
+	f := logging.Finding{Path: path, Where: where, What: string(c.Kind)}
+	switch c.Kind {
+	case docdiff.Added:
+		f.Why = docdiff.FormatValue(c.After)
+	case docdiff.Removed:
+		f.Why = docdiff.FormatValue(c.Before)
+	case docdiff.Changed:
+		f.Why = docdiff.FormatValue(c.Before) + " -> " + docdiff.FormatValue(c.After)
+	}
+	return f
+}
+
+// encodingOnlyFinding explains a byte difference the value comparison cannot
+// see: the artifact decodes to the same document generate would write, so only
+// the encoding differs — indentation, key order, line endings, or the anchors a
+// YAML file may carry. Staying silent here would report a stale artifact with no
+// explanation at all.
+func encodingOnlyFinding(path string, want, got []byte) logging.Finding {
+	return logging.Finding{
+		Path:  path,
+		Where: fmt.Sprintf("byte %d", firstDifference(want, got)),
+		What:  "values match, encoding differs",
+		Why:   fmt.Sprintf("artifact is %d bytes, generated is %d", len(want), len(got)),
+	}
+}
+
+// decodeDocument decodes an artifact into the generic document the value diff
+// walks. It tries the run's format first and falls back to the other one: --format
+// picks the encoding and -o picks the file, so `-o spec.yaml --format json` is a
+// valid invocation, and each parser accepts the other's input often enough that
+// the pair recognises both encodings either way round.
+func decodeDocument(data []byte, format string) (any, error) {
+	first, second := decodeYAML, decodeJSON
+	if format == "json" {
+		first, second = decodeJSON, decodeYAML
+	}
+	doc, err := first(data)
+	if err == nil {
+		return doc, nil
+	}
+	if other, otherErr := second(data); otherErr == nil {
+		return other, nil
+	}
+	return nil, err
+}
+
+// decodeYAML parses a YAML document, resolving anchors and aliases into values.
+func decodeYAML(data []byte) (any, error) {
+	var doc any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+// decodeJSON parses a JSON document. UseNumber keeps an integer's digits, so a
+// 64-bit binding value reaches the comparison without rounding through float64.
+func decodeJSON(data []byte) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var doc any
+	if err := dec.Decode(&doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
 }
 
 // byteOffsetFinding locates a difference the section comparison cannot describe.
 func byteOffsetFinding(path string, want, got []byte) logging.Finding {
-	offset := 0
-	for offset < len(want) && offset < len(got) && want[offset] == got[offset] {
-		offset++
-	}
 	return logging.Finding{
 		Path:  path,
-		Where: fmt.Sprintf("byte %d", offset),
+		Where: fmt.Sprintf("byte %d", firstDifference(want, got)),
 		What:  "differs from what generate would write",
 		Why: fmt.Sprintf(
 			"artifact is %d bytes, generated is %d", len(want), len(got),
 		),
 	}
+}
+
+// firstDifference returns the offset of the first byte two documents disagree
+// on, or the length of the shorter one when it is a prefix of the other.
+func firstDifference(want, got []byte) int {
+	offset := 0
+	for offset < len(want) && offset < len(got) && want[offset] == got[offset] {
+		offset++
+	}
+	return offset
 }
 
 // sectionKeys is one section of the document reduced to the set of keys it

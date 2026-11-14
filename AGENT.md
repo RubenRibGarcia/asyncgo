@@ -110,7 +110,7 @@ artifact.
 | DSL | `asyncgo.Spec`, `SpecResult.Named`, `Info`, `DefaultContentType`, `Servers`, `Server`, `SecuritySchemes`, `SecurityScheme`, `Replies`, `Reply`, `ReplyAddresses`, `ReplyAddress`, `OperationTraits`, `OperationTrait`, `MessageTraits`, `MessageTrait`, `CorrelationIDs`, `CorrelationID`, `Channels`, `Channel`, `Operation`, `MessageOf`, `MessageFrom`, `Schemas`, `Schema`, one typed binding helper per protocol (20) plus `Binding` |
 | Spec model | `spec.AsyncAPI`, `Info`, `Server`, `SecurityScheme`, `OAuthFlows`, `OAuthFlow`, `Channel`, `Parameter`, `Operation`, `OperationTrait`, `OperationReply`, `OperationReplyAddress`, `Message`, `MessageTrait`, `CorrelationID`, `Schema`, `MultiFormat`, `Components`, `*Bindings`, protocol binding structs |
 | Schema | `schema.FromType(reflect.Type, defs)`, `schema.Name`, `schema.Ref` |
-| CLI | `asyncgo generate [dir] [-o output|dir/] [--format yaml|json] [--config path]`, `asyncgo check [dir] [-o output|dir/] [--format yaml|json] [--config path]` |
+| CLI | `asyncgo generate [dir] [-o output|dir/] [--format yaml|json] [--config path]`, `asyncgo check [dir] [-o output|dir/] [--format yaml|json] [--config path] [--diff]` |
 
 ## Directory Structure
 
@@ -131,6 +131,7 @@ asyncgo/
 │   ├── designdoc/              #   design docs (proposal → review → ADR)
 │   └── templates/              #   adr/design-doc templates
 ├── internal/cli/               # Cobra command tree: generate | check | version
+├── internal/docdiff/           # value diff behind `check --diff` (not public API)
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
 ├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, parameters, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes, mappings — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation

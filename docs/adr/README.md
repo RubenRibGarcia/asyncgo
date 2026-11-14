@@ -62,3 +62,4 @@ ADR can be written directly — the design-doc step is optional, the ADR is not.
 | [0009](0009-verbose-cli-logging.md) | Narrate CLI runs with a repeatable verbose flag | accepted | 2026-11-08 | 2026-11-08 |
 | [0010](0010-catalog-scope-is-the-module.md) | Scope catalog discovery to the module, not the main import graph | accepted | 2026-11-10 | 2026-11-10 |
 | [0011](0011-per-catalog-documents.md) | Emit one document per catalog when the destination is a directory | accepted | 2026-11-10 | 2026-11-10 |
+| [0012](0012-check-value-diff.md) | Explain a stale artifact with a value diff | accepted | 2026-11-12 | 2026-11-12 |
