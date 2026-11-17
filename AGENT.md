@@ -120,9 +120,8 @@ asyncgo/
 ├── README.md                   # User-facing docs
 ├── go.mod / go.sum
 ├── go.work                     # multi-module workspace (root + test/data/* + test/integration + tools)
-├── .goreleaser.yaml            # release build: cross-compile + version ldflags
-├── .github/workflows/          # CI (test.yaml) + release (release.yml) + site (docs.yml)
-├── site/                       # MkDocs Material project site, published to GitHub Pages
+├── cliff.toml                  # changelog rules: conventional commits → release notes
+├── .github/workflows/          # CI (test.yaml) + release (release.yml) + site (docs.yml)├── site/                       # MkDocs Material project site, published to GitHub Pages
 ├── spec/                       # Typed AsyncAPI 3.1.0 object model + codecs
 ├── schema/                     # struct → JSON Schema (the "data contract" half)
 ├── cmd/asyncgo/                # thin main: build metadata + cli.Execute
@@ -193,22 +192,38 @@ A merged public-API change with stale site pages is an incomplete change.
 
 ## Release
 
-Releases follow [semantic versioning](https://semver.org/). A release is made
-manually by pushing a new git tag following semver:
+Releases follow [semantic versioning](https://semver.org/). A release is one
+`workflow_dispatch` run of `.github/workflows/release.yml`:
 
-1. Tag the commit to release (`git tag vX.Y.Z`) and push it
-   (`git push origin vX.Y.Z`).
-2. Pushing the `v*` tag triggers the `release` workflow
-   (`.github/workflows/release.yml`), which runs
-   [goreleaser](https://goreleaser.com) (`.goreleaser.yaml`).
-3. GoReleaser builds the `asyncgo` binary for linux/darwin/windows ×
-   amd64/arm64, stamps the version via `-ldflags -X main.version=vX.Y.Z`, and
-   creates the GitHub release with the archives, checksums, and source tarball.
-   The workflow then attests the checksums and digests.
+1. Actions → **Release** → *Run workflow*, with `version: X.Y.Z` (no leading
+   `v`). Dispatch `dry_run: true` first when the notes matter — it validates and
+   renders the changelog without tagging anything.
+2. The workflow refuses to run unless `HEAD` is `origin/master` and the newest
+   `Test & Coverage` run succeeded for exactly that commit.
+3. It renders the release notes with [git-cliff](https://git-cliff.org) from
+   `cliff.toml`, creates the annotated tag `vX.Y.Z`, and publishes the GitHub
+   release with those notes as its body.
+4. It then dispatches the docs workflow, so the site's Changelog page
+   (`site/hooks/changelog.py`) renders the new release.
 
-`asyncgo version` reports the stamped version (falling back to the module
-version for `go install ...@vX.Y.Z` installs, and `devel` for local builds).
-The version is the git tag — never stored in source.
+There are no build artifacts. GitHub attaches the source archives to the tag,
+and the CLI is installed with
+`go install github.com/RubenRibGarcia/asyncgo/cmd/asyncgo@vX.Y.Z`. That install
+reports the module version, because the toolchain records it; `devel` only comes
+from a `go build` in a working tree. The version is the git tag — never stored in
+source.
+
+GitHub Releases is the changelog's single source of truth, so a commit that ships
+a user-visible change must be `feat:`, `fix:`, `perf:`, `refactor:` or `revert:`
+— `docs:`, `test:`, `ci:`, `build:`, `chore:` and `style:` never reach a release.
+Correct published notes with `gh release edit vX.Y.Z --notes-file <file>`; there
+is no second changelog file in the repository to keep in step.
+
+Preview what a release would say before dispatching:
+
+```bash
+make release-notes VERSION=0.1.0
+```
 
 ## Conventions
 

@@ -47,3 +47,4 @@ docs/designdoc/
 | [multi-format-schemas](multi-format-schemas.md) | Accepted | 2026-10-05 | 2026-10-05 | [0005](../adr/0005-multi-format-schema-objects.md) |
 | [schema-keywords](schema-keywords.md) | Accepted | 2026-10-10 | 2026-10-10 | [0006](../adr/0006-schema-keywords.md) |
 | [external-type-mappings](external-type-mappings.md) | Accepted | 2026-11-08 | 2026-11-08 | [0008](../adr/0008-external-type-mappings.md) |
+| [release-workflow](release-workflow.md) | Accepted | 2026-11-16 | 2026-11-16 | [0013](../adr/0013-release-by-workflow-dispatch.md) |

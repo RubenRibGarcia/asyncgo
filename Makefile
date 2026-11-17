@@ -1,6 +1,6 @@
 .SILENT:
 
-.PHONY: deps test pipeline-test build clean lint site-deps site-serve site-build
+.PHONY: deps test pipeline-test build clean lint site-deps site-serve site-build release-notes
 
 # The project site (site/) is built with MkDocs Material and published to GitHub
 # Pages by .github/workflows/docs.yml. The virtualenv lives inside site/ and is
@@ -42,6 +42,13 @@ site-serve: $(SITE_MKDOCS)
 
 site-build: $(SITE_MKDOCS)
 	cd site && .venv/bin/mkdocs build --strict
+
+# The changelog is generated, never edited: release notes come from conventional
+# commits via git-cliff (cliff.toml). .github/workflows/release.yml runs the same
+# command at dispatch time, with the tag of the version about to be published.
+release-notes:
+	@test -n "$(VERSION)" || { echo "usage: make release-notes VERSION=0.1.0"; exit 2; }
+	git-cliff --config cliff.toml --tag v$(VERSION) --unreleased --strip all
 
 $(SITE_MKDOCS):
 	$(MAKE) site-deps

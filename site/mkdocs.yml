@@ -65,6 +65,9 @@ nav:
       - Struct tags: reference/struct-tags.md
   - Project:
       - Overview: project/index.md
+      # Generated at build time from the repository's GitHub Releases by
+      # hooks/changelog.py — the release bodies are the only copy of an entry.
+      - Changelog: changelog.md
       - AsyncAPI 3.1.0 coverage: project/asyncapi-3.1.0-coverage.md
       # The two entries below are placeholders: hooks/assemble.py copies the
       # ADRs, design docs and coverage matrix out of docs/ and replaces each
@@ -74,11 +77,13 @@ nav:
 
 hooks:
   - hooks/assemble.py
+  - hooks/changelog.py
 
 # Rebuild when the development-process records change (watch paths are relative
 # to this file).
 watch:
   - ../docs
+  - hooks/changelog.py
 
 plugins:
   - search

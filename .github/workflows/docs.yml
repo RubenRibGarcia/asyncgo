@@ -48,9 +48,13 @@ jobs:
         run: pip install -r site/requirements.txt
 
       # --strict turns MkDocs warnings (broken relative links, pages missing
-      # from nav, unknown anchors) into build failures.
+      # from nav, unknown anchors) into build failures. The token raises the
+      # GitHub API rate limit for hooks/changelog.py, which renders the release
+      # notes; a build without it still works and falls back to its cache.
       - name: Build site
         working-directory: site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: mkdocs build --strict
 
       - name: Configure Pages
