@@ -1,6 +1,6 @@
 module github.com/RubenRibGarcia/asyncgo/test/data/reply
 
-go 1.26.8
+go 1.26.0
 
 require github.com/RubenRibGarcia/asyncgo v0.0.0
 
