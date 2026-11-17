@@ -1,50 +1,143 @@
 name: Release
 
+# A release is a version input, not a tag push: this workflow validates the
+# commit, renders the changelog with git-cliff (cliff.toml), creates the
+# annotated tag and the GitHub release, then rebuilds the site so the Changelog
+# page picks the release up.
+#
+# There are no build artifacts: the CLI is installed with
+# `go install .../cmd/asyncgo@vX.Y.Z`, and GitHub attaches the source archives
+# to every release.
+#
+# Note: a tag pushed with GITHUB_TOKEN does not trigger other workflows. Nothing
+# depends on that — the publish steps below do the work — but it is why the docs
+# build is dispatched explicitly at the end instead of reacting to the tag.
+
 on:
-  push:
-    tags:
-      - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 0.1.0)"
+        required: true
+        type: string
+      dry_run:
+        description: "Render and print the notes, but do not tag or publish"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: write   # create the tag and the release
+  actions: write    # dispatch docs.yml
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  goreleaser:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Checkout master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
+          ref: master
+          fetch-depth: 0        # git-cliff needs the full tag and commit history
+          # Needed for `git push origin "$TAG"` below; the token stays in the
+          # job's .git/config, which is why this job only reads the repository.
+          persist-credentials: true
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - name: Setup Syft
-        uses: anchore/sbom-action/download-syft@v0
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
-        with:
-          version: "~> v2"
-          args: release --clean
+      - name: Validate the dispatch
+        id: validate
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::'$INPUT_VERSION' is not MAJOR.MINOR.PATCH[-PRE]"; exit 1
+          fi
+          echo "VERSION=$INPUT_VERSION" >> "$GITHUB_ENV"
+          echo "TAG=v$INPUT_VERSION" >> "$GITHUB_ENV"
 
-      - name: Attest checksums
-        uses: actions/attest@v4
-        with:
-          subject-checksums: ./dist/asyncgo-${{ fromJSON(steps.goreleaser.outputs.metadata).version }}-checksums.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]]; then
+            echo "::error::master moved during the dispatch; re-run"; exit 1
+          fi
 
-      - name: Attest digests
-        uses: actions/attest@v4
+          # A retry after a half-finished publish may legitimately find its own
+          # tag: accept it only when it points at the commit being released.
+          if git rev-parse -q --verify "refs/tags/v$INPUT_VERSION" >/dev/null; then
+            if [[ "$(git rev-parse "v$INPUT_VERSION^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+              echo "::error::v$INPUT_VERSION already exists and does not point at HEAD"; exit 1
+            fi
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if gh release view "v$INPUT_VERSION" >/dev/null 2>&1; then
+            echo "::error::release v$INPUT_VERSION already exists — correct it with 'gh release edit'"; exit 1
+          fi
+
+      - name: Require a green test run for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest=$(gh run list --workflow=test.yaml --branch=master --limit=1 \
+                     --json headSha,conclusion --jq '.[0] | "\(.headSha) \(.conclusion)"')
+          echo "latest test.yaml: $latest"
+          if [[ "$latest" != "$(git rev-parse HEAD) success" ]]; then
+            echo "::error::the newest Test & Coverage run is not a success for HEAD"
+            exit 1
+          fi
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2
         with:
-          subject-checksums: ./dist/digests.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tool: git-cliff@2.14.2
+
+      - name: Render release notes
+        env:
+          TAG_EXISTS: ${{ steps.validate.outputs.tag_exists }}
+        run: |
+          set -euo pipefail
+          # A retry (tag already pushed, release missing) has no unreleased
+          # commits left, so it re-renders the tag that is already on HEAD.
+          if [[ "$TAG_EXISTS" == "true" ]]; then
+            args=(--latest)
+          else
+            args=(--tag "$TAG" --unreleased)
+          fi
+          git cliff --config cliff.toml "${args[@]}" --strip all --output release-notes.md
+          cat release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+          if ! grep -q '^### ' release-notes.md; then
+            echo "::error::nothing releasable since the last tag"; exit 1
+          fi
+
+      - name: Tag and publish
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_EXISTS: ${{ steps.validate.outputs.tag_exists }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG_EXISTS" != "true" ]]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "asyncgo $TAG"
+            git push origin "$TAG"
+          fi
+          flags=()
+          if [[ "$VERSION" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" --title "$TAG" --verify-tag \
+            --notes-file release-notes.md "${flags[@]}"
+
+      - name: Rebuild the site
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docs.yml --ref master

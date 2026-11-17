@@ -41,6 +41,14 @@ site/content/project/adr/
 site/content/project/designdoc/
 site/content/project/asyncapi-3.1.0-coverage.md
 
+# The Changelog page is rendered from GitHub Releases at build time
+# (site/hooks/changelog.py), with the last successful fetch cached beside it.
+site/content/changelog.md
+site/.cache/
+
+# Release notes written by .github/workflows/release.yml
+/release-notes.md
+
 # Python bytecode from the site build hook
 __pycache__/
 *.pyc

@@ -1,2 +1,6 @@
 [tools]
 go = "1.26.8"
+# Renders the changelog from conventional commits (cliff.toml). Pinned to the
+# same version .github/workflows/release.yml installs, so `make release-notes`
+# reproduces a release body byte for byte.
+git-cliff = "2.14.2"

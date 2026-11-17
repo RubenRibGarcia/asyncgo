@@ -12,3 +12,11 @@ updates:
       - "/test/**/*"
     schedule:
       interval: daily
+
+  # The repository requires every action to be pinned to a full-length commit
+  # SHA (Settings → Actions → "Require actions to be pinned"). Dependabot is what
+  # keeps those pins moving: it rewrites the SHA and the `# vX` comment beside it.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily

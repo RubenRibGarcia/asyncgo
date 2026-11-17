@@ -1,0 +1,54 @@
+# Changelog rules for asyncgo.
+#
+# The changelog is generated, never edited: GitHub Releases is the single source
+# of truth, and `.github/workflows/release.yml` renders a release body from these
+# rules at dispatch time. The site's Changelog page (site/hooks/changelog.py)
+# renders the published releases, so a correction is `gh release edit`.
+#
+#   local preview:  make release-notes VERSION=0.1.0
+#   in CI:          git cliff --tag v0.1.0 --unreleased --strip all
+#
+# The rules below are what .goreleaser.yaml used to express as exclusion regexes:
+# only feat / fix / perf / refactor / revert reach a release, everything else is
+# developer noise, and non-conventional messages (merge commits) are dropped.
+
+[changelog]
+header = ""
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}](https://github.com/RubenRibGarcia/asyncgo/releases/tag/v{{ version | trim_start_matches(pat="v") }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## Unreleased
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{% if commit.breaking %}**breaking** — {% endif %}\
+{{ commit.message | upper_first }}{% if commit.id %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/RubenRibGarcia/asyncgo/commit/{{ commit.id }})){% endif %}
+{% endfor %}\
+{% endfor %}\
+"""
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = true
+tag_pattern = "v[0-9]*"
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^revert", group = "Reverted" },
+  { message = "^docs", skip = true },
+  { message = "^test", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^build", skip = true },
+  { message = "^chore", skip = true },
+  { message = "^style", skip = true },
+]

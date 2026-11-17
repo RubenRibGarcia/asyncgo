@@ -19,15 +19,17 @@ $ asyncgo version
 devel (commit unknown, built unknown)
 ```
 
-A binary built by `go install` from `master` and the released archives both say
-`devel` unless the release pipeline stamped them, so `devel` tells you the version,
-not that something is broken.
+`devel` is what a `go build` from a working tree reports, because nothing stamps
+a version there. An install from a release tag reports the module version
+instead — `go install …@v0.1.0` prints `v0.1.0` — because the Go toolchain records
+it, not the build.
 
-!!! note "Prebuilt archives"
+!!! note "Releases are source-only"
 
-    `goreleaser` builds Linux, macOS and Windows archives for `amd64` and `arm64`
-    on every version tag and attaches them to the GitHub release. Until the first
-    version is tagged, use `go install` as above.
+    A release is a git tag with its changelog entry: no prebuilt archives are
+    published. Install a released version with
+    `go install github.com/RubenRibGarcia/asyncgo/cmd/asyncgo@vX.Y.Z`, or pin it as
+    a module tool (below).
 
 ### Alternative: pin the CLI as a module tool
 
