@@ -70,7 +70,7 @@ types `FromType` actually encounters.
 
 Precedent for name-keyed registries: `schema.Register` already keys types by
 fully-qualified name (`pkgPath.TypeName`), and combinator directives
-(`oneOf=A|B`) already resolve such names, rejecting semi-qualified ones.
+(`oneOf=A,B`) already resolve such names, rejecting semi-qualified ones.
 
 ## Goals / Non-goals
 

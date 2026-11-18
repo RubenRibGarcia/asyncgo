@@ -10,8 +10,10 @@ declarations. Nothing here needs a hand-written schema.
   (e.g. `example.com/orders/orders.OrderPlaced`); `$ref` escapes `/` per JSON
   Pointer.
 - **Optional by default** — a field is required only with `asyncapi:"required"`.
-- **Whitespace-separated directives** — `asyncapi:"required examples=1,000"`
-  separates directives with spaces, so a value may itself contain a comma.
+- **`;`-separated directives** — `asyncapi:"required;examples=1,000"`
+  separates directives with semicolons, so a scalar value may contain a comma.
+  List directives (`enum`, `oneOf`, `anyOf`, `allOf`) separate their members with
+  a comma: `enum=draft,sent`. A space is not allowed anywhere in the tag.
 - **Descriptions from comments** — a field's `description` is read from its doc
   comment; `enum`, `examples`, `format`, `contentEncoding`, and `contentMediaType`
   still come from the `asyncapi` tag.
@@ -24,7 +26,7 @@ declarations. Nothing here needs a hand-written schema.
   implements `spec.SchemaProvider` (see [Custom types](custom-types.md)).
 - **Embedding** — embedded structs are flattened by default (matching
   `encoding/json`); tag one with `asyncapi:"allOf"` to compose it instead.
-- **Union fields** — `asyncapi:"oneOf=A|B"`, `anyOf=A|B`, or `allOf=A|B` on a
+- **Union fields** — `asyncapi:"oneOf=A,B"`, `anyOf=A,B`, or `allOf=A,B` on a
   field emits `$ref`s to the named types, which are hoisted automatically.
 - **Custom types** — a named type implementing `spec.SchemaProvider` overrides
   derivation: its `AsyncAPISchema()` result is hoisted under the type's
@@ -91,7 +93,7 @@ type OrderCancelled struct {
 }
 
 type OrderEvent struct {
-	Data any `json:"data" asyncapi:"required oneOf=OrderPlaced|OrderCancelled"`
+	Data any `json:"data" asyncapi:"required;oneOf=OrderPlaced,OrderCancelled"`
 }
 ```
 

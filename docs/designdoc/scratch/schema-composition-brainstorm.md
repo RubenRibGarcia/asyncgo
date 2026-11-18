@@ -80,7 +80,7 @@ Latent `encoding/json` nuance: an anonymous field *with* a JSON name tag
 
 Go has no sum types. Three mechanisms, increasing magic:
 
-- **A. Tag + type names** — `asyncapi:"oneOf=OrderPlaced|OrderShipped"`.
+- **A. Tag + type names** — `asyncapi:"oneOf=OrderPlaced,OrderShipped"`.
   Explicit, matches existing `enum=`/`format=` style. The hard part is
   name→type resolution.
 - **B. Sealed-interface idiom** — `type Event interface{ event() }`; static pass

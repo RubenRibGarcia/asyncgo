@@ -220,8 +220,8 @@ library's differentiating feature and the area with the deepest coverage.
 | `json:"-"`, unexported field | skipped | ✅ |
 | field doc comment | `description` | ✅ static AST pass (`internal/discovery/descriptions.go`) |
 | `asyncapi:"required"` | `required: [...]` | ✅ |
-| `asyncapi:"enum=a\|b"` | `enum` (strings only) | 🟡 no typed / `iota` enum detection |
-| `asyncapi:"examples=…"` | `examples` | ✅ repeatable — one entry appended per directive; directives are whitespace-separated, so a value may contain a comma |
+| `asyncapi:"enum=a\,b"` | `enum` (strings only) | 🟡 no typed / `iota` enum detection |
+| `asyncapi:"examples=…"` | `examples` | ✅ repeatable — one entry appended per directive; directives are `;`-separated, so a scalar value may contain a comma |
 | `asyncapi:"const=…"` | `const` | ✅ string-valued; use `SchemaProvider` for a typed constant |
 | `asyncapi:"discriminator=…"` | `discriminator` | ✅ the property name, a plain string in 3.1.0 |
 | `asyncapi:"minItems=N"` / `maxItems` / `minProperties` / `maxProperties` | matching keyword | ✅ |
@@ -229,7 +229,7 @@ library's differentiating feature and the area with the deepest coverage.
 | `Message.PayloadExamples(…)` | `examples` on the payload schema | ✅ resolves a `$ref` payload into its `components.schemas` entry; an unresolvable ref is an error |
 | malformed directive value (`minItems=abc`, `examples=`) | — | ❌ silently ignored; the derivation chain has no error channel ([§8 B7](#b7)) |
 | `asyncapi:"format=…"` | `format` | ✅ |
-| `asyncapi:"oneOf=A\|B"` / `anyOf` / `allOf` | `$ref` list, members auto-hoisted | ✅ |
+| `asyncapi:"oneOf=A\,B"` / `anyOf` / `allOf` | `$ref` list, members auto-hoisted | ✅ |
 | `spec.SchemaProvider` | full schema override, hoisted as-is | ✅ any named type — struct or non-struct |
 
 ### 4.3 Not expressible

@@ -5,6 +5,12 @@
 - **Status updated**: 2026-11-08
 - **Scope**: `internal/discovery/`, `schema/`, `internal/taggrammar/` (new), `docs/`
 
+> **Superseded in part by [ADR 0014](../adr/0014-semicolon-separated-tag-directives.md).**
+> The directive and list separators described below (whitespace, `|`) are
+> historical. The shared `internal/taggrammar` package, the conformance test and
+> the `json` semantics decided here still hold, and this page stays as the record
+> of that decision.
+
 ## Summary
 
 Two passes read the same struct tags with two hand-written parsers: the
