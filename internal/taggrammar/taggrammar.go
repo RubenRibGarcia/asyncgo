@@ -12,11 +12,20 @@ package taggrammar
 
 import "strings"
 
-// Directive is one whitespace-separated part of a struct tag, split at the first
-// "=" into a key and its value. HasValue separates a value directive — even one
-// with an empty value, as in "format=" — from a bare flag, as in "readOnly". The
-// distinction matters: "allOf" marks an embedded struct for composition, while
-// "allOf=A" composes named types.
+// The two levels of the asyncapi tag grammar. Directives are separated by
+// DirectiveSeparator and the members of a list directive by ListSeparator; the
+// characters differ so that a member can never be mistaken for the next
+// directive. See docs/adr/0014-semicolon-separated-tag-directives.md.
+const (
+	DirectiveSeparator = ";"
+	ListSeparator      = ","
+)
+
+// Directive is one DirectiveSeparator-separated part of a struct tag, split at
+// the first "=" into a key and its value. HasValue separates a value directive —
+// even one with an empty value, as in "format=" — from a bare flag, as in
+// "readOnly". The distinction matters: "allOf" marks an embedded struct for
+// composition, while "allOf=A" composes named types.
 type Directive struct {
 	Key      string
 	Value    string
@@ -24,14 +33,15 @@ type Directive struct {
 }
 
 // Parse splits a struct tag into its directives. Directives are separated by
-// whitespace, so a value may contain a comma — "examples=1,000" yields the single
-// example "1,000" — but not a space. A legacy comma-separated tag is therefore one
-// unrecognised directive, and the callers ignore it like any other unknown key.
+// ";", so a value may contain a comma and a "|": "examples=1,000" and
+// "enum=a|b" are single values. The value of a list directive ("enum=draft,sent")
+// is not split here; List and SplitList do that. A legacy whitespace-separated
+// tag is one directive whose key contains a space, which the callers reject.
 func Parse(tag string) []Directive {
-	parts := strings.Fields(tag)
-	if len(parts) == 0 {
+	if tag == "" {
 		return nil
 	}
+	parts := strings.Split(tag, DirectiveSeparator)
 	ds := make([]Directive, len(parts))
 	for i, part := range parts {
 		key, value, hasValue := strings.Cut(part, "=")
@@ -61,6 +71,24 @@ func Value(ds []Directive, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// SplitList splits a list directive's value into its members. It validates
+// nothing: an empty member is a caller's CheckTag error, and an empty value
+// yields one empty member.
+func SplitList(value string) []string {
+	return strings.Split(value, ListSeparator)
+}
+
+// List returns the members of the first directive with the given key, or
+// ok=false when the key is absent or carries no value. It is the one split both
+// passes use, so a list directive cannot be read two ways.
+func List(ds []Directive, key string) ([]string, bool) {
+	raw, ok := Value(ds, key)
+	if !ok || raw == "" {
+		return nil, false
+	}
+	return SplitList(raw), true
 }
 
 // JSONName reports the field name a json tag declares, with skip true for "-",
