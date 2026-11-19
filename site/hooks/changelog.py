@@ -13,6 +13,11 @@ The build therefore reads the network, which `--strict` would turn into a hard
 failure. Two fallbacks keep it green: the cache written by the last successful
 fetch (`site/.cache/releases.json`), then a stub page that points at the releases
 page. Set `ASYNCGO_RELEASES_PATH` to a bad or empty path to exercise them.
+
+Because the site is versioned, the page is also cut off at the release line being
+built (`ASYNCGO_MAX_VERSION`): the 0.1 docs must not advertise 0.2's releases,
+which is the whole point of having 0.1 docs. The cache keeps the unfiltered list,
+so a build with a cutoff cannot hide releases from a later one.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -37,6 +43,12 @@ TIMEOUT = 8
 
 #: The generated page, relative to `docs_dir`.
 PAGE = "changelog.md"
+
+#: A release tag, of which only the major and minor select the release line.
+_RELEASE_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)")
+
+#: A release line: MAJOR.MINOR, the same shape as a version directory on the site.
+_LINE = re.compile(r"^(\d+)\.(\d+)$")
 
 
 def _api_path() -> str:
@@ -103,6 +115,55 @@ def _published(payload: list) -> list[dict]:
     disk, and trusting its contents would make the filter depend on who wrote it.
     """
     return [r for r in payload if isinstance(r, dict) and not r.get("draft")]
+
+
+def _line() -> tuple[int, int] | None:
+    """The release line this page stops at, from `ASYNCGO_MAX_VERSION`.
+
+    Unset means no cutoff: a plain local build and `dev` show every published
+    release, which is what a reader of the current docs wants. Malformed is an
+    error rather than a silent full list, because a page that advertises newer
+    releases than the code beside it is exactly the drift versioning prevents.
+    """
+    raw = os.environ.get("ASYNCGO_MAX_VERSION", "").strip()
+    if not raw:
+        return None
+    match = _LINE.match(raw)
+    if not match:
+        raise ValueError(f"ASYNCGO_MAX_VERSION must be MAJOR.MINOR, got {raw!r}")
+    try:
+        return int(match.group(1)), int(match.group(2))
+    except ValueError:  # unreachable: _LINE only matches digits
+        raise ValueError(f"ASYNCGO_MAX_VERSION must be MAJOR.MINOR, got {raw!r}") from None
+
+
+def _release_line(tag: str) -> tuple[int, int] | None:
+    """The release line a tag belongs to, or None when it is not a vX.Y.Z tag."""
+    match = _RELEASE_TAG.match(tag)
+    if not match:
+        return None
+    try:
+        return int(match.group(1)), int(match.group(2))
+    except ValueError:  # unreachable: _RELEASE_TAG only matches digits
+        return None
+
+
+def _up_to(releases: list[dict], cap: tuple[int, int] | None) -> list[dict]:
+    """Keep the releases that belong to `cap` or an earlier line."""
+    if cap is None:
+        return releases
+    kept = []
+    for release in releases:
+        tag = release.get("tag_name") or ""
+        line = _release_line(tag)
+        if line is None:
+            # Cannot be dated to a release line, so it cannot be proven old;
+            # dropping it is the safe direction for an archived page.
+            print(f"changelog: release {tag!r} is not a vX.Y.Z tag; skipped")
+            continue
+        if line <= cap:
+            kept.append(release)
+    return kept
 
 
 def _read_cache(cache: Path) -> list[dict] | None:
@@ -186,10 +247,12 @@ def on_config(config):
     releases = _fetch()
     if releases is not None:
         # Cache even an empty list: "the API answered, nothing is published" is
-        # worth keeping across an outage.
+        # worth keeping across an outage. The cache stays unfiltered: the cutoff
+        # belongs to the page being rendered, not to the repository's releases.
         _write_cache(cache, releases)
     else:
         releases = _read_cache(cache)
+    releases = _up_to(releases, _line()) if releases is not None else None
 
     page = _render(releases) if releases is not None else _fallback()
     dest = content_dir / PAGE

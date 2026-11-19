@@ -184,9 +184,20 @@ same change:
   `mkdocs build --strict` fails on a page missing from the nav.
 - ADRs and design docs need no site edit: `site/hooks/assemble.py` copies
   `docs/` into the Project section on every build.
-- Verify with `make site-build` — exactly what CI runs. The docs workflow
-  builds on every pull request touching `site/**` or `docs/**` and only deploys
-  from `master`.
+- Verify with `make site-build` (one build of your checkout, exactly what a pull
+  request runs) and `make site-versions` (the full published tree — every stable
+  tag in its own directory, plus `latest/` and `dev/`).
+
+The site is versioned, so "update the site" means two things at once:
+
+- `latest/` and `dev/` are rebuilt on every push to master, and a release
+  rebuilds everything so the new tag gets its own directory. Nothing is written
+  to an old version's directory from master: those pages come from the tag that
+  released them.
+- Because old content is built by today's `mkdocs.yml`, `nav:` and hooks, a page
+  added to the nav *now* must not be one that a previously tagged release does
+  not have — that version's `--strict` build would fail. Content differences are
+  expected; nav references to pages a tag never had are not.
 
 A merged public-API change with stale site pages is an incomplete change.
 
