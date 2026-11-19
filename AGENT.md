@@ -63,7 +63,14 @@ artifact.
 
 3. **Optional by default** — a field is required only when tagged
    `asyncapi:"required"`. Field descriptions are read from the field's doc
-   comment by the discovery pass, not from the tag.
+   comment by the discovery pass, not from the tag. Presence is not nullability:
+   a nilable position — pointer, slice, map, interface, `chan`, `func` — derives
+   `oneOf: [<schema>, {type: "null"}]`, because `encoding/json` emits `null` for
+   a nil value and accepts it on unmarshal. `omitempty` does not enter into it
+   (it governs only what asyncgo writes), a tag keyword is applied to the payload
+   branch so `enum=` cannot exclude `null`, and `components.schemas` entries stay
+   non-nullable so `*T` and `T` share one component — see
+   [ADR 0015](docs/adr/0015-nilable-null-derivation.md).
 
 4. **Always hoist** — named struct types go into `components.schemas` and are
    referenced via `$ref`; only anonymous inline types are inlined. Messages are
@@ -132,7 +139,7 @@ asyncgo/
 ├── internal/cli/               # Cobra command tree: generate | check | version
 ├── internal/docdiff/           # value diff behind `check --diff` (not public API)
 ├── internal/discovery/         # catalog discovery + materialization (not public API)
-├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, parameters, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes, mappings — each its own Go module)
+├── test/data/                  # discovery test fixtures (simple, allof, oneof, anyof, provider, security, parameters, reply, traits, multiformat, derived, bindings, bindings-unlisted, bytes, mappings, nullable — each its own Go module)
 └── test/integration/           # end-to-end test (own Go module): golden comparison + AsyncAPI CLI validation
 ```
 
@@ -252,7 +259,7 @@ make release-notes VERSION=0.1.0
   and asserts three independent things for each `test/data/` fixture (`simple`,
   `allof`, `oneof`, `anyof`, `provider`, `security`, `parameters`, `reply`,
   `traits`, `multiformat`, `derived`, `bindings`, `bindings-unlisted`, `bytes`,
-  `mappings`):
+  `mappings`, `nullable`):
 
   1. **Golden** — the generator output reproduces the committed `asyncapi.yaml`
      exactly.

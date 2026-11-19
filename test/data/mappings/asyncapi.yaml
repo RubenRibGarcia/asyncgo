@@ -42,28 +42,34 @@ components:
           format: uuid
           pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
         link:
-          type: string
           description: Link is a named pointer to UUID.
-          format: uuid
-          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          oneOf:
+          - type: string
+            format: uuid
+            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          - type: "null"
         quantity:
           type: integer
           description: Quantity has no mapping and derives as an integer by kind.
         refs:
-          type: array
           description: Refs are the identifiers of related orders, mapped through the element type.
-          items:
-            type: string
-            format: uuid
-            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          oneOf:
+          - type: array
+            items:
+              type: string
+              format: uuid
+              pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+          - type: "null"
         saved:
           type: string
           description: Saved is a Go type alias for UUID, so reflection already sees UUID.
           format: uuid
           pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
         total:
-          type: integer
           description: "Total is a *math/big.Int, covered by a built-in mapping: encoding/json marshals\nit as a bare JSON number, where kind derivation would give an empty object."
+          oneOf:
+          - type: integer
+          - type: "null"
       required:
       - id
   messages:

@@ -47,8 +47,10 @@ components:
       properties:
         data:
           oneOf:
-          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderPlaced"
-          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderCancelled"
+          - oneOf:
+            - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderPlaced"
+            - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderCancelled"
+          - type: "null"
       required:
       - data
     github.com/RubenRibGarcia/asyncgo/test/data/oneof.OrderPlaced:
