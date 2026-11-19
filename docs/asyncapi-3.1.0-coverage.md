@@ -232,6 +232,8 @@ library's differentiating feature and the area with the deepest coverage.
 | `asyncapi:"format=…"` | `format` | ✅ |
 | `asyncapi:"oneOf=A\,B"` / `anyOf` / `allOf` | `$ref` list, members auto-hoisted | ✅ |
 | any tag keyword on a nilable field | the keyword on the payload branch, not beside the `oneOf` | ✅ otherwise `enum=` would intersect with the wrapper and silently exclude `null` ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
+| `oneOf=` / `anyOf=` on a nilable field | the null branch appended to the directive's own member list | ✅ null matches only that member, so exactly-one still holds and no nesting is added ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
+| `allOf=` on a nilable field | `oneOf: [{allOf: [...]}, {type: "null"}]` | ✅ merging is impossible here: every member must pass, so a null member would leave the field accepting nothing ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
 | `spec.SchemaProvider` | full schema override, hoisted as-is | ✅ any named type — struct or non-struct |
 
 ### 4.3 Not expressible

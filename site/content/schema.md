@@ -31,7 +31,9 @@ declarations. Nothing here needs a hand-written schema.
   combination; a tag keyword such as `enum=` lands on the payload branch so it
   cannot exclude `null`; and `components.schemas` entries stay non-nullable, so
   `*Order` and `Order` share one component. `nullable` is not a 3.1.0 keyword —
-  `oneOf` with `{type: "null"}` is how Draft-07 spells it.
+  `oneOf` with `{type: "null"}` is how Draft-07 spells it. A `oneOf=` or `anyOf=`
+  directive takes the null branch as one of its own members; `allOf=`, where
+  every member must pass, wraps it instead.
 - **`;`-separated directives** — `asyncapi:"required;examples=1,000"`
   separates directives with semicolons, so a scalar value may contain a comma.
   List directives (`enum`, `oneOf`, `anyOf`, `allOf`) separate their members with

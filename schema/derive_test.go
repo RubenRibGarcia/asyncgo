@@ -412,9 +412,10 @@ func TestAllOfEmbedding(t *testing.T) {
 	}
 }
 
-// unwrapNullable returns the payload branch of a nullable position — the s of
-// `oneOf: [s, {type: "null"}]` — and s itself for any other node, so a test can
-// assert on the derived schema without every assertion repeating the wrapper.
+// unwrapNullable returns the payload branch of a wrapped nullable position — the
+// s of `oneOf: [s, {type: "null"}]` — and s itself for any other node, so a test
+// can assert on the derived schema without repeating the wrapper. A field whose
+// null branch was merged into a oneOf/anyOf member list is returned unchanged.
 func unwrapNullable(t *testing.T, s *spec.Schema) *spec.Schema {
 	t.Helper()
 	require.NotNil(t, s)
@@ -424,32 +425,57 @@ func unwrapNullable(t *testing.T, s *spec.Schema) *spec.Schema {
 	return s
 }
 
+// assertUnionMembers asserts got names UnionMemberA then UnionMemberB, the two
+// arms every combinator fixture declares.
+func assertUnionMembers(t *testing.T, got []*spec.Schema) {
+	t.Helper()
+	require.Len(t, got, 2)
+	assert.Equal(
+		t,
+		RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"),
+		got[0].Ref,
+	)
+	assert.Equal(
+		t,
+		RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB"),
+		got[1].Ref,
+	)
+}
+
 func TestCombinatorDirectives(t *testing.T) {
-	const key = "github.com/RubenRibGarcia/asyncgo/schema.CombinatorHolder"
 	tests := []struct {
-		name     string
-		field    string
-		accessor func(*spec.Schema) []*spec.Schema
+		name   string
+		field  string
+		verify func(t *testing.T, prop *spec.Schema)
 	}{
 		{
-			name:  "should_emit_oneOf_refs",
+			name:  "should_merge_the_null_branch_into_oneOf",
 			field: "one",
-			accessor: func(s *spec.Schema) []*spec.Schema {
-				return s.OneOf
+			verify: func(t *testing.T, prop *spec.Schema) {
+				require.Len(t, prop.OneOf, 3)
+				assertUnionMembers(t, prop.OneOf[:2])
+				assert.Equal(t, "null", prop.OneOf[2].Type)
 			},
 		},
 		{
-			name:  "should_emit_anyOf_refs",
+			name:  "should_merge_the_null_branch_into_anyOf",
 			field: "any",
-			accessor: func(s *spec.Schema) []*spec.Schema {
-				return s.AnyOf
+			verify: func(t *testing.T, prop *spec.Schema) {
+				require.Len(t, prop.AnyOf, 3)
+				assertUnionMembers(t, prop.AnyOf[:2])
+				assert.Equal(t, "null", prop.AnyOf[2].Type)
 			},
 		},
 		{
-			name:  "should_emit_allOf_refs",
+			name:  "should_wrap_the_null_branch_around_allOf",
 			field: "all",
-			accessor: func(s *spec.Schema) []*spec.Schema {
-				return s.AllOf
+			verify: func(t *testing.T, prop *spec.Schema) {
+				// Every allOf member must pass, so a null member would make the field
+				// unsatisfiable; the null branch wraps the conjunction instead.
+				require.Len(t, prop.OneOf, 2)
+				assert.Equal(t, "null", prop.OneOf[1].Type)
+				require.NotNil(t, prop.OneOf[0])
+				assertUnionMembers(t, prop.OneOf[0].AllOf)
 			},
 		},
 	}
@@ -457,22 +483,11 @@ func TestCombinatorDirectives(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defs := map[string]*spec.Schema{}
 			FromType(reflect.TypeFor[CombinatorHolder](), defs)
-			obj := defs[key]
+			obj := defs["github.com/RubenRibGarcia/asyncgo/schema.CombinatorHolder"]
 			require.NotNil(t, obj)
 			prop := obj.Properties[tc.field]
 			require.NotNil(t, prop)
-			got := tc.accessor(unwrapNullable(t, prop))
-			require.Len(t, got, 2)
-			assert.Equal(
-				t,
-				RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"),
-				got[0].Ref,
-			)
-			assert.Equal(
-				t,
-				RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB"),
-				got[1].Ref,
-			)
+			tc.verify(t, prop)
 		})
 	}
 }
@@ -485,20 +500,12 @@ func TestCombinatorNameResolution(t *testing.T) {
 		require.NotNil(t, obj)
 		prop := obj.Properties["data"]
 		require.NotNil(t, prop)
-		prop = unwrapNullable(t, prop)
-		require.Len(t, prop.OneOf, 2)
-		// Both members of `oneOf=UnionMemberA|UnionMemberB` resolve against the
-		// declaring struct's package, in the order they were written.
-		assert.Equal(
-			t,
-			RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"),
-			prop.OneOf[0].Ref,
-		)
-		assert.Equal(
-			t,
-			RefByName("github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB"),
-			prop.OneOf[1].Ref,
-		)
+		// Both members of `oneOf=UnionMemberA,UnionMemberB` resolve against the
+		// declaring struct's package, in the order they were written, and the null
+		// branch the nilable field adds is merged onto the end.
+		require.Len(t, prop.OneOf, 3)
+		assertUnionMembers(t, prop.OneOf[:2])
+		assert.Equal(t, "null", prop.OneOf[2].Type)
 	})
 
 	t.Run("should_pass_through_fully_qualified_name", func(t *testing.T) {
@@ -508,9 +515,9 @@ func TestCombinatorNameResolution(t *testing.T) {
 		require.NotNil(t, obj)
 		prop := obj.Properties["data"]
 		require.NotNil(t, prop)
-		prop = unwrapNullable(t, prop)
-		require.Len(t, prop.OneOf, 1)
+		require.Len(t, prop.OneOf, 2)
 		assert.Equal(t, RefByName("github.com/acme/orders.OrderPlaced"), prop.OneOf[0].Ref)
+		assert.Equal(t, "null", prop.OneOf[1].Type)
 	})
 }
 
@@ -1124,9 +1131,10 @@ func TestSchemaProviderNonStructFinalize(t *testing.T) {
 		holder := doc.Components.Schemas[Name(reflect.TypeFor[NamedProviderUnion]())]
 		require.NotNil(t, holder)
 
-		oneOf := unwrapNullable(t, holder.Properties["id"]).OneOf
-		require.Len(t, oneOf, 1)
-		assert.Equal(t, Ref(reflect.TypeFor[OrderID]()), oneOf[0].Ref)
+		members := holder.Properties["id"].OneOf
+		require.Len(t, members, 2)
+		assert.Equal(t, Ref(reflect.TypeFor[OrderID]()), members[0].Ref)
+		assert.Equal(t, "null", members[1].Type)
 
 		// The $ref resolves: the member schema exists in components.
 		assert.NotNil(t, doc.Components.Schemas[Name(reflect.TypeFor[OrderID]())])
@@ -1167,6 +1175,7 @@ func TestFromTypeSchemaKeywordsDerivation(t *testing.T) {
 	assert.Equal(t, "kind", kind.Discriminator)
 
 	items := unwrapNullable(t, obj.Properties["items"])
+	require.NotNil(t, items)
 	require.NotNil(t, items.MinItems)
 	require.NotNil(t, items.MaxItems)
 	assert.Equal(t, uint64(1), *items.MinItems)

@@ -137,16 +137,18 @@ Written beside the `oneOf` they would intersect with the whole instance, so
 `enum=web,mobile` on a nullable field would exclude the `null` the wrapper had
 just added.
 
-### D7 — combinator directives nest
+### D7 — combinator directives: merged for oneOf/anyOf, wrapped for allOf
 
-`asyncapi:"oneOf=A,B"` on a nilable field yields
-`oneOf: [{oneOf: [A, B]}, {type: "null"}]`.
+`asyncapi:"oneOf=A,B"` on a nilable field yields `oneOf: [A, B, {type: "null"}]`,
+and `anyOf` the same. `allOf` yields
+`oneOf: [{allOf: [A, B]}, {type: "null"}]`.
 
-**Rationale**: merging the null branch into the directive's member list is
-equivalent for `oneOf` and `anyOf` — the null member is disjoint, so
-exactly-one still holds — but it is **wrong** for `allOf`, where every member
-must pass and a null member would make the position unsatisfiable. Nesting is
-uniform across the three and correct for all of them.
+**Rationale**: a null instance matches a null member and nothing else, so
+appending it to a `oneOf`/`anyOf` member list is equivalent to wrapping the list
+— and one nesting level shorter. `allOf` cannot take the merge: every member
+must pass, so `allOf: [A, B, {type: "null"}]` accepts neither the object nor
+null. Verified against a Draft-07 validator before choosing, because the failure
+is total rather than partial: the field would accept nothing at all.
 
 ### D8 — embedded fields are unaffected
 
@@ -190,8 +192,10 @@ Three call sites, each passing the **undereferenced** position type, because
 Items:                nullable(t.Elem(), FromType(t.Elem(), defs), defs)
 AdditionalProperties: nullable(t.Elem(), FromType(t.Elem(), defs), defs)
 
-// fillFields, after applyTag and the combinator directives (D6)
-own.Properties[name] = nullable(f.Type, prop, defs)
+// fillFields, after applyTag and the combinator directives (D6/D7)
+own.Properties[name] = nullableField(f.Type, prop, defs, mergeNull)
+// mergeNull is true when a oneOf/anyOf directive built the member list, so the
+// null branch appends to it instead of wrapping it.
 ```
 
 ### 2. Package documentation
@@ -249,7 +253,10 @@ required:
   becomes the payload branch.
 - `omitempty` — no effect (D2's rationale).
 - Embedded pointer — no wrapper (D8).
-- `oneOf`/`anyOf`/`allOf` directive on a nilable field — nested (D7).
+- `oneOf`/`anyOf` directive on a nilable field — the null branch joins the member
+  list (D7).
+- `allOf` directive on a nilable field — wrapped, because merging would accept
+  nothing (D7).
 
 ## Rollout plan
 
@@ -278,7 +285,9 @@ shapes.
   - `should_wrap_a_map_whose_values_admit_anything`,
     `should_wrap_a_slice_whose_elements_admit_anything`
   - `should_keep_tag_keywords_on_the_payload_branch`,
-    `should_nest_a_combinator_directive`, `should_look_through_a_ref_to_an_empty_component`,
+    `should_merge_the_null_branch_into_oneOf`,
+    `should_wrap_the_null_branch_around_allOf`,
+    `should_look_through_a_ref_to_an_empty_component`,
     `should_keep_the_root_and_components_bare`, `should_never_share_the_null_node`
 - Existing tests that asserted the un-wrapped shape for `any` fields with
   combinator directives were updated to unwrap through a helper, which is the

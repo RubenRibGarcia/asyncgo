@@ -170,19 +170,19 @@ properties:
     type: string
   state:
     oneOf:
-    - oneOf:
-      - $ref: "#/components/schemas/...Paid"
-      - $ref: "#/components/schemas/...Cancelled"
+    - $ref: "#/components/schemas/...Paid"
+    - $ref: "#/components/schemas/...Cancelled"
     - type: "null"
 required:
 - id
 ```
 
-`any` can hold `nil`, so the directive's `oneOf` sits inside the null branch that
-any nilable field gets — see [Nilable means nullable](../schema.md). The nested
-shape is the same for `anyOf=` and `allOf=`, and it is required rather than
-cosmetic: appending `{type: "null"}` to an `allOf` member list would make the
-field unsatisfiable.
+`any` can hold `nil`, so the directive's member list gains a `{type: "null"}``
+branch — see [Nilable means nullable](../schema.md). One member matching is all
+the schema needs, and null matches only that member, so `oneOf` still means
+exactly-one. `allOf=` is the exception: every member must pass, so a null member
+would leave the field accepting nothing and the branch wraps the conjunction
+instead.
 
 A member name is resolved one of two ways:
 

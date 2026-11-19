@@ -80,6 +80,9 @@ kind rather than only to pointers.
   payload's `$ref`.
 - Good, because a tag keyword (`enum`, `format`, `minItems`) is applied to the
   payload branch, so it constrains the value instead of silently excluding null.
+- Good, because `oneOf=` and `anyOf=` absorb the null branch as one of their own
+  members, so a directive-driven union stays flat; `allOf=` alone keeps the
+  wrapper, which is the only form that accepts "the conjunction, or null".
 - Bad, because it is a breaking change: every document with a nilable position
   changes shape (`anyof`, `oneof`, `bytes` and `mappings` fixtures, plus any
   user document with a pointer, slice or map field). Accepted deliberately while

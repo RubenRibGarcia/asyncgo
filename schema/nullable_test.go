@@ -334,13 +334,17 @@ func TestNilableTagKeywordsLandOnThePayloadBranch(t *testing.T) {
 	assert.True(t, items.UniqueItems)
 }
 
-// TestNilableCombinatorDirectiveNests pins D7: the null branch wraps whatever the
-// directive produced rather than being merged into its member list. Merging is
-// wrong for allOf — every branch must pass, so a null member would make the
-// position unsatisfiable — and nesting keeps the three directives uniform.
-func TestNilableCombinatorDirectiveNests(t *testing.T) {
+// TestNilableCombinatorDirectiveShape pins how the null branch meets a combinator
+// directive. For oneOf and anyOf it joins the directive's own member list: a null
+// instance matches only the null member, so exactly-one and any-of still hold,
+// and the document loses a nesting level. allOf cannot take that treatment —
+// every member must pass, so a null member would leave the field unsatisfiable —
+// and keeps the wrapper.
+func TestNilableCombinatorDirectiveShape(t *testing.T) {
 	type union struct {
-		Data any `json:"data" asyncapi:"oneOf=nilableInner"`
+		One any `json:"one" asyncapi:"oneOf=nilableInner"`
+		Any any `json:"any" asyncapi:"anyOf=nilableInner"`
+		All any `json:"all" asyncapi:"allOf=nilableInner"`
 	}
 
 	defs := map[string]*spec.Schema{}
@@ -348,28 +352,56 @@ func TestNilableCombinatorDirectiveNests(t *testing.T) {
 	obj := defs[Name(reflect.TypeFor[union]())]
 	require.NotNil(t, obj)
 
-	prop := obj.Properties["data"]
-	require.NotNil(t, prop)
-	require.Len(t, prop.OneOf, 2)
-	assert.Equal(t, "null", prop.OneOf[1].Type)
+	t.Run("should_merge_the_null_branch_into_oneOf", func(t *testing.T) {
+		members := obj.Properties["one"].OneOf
+		require.Len(t, members, 2)
+		assert.Equal(t, Ref(reflect.TypeFor[nilableInner]()), members[0].Ref)
+		assert.Equal(t, "null", members[1].Type)
+	})
 
-	members := prop.OneOf[0].OneOf
-	require.Len(t, members, 1)
-	assert.Equal(t, Ref(reflect.TypeFor[nilableInner]()), members[0].Ref)
+	t.Run("should_merge_the_null_branch_into_anyOf", func(t *testing.T) {
+		members := obj.Properties["any"].AnyOf
+		require.Len(t, members, 2)
+		assert.Equal(t, Ref(reflect.TypeFor[nilableInner]()), members[0].Ref)
+		assert.Equal(t, "null", members[1].Type)
+	})
+
+	t.Run("should_wrap_the_null_branch_around_allOf", func(t *testing.T) {
+		prop := obj.Properties["all"]
+		require.Len(t, prop.OneOf, 2)
+		assert.Equal(t, "null", prop.OneOf[1].Type)
+
+		conjunction := prop.OneOf[0]
+		require.Len(t, conjunction.AllOf, 1)
+		assert.Equal(t, Ref(reflect.TypeFor[nilableInner]()), conjunction.AllOf[0].Ref)
+	})
 }
 
 // TestNilableNeverSharesTheNullNode guards against handing one mutable node to
 // every nullable position: a document that edited one would edit them all.
 func TestNilableNeverSharesTheNullNode(t *testing.T) {
+	type union struct {
+		One any `json:"one" asyncapi:"oneOf=nilableInner"`
+		Any any `json:"any" asyncapi:"anyOf=nilableInner"`
+	}
+
 	defs := map[string]*spec.Schema{}
 	FromType(reflect.TypeFor[nilableHolder](), defs)
+	FromType(reflect.TypeFor[union](), defs)
 	obj := defs[Name(reflect.TypeFor[nilableHolder]())]
 	require.NotNil(t, obj)
+	merged := defs[Name(reflect.TypeFor[union]())]
+	require.NotNil(t, merged)
 
 	a := obj.Properties["str"].OneOf[1]
 	b := obj.Properties["omit"].OneOf[1]
-	require.NotNil(t, a)
-	require.NotNil(t, b)
+	c := merged.Properties["one"].OneOf[1]
+	d := merged.Properties["any"].AnyOf[1]
+	for _, node := range []*spec.Schema{a, b, c, d} {
+		require.NotNil(t, node)
+		assert.NotSame(t, node, nullSchema)
+	}
 	assert.NotSame(t, a, b)
-	assert.NotSame(t, a, nullSchema)
+	assert.NotSame(t, c, d)
+	assert.NotSame(t, a, c)
 }

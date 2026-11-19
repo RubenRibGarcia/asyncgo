@@ -334,9 +334,10 @@ func TestMappingFinalize(t *testing.T) {
 		defs := map[string]*spec.Schema{}
 		FromType(reflect.TypeFor[mappingCombinator](), defs)
 		require.Contains(t, defs[mappingCombinatorName].Properties, "data")
-		members := unwrapNullable(t, defs[mappingCombinatorName].Properties["data"]).OneOf
-		require.Len(t, members, 1)
+		members := defs[mappingCombinatorName].Properties["data"].OneOf
+		require.Len(t, members, 2)
 		assert.Equal(t, RefByName(mappingUUIDName), members[0].Ref)
+		assert.Equal(t, "null", members[1].Type)
 
 		doc := spec.New()
 		Finalize(doc)

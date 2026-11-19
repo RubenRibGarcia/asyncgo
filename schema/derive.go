@@ -34,7 +34,12 @@
 //     wrapper is emitted at each use site instead. omitempty does not change
 //     this — it governs only what asyncgo writes, not what a consumer may send.
 //     Struct tags apply to the payload branch, never beside the oneOf, so an
-//     `enum=` cannot silently exclude null.
+//     `enum=` cannot silently exclude null. The combinator directives are the
+//     one shape that is folded in rather than wrapped: `oneOf=` and `anyOf=`
+//     take the null branch as a member of their own list, since a null instance
+//     matches only that member and exactly-one (or any-of) still holds. `allOf=`
+//     is wrapped, because every member must pass and a null member would leave
+//     the position accepting nothing.
 //   - json struct tags drive field names; "-" skips a field.
 //   - asyncapi struct tags carry "required", "enum=a,b,...", "examples=...",
 //     "format=...", "const=...", "discriminator=...", the numeric bounds
@@ -233,9 +238,16 @@ func deref(t reflect.Type) reflect.Type {
 }
 
 // nullSchema is the Draft-07 schema of JSON null, the second branch of a
-// nullable position. It is never handed out as-is: nullable copies it, so no two
+// nullable position. It is never handed out as-is: nullNode copies it, so no two
 // positions share one node.
 var nullSchema = &spec.Schema{Type: "null"}
+
+// nullNode returns a fresh copy of the null schema, so a node can be placed at
+// one position without every other position aliasing it.
+func nullNode() *spec.Schema {
+	null := *nullSchema
+	return &null
+}
 
 // nilableKind reports whether a value of type t can marshal to JSON null. All
 // six kinds are also accepted as null by encoding/json on unmarshal, so each is
@@ -262,8 +274,39 @@ func nullable(t reflect.Type, s *spec.Schema, defs map[string]*spec.Schema) *spe
 	if t == nil || !nilableKind(t) || !constrains(s, defs) {
 		return s
 	}
-	null := *nullSchema
-	return &spec.Schema{OneOf: []*spec.Schema{s, &null}}
+	return &spec.Schema{OneOf: []*spec.Schema{s, nullNode()}}
+}
+
+// nullableField adds the null branch to a field's schema in the shape the field
+// allows. merged reports that a oneOf/anyOf directive built the combinator that
+// s already carries: the null branch then joins that member list, which is
+// equivalent — a null instance matches only the null member, so exactly-one and
+// any-of still hold — and one nesting level shorter. Otherwise the wrapper
+// nullable builds is used.
+//
+// allOf is deliberately not mergeable and is passed here with merged=false: every
+// member of an allOf must pass, so appending {type: "null"} would require the
+// instance to satisfy the named types AND be null, which nothing does. The
+// wrapper is the only form that means "the conjunction, or null".
+func nullableField(
+	t reflect.Type,
+	s *spec.Schema,
+	defs map[string]*spec.Schema,
+	merged bool,
+) *spec.Schema {
+	if !merged || t == nil || !nilableKind(t) {
+		return nullable(t, s, defs)
+	}
+	if s.OneOf == nil && s.AnyOf == nil {
+		return nullable(t, s, defs)
+	}
+	if s.OneOf != nil {
+		s.OneOf = append(s.OneOf, nullNode())
+	}
+	if s.AnyOf != nil {
+		s.AnyOf = append(s.AnyOf, nullNode())
+	}
+	return s
 }
 
 // constrains reports whether s accepts a strict subset of instances, which is
@@ -439,6 +482,9 @@ func fillFields(
 		}
 
 		prop := FromType(f.Type, defs)
+		// mergeNull records that a oneOf/anyOf directive built the combinator, which
+		// lets the null branch join its member list instead of wrapping it.
+		mergeNull := false
 		if ds := taggrammar.Parse(f.Tag.Get("asyncapi")); len(ds) > 0 {
 			applyTag(prop, ds)
 			if taggrammar.Flag(ds, "required") {
@@ -446,18 +492,21 @@ func fillFields(
 			}
 			if names, ok := combinatorNames(ds, "oneOf"); ok {
 				prop.OneOf = refs(names, t)
+				mergeNull = true
 			}
 			if names, ok := combinatorNames(ds, "anyOf"); ok {
 				prop.AnyOf = refs(names, t)
+				mergeNull = true
 			}
 			if names, ok := combinatorNames(ds, "allOf"); ok {
 				prop.AllOf = refs(names, t)
 			}
 		}
 		// The null branch is added last, so every keyword the tag supplied lands on
-		// the payload branch. Beside a oneOf they would apply to the whole instance:
-		// `enum=a,b` would then exclude null while appearing to constrain the value.
-		own.Properties[name] = nullable(f.Type, prop, defs)
+		// the payload branch. Beside a combinator they would apply to the whole
+		// instance: `enum=a,b` would then exclude null while appearing to constrain
+		// the value.
+		own.Properties[name] = nullableField(f.Type, prop, defs, mergeNull)
 	}
 }
 
