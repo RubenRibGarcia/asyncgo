@@ -3,7 +3,7 @@
 - Status: accepted
 - Deciders: asyncgo maintainers
 - Created: 2026-11-12
-- Status updated: 2026-11-12
+- Status updated: 2026-11-19
 
 ## Context and Problem Statement
 
@@ -50,11 +50,17 @@ it does so without a diff engine.
 
 Concretely:
 
-- **`check --diff` prints one entry per changed key** in the shape findings
-  already use — `<path>: <where>: <added|removed|changed> (<values>)` — through a
-  new `logging.ReportDiff`, which is the *ungated* counterpart of
-  `ReportFindings`: `--diff` is the user asking for this detail, so it prints at
-  default verbosity, while findings stay `-v` narration.
+- **`check --diff` prints one row per changed key**, in one block per artifact:
+  a header record naming the file and counting its changes, then `where`,
+  `change` and `value` columns aligned to the widest cell in that block. The
+  path is printed once in the header instead of on every row, which is what keeps
+  a 50-row diff scannable. It goes through `logging.ReportDiff`, the *ungated*
+  counterpart of `ReportFindings`: `--diff` is the user asking for this detail, so
+  it prints at default verbosity, while findings stay `-v` narration. A member of
+  an out-of-date set that has no second document to compare against — a missing
+  artifact, an orphan file — keeps its one-line finding through
+  `logging.ReportLocators`, also ungated, because a header over a single row would
+  only repeat it.
 - **`--diff` replaces the `-v` section findings** for a stale artifact rather
   than printing both: the value diff is the superset (it also sees an empty
   section, which key comparison misses), and two reports of one change is noise.
@@ -69,10 +75,17 @@ Concretely:
   one on failure, so neither is silently reported as unparsable. The typed
   findings path gets the same tolerance, which removes a byte-offset fallback
   that used to fire for a perfectly readable YAML artifact.
-- **The walk descends only when both sides have the key.** A removed or added
-  subtree is one entry whose value *is* the subtree, and sequences compare as
-  values (a reordered `enum` is a change). This is what keeps a rename at two
-  entries instead of one per leaf.
+- **A key only one side has is expanded to its leaves**, bounded by two limits: a
+  depth of three levels below the changed key (a container sitting at the limit is
+  one entry, so a deep branch costs one row instead of collapsing the shallow
+  leaves beside it) and ten leaf entries per changed subtree (a subtree needing
+  more is one counted entry, so a moved payload schema never buries the rest of
+  the drift, and the report never shows an arbitrary prefix of a subtree as if it
+  were the whole thing). Sequences compare as values when both sides have them — a
+  reordered `enum` is a change, and per-element noise would bury it — but an added
+  or removed sequence is expanded by position. This is the one place the walk
+  deliberately trades rows for precision: a renamed channel used to be two
+  entries and is now its address, its bindings and its messages.
 - **Numbers compare by value, not by Go type.** goccy/go-yaml yields `uint64`
   for `3` and `int64` for `-7`; encoding/json yields `float64` for both. The same
   number therefore arrives as different types depending on the encoding, and a
@@ -88,10 +101,11 @@ Concretely:
   document — reindented, reordered, different line endings, or carrying YAML
   anchors — reports `values match, encoding differs` instead of printing nothing
   on a failing check.
-- **The report is capped at 50 changes per artifact**, with an
-  `and N more change(s)` line. Higher than the 10-per-section findings cap
-  because the flag is a targeted request, and lower than "unbounded" because a
-  regenerated document can legitimately differ in hundreds of keys.
+- **The report is capped at 50 rows per artifact**, with the header counting the
+  changes it has and an `and N more change(s)` footer saying what the cap dropped.
+  Higher than the 10-per-section findings cap because the flag is a targeted
+  request, and lower than "unbounded" because a regenerated document can
+  legitimately differ in hundreds of keys.
 - **Directory mode diffs only the stale members.** A missing artifact and an
   orphan have no second document to compare against, so they keep their single
   finding and the set keeps its one verdict.
@@ -111,12 +125,18 @@ Rejected:
 
 - Good, because a failing `check` now names the keys and values that differ, in
   either encoding, without a regenerate-and-read loop.
+- Good, because a subtree one side lacks is listed leaf by leaf, so a renamed or
+  added channel says what it contains instead of only how many keys it has.
 - Good, because the default output, the error text, exit code 3, and the `-v`
   findings are unchanged; the flag is additive.
 - Good, because one walker covers YAML, JSON and the mixed pair, and its numeric
   comparison is exact rather than float-truncating.
 - Good, because the encoding-tolerant decode also fixes the mixed case on the
   existing findings path.
+- Bad, because leaf expansion makes a rename cost one row per leaf — 18 rows for
+  the one-channel fixture — where it used to cost two. The depth and leaf limits
+  bound that, but a diff of several renames is a longer read than it was, and the
+  artifact row cap is what keeps it finite.
 - Bad, because `--diff` and `-v` are two ways to explain the same failure with
   different granularity; the interaction (diff wins) has to stay documented.
 - Bad, because generic decoding means the diff sees whatever the decoders
@@ -126,6 +146,20 @@ Rejected:
 - Bad, because `internal/docdiff` is a new package with a valuation rule set
   (numbers, sequences, nested mappings) that has to be kept in step with the
   encoders' behaviour.
+
+## Update (2026-11-19)
+
+The decisions above stand; the report *shape* and the granularity of a changed
+subtree changed. The first version printed each change as an indented finding line
+that carried the artifact path (`<path>: <where>: <added|removed|changed>
+(<values>)`), and a key one side lacked was a single entry whose value was the
+whole subtree. That repeated a long absolute path on every row, said only `{6
+keys}` about a renamed channel, and — because the block bypasses the record writer
+— reached CI logs as one unlabelled message. It is now one headed, column-aligned
+block per artifact (first bullet under "Decision Outcome"), with a changed
+subtree expanded to its leaves under the new depth and leaf limits. The
+ungated/gated split, the 50-change cap, the value summarising, the fallbacks and
+the locator handling are unchanged.
 
 ## More Information
 

@@ -177,13 +177,33 @@ esac
 ### Seeing what changed
 
 `--diff` explains a stale artifact as the **value changes** between the committed
-document and the one `generate` would write — one entry per added, removed or
-changed key:
+document and the one `generate` would write — one row per added, removed or
+changed key, under a header naming the artifact and counting its changes. A key
+only one side has is expanded to its leaves, so a renamed channel reads as its
+address, its bindings and its messages instead of as `{6 keys}`:
 
 ```console
 $ asyncgo check . --diff
-  /home/you/orders/asyncapi.yaml: channels.order-placed: added ({5 keys})
-  /home/you/orders/asyncapi.yaml: channels.order-renamed: removed ({5 keys})
+asyncgo: +0.121s check: /home/you/orders/asyncapi.yaml is out of date, 18 changes
+  where                                                 change   value
+  channels.order-placed.address                         added    "order-placed"
+  channels.order-placed.bindings.kafka.partitions       added    3
+  channels.order-placed.bindings.kafka.topic            added    "order-placed"
+  channels.order-placed.description                     added    "Emitted when an order is placed"
+  channels.order-placed.messages.OrderPlaced["$ref"]    added    "#/components/messages/OrderPlaced"
+  channels.order-placed.servers[0]["$ref"]              added    "#/servers/prod"
+  channels.order-renamed.address                        removed  "order-renamed"
+  channels.order-renamed.bindings.kafka.partitions      removed  3
+  channels.order-renamed.bindings.kafka.topic           removed  "order-renamed"
+  channels.order-renamed.description                    removed  "Emitted when an order is placed"
+  channels.order-renamed.messages.OrderPlaced["$ref"]   removed  "#/components/messages/OrderPlaced"
+  channels.order-renamed.servers[0]["$ref"]             removed  "#/servers/prod"
+  operations["order-placed.send"].action                added    "send"
+  operations["order-placed.send"].channel["$ref"]       added    "#/channels/order-placed"
+  operations["order-placed.send"].messages[0]["$ref"]   added    "#/channels/order-placed/messages/OrderPlaced"
+  operations["order-renamed.send"].action               removed  "send"
+  operations["order-renamed.send"].channel["$ref"]      removed  "#/channels/order-renamed"
+  operations["order-renamed.send"].messages[0]["$ref"]  removed  "#/channels/order-renamed/messages/OrderPlaced"
 asyncgo: /home/you/orders/asyncapi.yaml: document is out of date; run `asyncgo generate`
 ```
 
@@ -193,18 +213,28 @@ prints at default verbosity (`--diff` is the request, so `-v` is not needed) and
 replaces the per-section `-v` findings for the same failure, so the drift is
 reported once.
 
-Each entry names the key path, the change, and the value. Two details keep the
-report readable:
+Each row names the key path, the change, and the value, with the path printed
+once in the header rather than on every row and the columns aligned to the widest
+cell in that artifact's block. Five details keep the report readable:
 
-- A value too large for one line is summarised (`{5 keys}`, `[12 items]`) rather
-  than cut mid-way, and a long report stops at 50 entries per document with an
-  `and N more change(s)` line.
+- A key only one document has is expanded to its leaves, so a new channel lists
+  its address, messages, servers and bindings instead of collapsing to a count.
+- A location wider than its column wraps: the path takes a line per segment run
+  and the change follows indented below it, so one fully-qualified schema path
+  never pushes the other rows' columns right.
+- Expansion is bounded: a branch deeper than three levels reports the node at
+  that depth as one entry, and a subtree that would contribute more than ten
+  leaves reports a single `{N keys}` / `[N items]` entry, so a moved payload
+  schema cannot bury the rest of the drift.
+- A value too large for one line is summarised rather than cut mid-way, and a
+  long report stops at 50 rows per document, with the header counting all of them
+  and an `and N more change(s)` footer saying what the block left out.
 - An artifact that no longer parses reports the first differing byte offset, and
   one whose values all match — reindented, reordered, or carrying YAML anchors —
   reports `values match, encoding differs` instead of printing nothing.
 
-In directory mode each stale document gets its own diff. A **missing** artifact
-and an **orphan** keep their one-line finding, because there is no second
+In directory mode each stale document gets its own header and block. A **missing**
+artifact and an **orphan** keep their one-line finding, because there is no second
 document to compare them against.
 
 ## Discovery and configuration
