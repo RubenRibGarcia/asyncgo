@@ -23,19 +23,23 @@ components:
       type: object
       properties:
         body:
-          type: string
           description: Body is the raw file content, derived as base64.
-          format: byte
-          contentEncoding: base64
+          oneOf:
+          - type: string
+            format: byte
+            contentEncoding: base64
+          - type: "null"
         name:
           type: string
           description: Name is the attachment's file name.
         thumbnail:
-          type: string
           description: Thumbnail is a preview image, whose media type the Go type cannot carry.
-          format: byte
-          contentEncoding: base64
-          contentMediaType: image/png
+          oneOf:
+          - type: string
+            format: byte
+            contentEncoding: base64
+            contentMediaType: image/png
+          - type: "null"
       required:
       - name
       - body

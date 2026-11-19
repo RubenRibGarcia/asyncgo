@@ -201,7 +201,8 @@ library's differentiating feature and the area with the deepest coverage.
 | `map[K]V` | `{type: object, additionalProperties: …}` | ✅ (key type ignored) |
 | named struct | hoisted to `components.schemas`, referenced by `$ref` | ✅ |
 | anonymous struct | inlined `object` | ✅ |
-| pointer | dereferenced | ✅ |
+| pointer | dereferenced; the position is nullable | ✅ |
+| nilable position (`*T`, `[]T`, `map[K]V`, `interface`, `chan`, `func`) | `oneOf: [<payload schema>, {type: "null"}]` | ✅ a `nil` value marshals to `null`, so the position must accept it — see [ADR 0015](adr/0015-nilable-null-derivation.md). An already-unconstrained payload is not wrapped, since `oneOf: [{}, {type: "null"}]` would match every instance twice and validate nothing. `components.schemas` entries and the payload root stay bare |
 | `time.Time` | `{type: string, format: date-time}` | ✅ hardcoded, not overridable |
 | `[]byte` | `{type: string, format: byte, contentEncoding: base64}` | ✅ see [B17](#b17--byte-encoding-format) |
 | `json.RawMessage` | `{}` | ✅ |
@@ -230,6 +231,9 @@ library's differentiating feature and the area with the deepest coverage.
 | malformed directive value (`minItems=abc`, `examples=`) | — | ❌ silently ignored; the derivation chain has no error channel ([§8 B7](#b7)) |
 | `asyncapi:"format=…"` | `format` | ✅ |
 | `asyncapi:"oneOf=A\,B"` / `anyOf` / `allOf` | `$ref` list, members auto-hoisted | ✅ |
+| any tag keyword on a nilable field | the keyword on the payload branch, not beside the `oneOf` | ✅ otherwise `enum=` would intersect with the wrapper and silently exclude `null` ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
+| `oneOf=` / `anyOf=` on a nilable field | the null branch appended to the directive's own member list | ✅ null matches only that member, so exactly-one still holds and no nesting is added ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
+| `allOf=` on a nilable field | `oneOf: [{allOf: [...]}, {type: "null"}]` | ✅ merging is impossible here: every member must pass, so a null member would leave the field accepting nothing ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
 | `spec.SchemaProvider` | full schema override, hoisted as-is | ✅ any named type — struct or non-struct |
 
 ### 4.3 Not expressible
@@ -237,6 +241,7 @@ library's differentiating feature and the area with the deepest coverage.
 | Capability | Status |
 | --- | --- |
 | `default` from Go | ❌ only via `SchemaProvider` |
+| `nullable` (the AsyncAPI 2.x / OpenAPI 3.0 keyword) | ❌ not a Draft-07 or 3.1.0 keyword: a validator ignores it as unknown. A nilable Go type derives `oneOf` with `{type: "null"}` instead ([ADR 0015](adr/0015-nilable-null-derivation.md)) |
 | `minLength`, `maxLength`, `pattern` from Go | ❌ only via `SchemaProvider` |
 | validation-tag bridging (`validate:"required,min=1"`, `jsonschema:"…"`) | ❌ |
 | `externalDocs`, `$id`, `$schema`, `$comment` on a schema | ❌ model-only; author them on `spec.Schema` via `MessageFrom`, `Schema(...)`, or `SchemaProvider` |

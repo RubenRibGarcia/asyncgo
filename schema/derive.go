@@ -20,6 +20,26 @@
 //     named property instead — encoding/json does not inline it, and neither
 //     does derivation.
 //   - All fields are optional unless tagged asyncgo:"required".
+//   - A nilable position — a pointer, slice, map, interface, chan or func —
+//     derives a nullable schema, because encoding/json accepts null for all six
+//     on unmarshal and emits it for a nil value whenever the key is present. The
+//     shape is `oneOf: [<schema>, {type: "null"}]`: Draft-07 ignores keywords
+//     beside $ref, so a pointer to a hoisted struct could not carry the null
+//     branch any other way. A position whose schema already admits null — the
+//     unconstrained {} of an interface, chan or func, or a provider/mapping that
+//     returns one — is left alone, because `oneOf: [{}, {type: "null"}]` matches
+//     every instance against two branches and so validates nothing.
+//     Nullability belongs to the position, not to the type: a components.schemas
+//     entry is never nullable, since `*T` and `T` share one component and the
+//     wrapper is emitted at each use site instead. omitempty does not change
+//     this — it governs only what asyncgo writes, not what a consumer may send.
+//     Struct tags apply to the payload branch, never beside the oneOf, so an
+//     `enum=` cannot silently exclude null. The combinator directives are the
+//     one shape that is folded in rather than wrapped: `oneOf=` and `anyOf=`
+//     take the null branch as a member of their own list, since a null instance
+//     matches only that member and exactly-one (or any-of) still holds. `allOf=`
+//     is wrapped, because every member must pass and a null member would leave
+//     the position accepting nothing.
 //   - json struct tags drive field names; "-" skips a field.
 //   - asyncapi struct tags carry "required", "enum=a,b,...", "examples=...",
 //     "format=...", "const=...", "discriminator=...", the numeric bounds
@@ -104,6 +124,12 @@ func RefByName(fqn string) string {
 // (keyed by their fully-qualified name) and returned as a $ref; all other types
 // are inlined.
 //
+// The returned schema describes a non-nil instance of t: nullability is a
+// property of the position a type occupies, so FromType never wraps its own
+// result, while the positions it fills — a struct field, `items`, and
+// `additionalProperties` — do (see the package comment). A caller placing the
+// result somewhere else inlines a schema that a nil value cannot satisfy.
+//
 // A nil t yields an unconstrained schema rather than a panic. defs must be
 // non-nil whenever t is hoistable (a named struct or provider); FromType panics
 // on a hoistable type with a nil defs map.
@@ -172,9 +198,15 @@ func FromType(t reflect.Type, defs map[string]*spec.Schema) *spec.Schema {
 	case reflect.Float64:
 		return &spec.Schema{Type: "number", Format: "double"}
 	case reflect.Slice, reflect.Array:
-		return &spec.Schema{Type: "array", Items: FromType(t.Elem(), defs)}
+		return &spec.Schema{
+			Type:  "array",
+			Items: nullable(t.Elem(), FromType(t.Elem(), defs), defs),
+		}
 	case reflect.Map:
-		return &spec.Schema{Type: "object", AdditionalProperties: FromType(t.Elem(), defs)}
+		return &spec.Schema{
+			Type:                 "object",
+			AdditionalProperties: nullable(t.Elem(), FromType(t.Elem(), defs), defs),
+		}
 	case reflect.Struct:
 		if isNamed(t) {
 			return hoistStruct(t, defs)
@@ -193,11 +225,129 @@ func isNamed(t reflect.Type) bool { return t.Name() != "" && t.PkgPath() != "" }
 // deref strips any pointer layers from t. Derivation looks at the element type
 // only — a pointer and its element derive the same schema — so FromType, structOf
 // and Register each start from this instead of repeating the loop.
+//
+// Because it runs on entry, a pointer is indistinguishable from its element for
+// the rest of derivation. So nullability cannot be decided from the type once
+// derivation has started: each caller that places a schema at a value position
+// passes the type it was given, still undereferenced, to nullable.
 func deref(t reflect.Type) reflect.Type {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t
+}
+
+// nullSchema is the Draft-07 schema of JSON null, the second branch of a
+// nullable position. It is never handed out as-is: nullNode copies it, so no two
+// positions share one node.
+var nullSchema = &spec.Schema{Type: "null"}
+
+// nullNode returns a fresh copy of the null schema, so a node can be placed at
+// one position without every other position aliasing it.
+func nullNode() *spec.Schema {
+	null := *nullSchema
+	return &null
+}
+
+// nilableKind reports whether a value of type t can marshal to JSON null. All
+// six kinds are also accepted as null by encoding/json on unmarshal, so each is
+// nullable regardless of whether asyncgo itself would emit the null.
+func nilableKind(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Pointer, reflect.Slice, reflect.Map,
+		reflect.Interface, reflect.Chan, reflect.Func:
+		return true
+	default:
+		return false
+	}
+}
+
+// nullable adds the null branch to s when the declared type of the position is
+// nilable, yielding `oneOf: [s, {type: "null"}]`. s is returned unchanged
+// otherwise, and when it already admits null: an unconstrained schema accepts
+// every instance, so wrapping it would make exactly-one fail everywhere and
+// leave the position accepting nothing at all.
+//
+// t must be the type as declared at the position. FromType dereferences on
+// entry, so by the time a schema exists the pointer layer is gone.
+func nullable(t reflect.Type, s *spec.Schema, defs map[string]*spec.Schema) *spec.Schema {
+	if t == nil || !nilableKind(t) || !constrains(s, defs) {
+		return s
+	}
+	return &spec.Schema{OneOf: []*spec.Schema{s, nullNode()}}
+}
+
+// nullableField adds the null branch to a field's schema in the shape the field
+// allows. merged reports that a oneOf/anyOf directive built the combinator that
+// s already carries: the null branch then joins that member list, which is
+// equivalent — a null instance matches only the null member, so exactly-one and
+// any-of still hold — and one nesting level shorter. Otherwise the wrapper
+// nullable builds is used.
+//
+// allOf is deliberately not mergeable and is passed here with merged=false: every
+// member of an allOf must pass, so appending {type: "null"} would require the
+// instance to satisfy the named types AND be null, which nothing does. The
+// wrapper is the only form that means "the conjunction, or null".
+func nullableField(
+	t reflect.Type,
+	s *spec.Schema,
+	defs map[string]*spec.Schema,
+	merged bool,
+) *spec.Schema {
+	if !merged || t == nil || !nilableKind(t) {
+		return nullable(t, s, defs)
+	}
+	if s.OneOf == nil && s.AnyOf == nil {
+		return nullable(t, s, defs)
+	}
+	if s.OneOf != nil {
+		s.OneOf = append(s.OneOf, nullNode())
+	}
+	if s.AnyOf != nil {
+		s.AnyOf = append(s.AnyOf, nullNode())
+	}
+	return s
+}
+
+// constrains reports whether s accepts a strict subset of instances, which is
+// what makes a null branch meaningful. The annotations are folded away first and
+// the empty struct is the test, so the list to maintain is the set of keywords
+// that restrict nothing — a newly modelled constraint counts as a constraint by
+// default. That is the safe direction to be wrong in: the worst case is an
+// unnecessary null branch, never an unsatisfiable one.
+//
+// A $ref constrains exactly when its target does, so the target is resolved one
+// level through defs. Skipping that check would break the nilable case it is
+// there to protect: a provider that returns an unconstrained schema is hoisted
+// as an empty component, and `oneOf: [$ref, {type: "null"}]` would then match a
+// null instance against both branches and reject it. Only one level is followed
+// because a ref-to-ref is the only shape left, and treating it as a constraint
+// is the conservative answer.
+func constrains(s *spec.Schema, defs map[string]*spec.Schema) bool {
+	if s == nil {
+		return false
+	}
+	if name, ok := componentName(s.Ref); ok && defs != nil {
+		target, ok := defs[name]
+		if !ok || target == nil || target.Ref != "" {
+			return true
+		}
+		return constrains(target, nil)
+	}
+	annotated := *s
+	annotated.ID = ""
+	annotated.SchemaURI = ""
+	annotated.Title = ""
+	annotated.Description = ""
+	annotated.Comment = ""
+	annotated.ExternalDocs = nil
+	annotated.Examples = nil
+	annotated.Default = nil
+	annotated.ReadOnly = false
+	annotated.WriteOnly = false
+	annotated.Deprecated = false
+	annotated.Discriminator = ""
+	return !reflect.DeepEqual(annotated, spec.Schema{})
 }
 
 // hoistedRef returns the $ref to t when defs already holds its schema, and ""
@@ -332,6 +482,9 @@ func fillFields(
 		}
 
 		prop := FromType(f.Type, defs)
+		// mergeNull records that a oneOf/anyOf directive built the combinator, which
+		// lets the null branch join its member list instead of wrapping it.
+		mergeNull := false
 		if ds := taggrammar.Parse(f.Tag.Get("asyncapi")); len(ds) > 0 {
 			applyTag(prop, ds)
 			if taggrammar.Flag(ds, "required") {
@@ -339,15 +492,21 @@ func fillFields(
 			}
 			if names, ok := combinatorNames(ds, "oneOf"); ok {
 				prop.OneOf = refs(names, t)
+				mergeNull = true
 			}
 			if names, ok := combinatorNames(ds, "anyOf"); ok {
 				prop.AnyOf = refs(names, t)
+				mergeNull = true
 			}
 			if names, ok := combinatorNames(ds, "allOf"); ok {
 				prop.AllOf = refs(names, t)
 			}
 		}
-		own.Properties[name] = prop
+		// The null branch is added last, so every keyword the tag supplied lands on
+		// the payload branch. Beside a combinator they would apply to the whole
+		// instance: `enum=a,b` would then exclude null while appearing to constrain
+		// the value.
+		own.Properties[name] = nullableField(f.Type, prop, defs, mergeNull)
 	}
 }
 

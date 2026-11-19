@@ -1,0 +1,105 @@
+asyncapi: 3.1.0
+info:
+  title: Nullable Values
+  version: 1.0.0
+  description: A payload whose nilable positions derive oneOf with a null branch
+channels:
+  order-updated:
+    address: order-updated
+    messages:
+      github.com/RubenRibGarcia/asyncgo/test/data/nullable.OrderUpdated:
+        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.OrderUpdated"
+    description: Emitted when an order changes
+operations:
+  order-updated.send:
+    action: send
+    channel:
+      $ref: "#/channels/order-updated"
+    messages:
+    - $ref: "#/channels/order-updated/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.OrderUpdated"
+components:
+  schemas:
+    github.com/RubenRibGarcia/asyncgo/test/data/nullable.Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID identifies the customer.
+      required:
+      - id
+    github.com/RubenRibGarcia/asyncgo/test/data/nullable.OrderUpdated:
+      type: object
+      properties:
+        attributes:
+          description: Attributes is a nilable map.
+          oneOf:
+          - type: object
+            additionalProperties:
+              type: string
+          - type: "null"
+        channel:
+          description: |-
+            Channel records how the order was placed. Its enum lands on the payload
+            branch, so the field still accepts null.
+          oneOf:
+          - type: string
+            enum:
+            - web
+            - mobile
+          - type: "null"
+        customer:
+          description: "Customer is required but nullable: the key must be there, the value may be\nnull."
+          oneOf:
+          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.Customer"
+          - type: "null"
+        metadata:
+          description: Metadata is unconstrained, so it already admits null and is left alone.
+        note:
+          description: |-
+            Note is an optional comment; omitempty changes what asyncgo writes, not
+            what a consumer may send.
+          oneOf:
+          - type: string
+          - type: "null"
+        order_id:
+          type: string
+          description: OrderID is always present and never null, so it carries no null branch.
+        refunds:
+          description: Refunds is a nilable array whose entries may themselves be nil.
+          oneOf:
+          - type: array
+            items:
+              oneOf:
+              - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.Refund"
+              - type: "null"
+          - type: "null"
+        ship_by:
+          description: |-
+            ShipBy is a mapped time.Time behind a pointer, so the mapping's shape
+            becomes the payload branch.
+          oneOf:
+          - type: string
+            format: date-time
+          - type: "null"
+        tags:
+          description: Tags is a nilable slice.
+          oneOf:
+          - type: array
+            items:
+              type: string
+          - type: "null"
+      required:
+      - order_id
+      - customer
+    github.com/RubenRibGarcia/asyncgo/test/data/nullable.Refund:
+      type: object
+      properties:
+        amount:
+          type: number
+          description: Amount is the refunded amount.
+          format: double
+  messages:
+    github.com/RubenRibGarcia/asyncgo/test/data/nullable.OrderUpdated:
+      payload:
+        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.OrderUpdated"
+      name: OrderUpdated

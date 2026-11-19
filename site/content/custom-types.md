@@ -151,8 +151,10 @@ type OrderPlaced struct {
 # properties (abridged):
 #   id:   { type: string, format: uuid }
 #   refs:
-#     type: array
-#     items: { type: string, format: uuid }
+#     oneOf:
+#       - type: array
+#         items: { type: string, format: uuid }
+#       - type: "null"    # []T is nilable, so the position accepts null
 ```
 
 ### Precedence

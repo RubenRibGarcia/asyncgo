@@ -71,11 +71,13 @@ properties:
     description: PlacedAt is when the order was accepted.
     format: date-time
   receipt:
-    type: string
     description: Receipt is a PNG; []byte is base64 by kind.
-    format: byte
-    contentEncoding: base64
-    contentMediaType: image/png
+    oneOf:
+    - type: string
+      format: byte
+      contentEncoding: base64
+      contentMediaType: image/png
+    - type: "null"
   sku:
     type: string
     description: Sku names the product.
@@ -83,22 +85,27 @@ properties:
     - sku-1
     - sku-2
   tags:
-    type: array
     description: Tags are free-form labels.
-    items:
-      type: string
-    minItems: 1
-    uniqueItems: true
+    oneOf:
+    - type: array
+      items:
+        type: string
+      minItems: 1
+      uniqueItems: true
+    - type: "null"
 required:
 - order_id
 - sku
 - placed_at
 ```
 
-Two things in that output are not tags at all. The `description` is the field's
-doc comment — reflection cannot see comments, so the static pass supplies it. And
-`format: date-time` on `PlacedAt` is derived from the type. A tag only ever adds
-what the type cannot say.
+Three things in that output are not tags at all. The `description` is the field's
+doc comment — reflection cannot see comments, so the static pass supplies it.
+`format: date-time` on `PlacedAt` is derived from the type. And the `oneOf` around
+`receipt` and `tags` is the null branch every nilable field gets: `[]byte` and
+`[]string` can both be `nil`, so `minItems` and the rest sit on the payload branch
+rather than beside the `oneOf`, where they would exclude `null`. A tag only ever
+adds what the type cannot say.
 
 ## Flags
 
@@ -165,9 +172,17 @@ properties:
     oneOf:
     - $ref: "#/components/schemas/...Paid"
     - $ref: "#/components/schemas/...Cancelled"
+    - type: "null"
 required:
 - id
 ```
+
+`any` can hold `nil`, so the directive's member list gains a `{type: "null"}``
+branch — see [Nilable means nullable](../schema.md). One member matching is all
+the schema needs, and null matches only that member, so `oneOf` still means
+exactly-one. `allOf=` is the exception: every member must pass, so a null member
+would leave the field accepting nothing and the branch wraps the conjunction
+instead.
 
 A member name is resolved one of two ways:
 
