@@ -228,7 +228,23 @@ def build_all(out: Path) -> None:
 
 def assemble(out: Path, plan: list[dict]) -> None:
     """Write the two files that tie the version directories together."""
-    (out / "versions.json").write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+    # The selector reads each entry as mike's schema spells it — `version` is
+    # the directory it links to and what it matches the current page against,
+    # `title` the label, `aliases` the extra names (`latest`) the version also
+    # answers to. The plan's own key is `directory`, so the mapping is explicit
+    # here: published under that name, every selector link resolved to
+    # `../undefined/` and no page matched its own version.
+    published = [
+        {
+            "version": entry["directory"],
+            "title": entry["title"],
+            "aliases": entry["aliases"],
+        }
+        for entry in plan
+    ]
+    (out / "versions.json").write_text(
+        json.dumps(published, indent=2) + "\n", encoding="utf-8"
+    )
 
     # GitHub Pages serves / as a directory index, so the redirect is a file.
     (out / "index.html").write_text(
