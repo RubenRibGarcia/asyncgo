@@ -7,6 +7,12 @@
 
 site_name: asyncgo
 site_description: Generate an AsyncAPI 3.1.0 specification from Go code.
+# Every published version is built with its own site_url, because Material's
+# version selector links a sibling as `../<version>/`: a build served from
+# /asyncgo/0.1/ links to /asyncgo/0.2/, while a build served from /asyncgo/
+# would link to /0.2/ and miss. site/hooks/versioning.py sets this (and the
+# edit link below, which has to point at the tag the pages came from); the
+# values here are what `make site-serve` uses.
 site_url: https://rubenribgarcia.github.io/asyncgo/
 repo_url: https://github.com/RubenRibGarcia/asyncgo
 repo_name: RubenRibGarcia/asyncgo
@@ -19,6 +25,9 @@ site_dir: build
 
 theme:
   name: material
+  # The versioned builds need one template override: Material ships the version
+  # selector and the outdated banner itself, and the banner's text is ours.
+  custom_dir: overrides
   icon:
     repo: fontawesome/brands/github
   palette:
@@ -76,6 +85,7 @@ nav:
       - Design docs: project/designdoc/README.md
 
 hooks:
+  - hooks/versioning.py
   - hooks/assemble.py
   - hooks/changelog.py
 
@@ -112,6 +122,23 @@ markdown_extensions:
 #           format: !!python/name:pymdownx.superfences.fence_code_format
 
 extra:
+  # Enables Material's version selector. It fetches ../versions.json, which
+  # site/scripts/build_site.py writes beside the version directories, and it
+  # treats a page as outdated unless its version (or one of its aliases)
+  # matches this pattern — `dev` is the current checkout, not an old release,
+  # so it must not be warned about. `provider: mike` is Material's documented
+  # key for the schema of versions.json; the mike plugin itself is not used,
+  # because it would mean publishing from a branch instead of the Pages
+  # artifact.
+  version:
+    provider: mike
+    default: "latest|dev"
+  # Filled in per build by site/hooks/versioning.py; empty for a plain local
+  # build, which leaves the banner text blank rather than lying about a version.
+  current_version: ""
+  current_tag: ""
+  latest_version: ""
+  latest_url: https://rubenribgarcia.github.io/asyncgo/latest/
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/RubenRibGarcia/asyncgo

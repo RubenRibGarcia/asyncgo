@@ -1,0 +1,24 @@
+{# Theme overrides for the versioned site.
+ #
+ # Material renders the version selector itself when `extra.version` is set
+ # (site/mkdocs.yml) — it reads ../versions.json, which site/scripts/build_site.py
+ # writes next to the version directories — and it also renders an "outdated"
+ # banner scaffold that stays hidden until its script decides the page is not the
+ # default version. The banner is the only thing left to fill in, so this file
+ # overrides one block and nothing else.
+ #
+ # The whitespace control is load-bearing: Material decides whether to render the
+ # banner at all from `self.outdated()`, i.e. from whether this block produced
+ # anything. A stray newline would put an empty warning banner on every page,
+ # including a plain local build that has no version. Hence the trim markers on
+ # both ends of the block.
+#}
+{% extends "base.html" %}
+
+{% block outdated -%}
+{%- if config.extra.current_version -%}
+  You are reading the documentation for asyncgo {{ config.extra.current_version }}
+  ({{ config.extra.current_tag }}), which is not the current release.
+  <a href="{{ config.extra.latest_url }}"><strong>Switch to the latest version</strong></a>.
+{%- endif -%}
+{% endblock %}

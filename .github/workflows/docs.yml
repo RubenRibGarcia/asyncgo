@@ -1,8 +1,15 @@
 name: Docs
 
-# Builds the MkDocs site in site/ with --strict and publishes it to GitHub
-# Pages. Pull requests build but never deploy, so a broken link or a missing nav
-# entry fails review instead of shipping.
+# Builds and publishes the project site. The site is versioned: every release
+# line gets its own directory built from the tag that released it, `latest/`
+# mirrors the newest release, and `dev/` is this checkout — so a reader on an
+# old release is never handed the docs for a newer one.
+# site/scripts/build_site.py does the whole build; `make site-versions` runs the
+# same thing locally.
+#
+# Pull requests build the same tree but never deploy: the changed pages still go
+# through `mkdocs build --strict` in every version, and unmerged work cannot
+# reach the versions people are reading.
 #
 # One-time repository setup: Settings → Pages → Source must be "GitHub Actions".
 
@@ -37,6 +44,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          # The release directories are built from tags, each in its own
+          # worktree, so the whole history and every tag have to be present.
+          fetch-depth: 0
           # This workflow only reads the repository and then uploads a Pages
           # artifact from site/build; keeping the token out of .git/config means
           # it cannot be swept into that artifact.
@@ -49,18 +59,21 @@ jobs:
           cache: pip
           cache-dependency-path: site/requirements.txt
 
+      # One toolchain for every version: the dependencies are installed once,
+      # and build_site.py copies this checkout's mkdocs.yml, hooks and overrides
+      # into each tag's worktree. Only the content comes from the tag.
       - name: Install site dependencies
         run: pip install -r site/requirements.txt
 
       # --strict turns MkDocs warnings (broken relative links, pages missing
-      # from nav, unknown anchors) into build failures. The token raises the
-      # GitHub API rate limit for hooks/changelog.py, which renders the release
-      # notes; a build without it still works and falls back to its cache.
+      # from nav, unknown anchors) into build failures, for every version. The
+      # token raises the GitHub API rate limit for hooks/changelog.py, which
+      # renders the release notes; a build without it still works and falls back
+      # to its cache.
       - name: Build site
-        working-directory: site
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mkdocs build --strict
+        run: python3 site/scripts/build_site.py all
 
       - name: Configure Pages
         if: github.event_name != 'pull_request'

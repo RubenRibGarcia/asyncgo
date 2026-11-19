@@ -1,10 +1,13 @@
 .SILENT:
 
-.PHONY: deps test pipeline-test build clean lint site-deps site-serve site-build release-notes
+.PHONY: deps test pipeline-test build clean lint site-deps site-serve site-build site-versions release-notes
 
 # The project site (site/) is built with MkDocs Material and published to GitHub
-# Pages by .github/workflows/docs.yml. The virtualenv lives inside site/ and is
-# gitignored; site-build runs exactly what CI runs.
+# Pages by .github/workflows/docs.yml. It is versioned: every release line is
+# built from its tag into its own directory, latest/ mirrors the newest release
+# and dev/ is this checkout (site/scripts/build_site.py). The virtualenv lives
+# inside site/ and is gitignored; site-build and site-versions run exactly what
+# CI runs — site-build for a pull request, site-versions for a push to master.
 SITE_VENV := site/.venv
 SITE_MKDOCS := $(SITE_VENV)/bin/mkdocs
 
@@ -42,6 +45,11 @@ site-serve: $(SITE_MKDOCS)
 
 site-build: $(SITE_MKDOCS)
 	cd site && .venv/bin/mkdocs build --strict
+
+# The full versioned tree: every stable tag in its own directory, latest/, dev/,
+# versions.json and the root redirect. The same script CI runs on a push.
+site-versions: $(SITE_MKDOCS)
+	python3 site/scripts/build_site.py all
 
 # The changelog is generated, never edited: release notes come from conventional
 # commits via git-cliff (cliff.toml). .github/workflows/release.yml runs the same

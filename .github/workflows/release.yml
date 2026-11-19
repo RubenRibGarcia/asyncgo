@@ -3,7 +3,7 @@ name: Release
 # A release is a version input, not a tag push: this workflow validates the
 # commit, renders the changelog with git-cliff (cliff.toml), creates the
 # annotated tag and the GitHub release, then rebuilds the site so the Changelog
-# page picks the release up.
+# page picks the release up and the new tag gets its own version directory.
 #
 # There are no build artifacts: the CLI is installed with
 # `go install .../cmd/asyncgo@vX.Y.Z`, and GitHub attaches the source archives
