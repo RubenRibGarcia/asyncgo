@@ -177,13 +177,17 @@ esac
 ### Seeing what changed
 
 `--diff` explains a stale artifact as the **value changes** between the committed
-document and the one `generate` would write — one entry per added, removed or
-changed key:
+document and the one `generate` would write — one row per added, removed or
+changed key, under a header naming the artifact and counting its changes:
 
 ```console
 $ asyncgo check . --diff
-  /home/you/orders/asyncapi.yaml: channels.order-placed: added ({5 keys})
-  /home/you/orders/asyncapi.yaml: channels.order-renamed: removed ({5 keys})
+asyncgo: +0.121s check: /home/you/orders/asyncapi.yaml is out of date, 4 changes
+  where                             change   value
+  channels.order-placed             added    {5 keys}
+  channels.order-renamed            removed  {5 keys}
+  operations["order-placed.send"]   added    {3 keys}
+  operations["order-renamed.send"]  removed  {3 keys}
 asyncgo: /home/you/orders/asyncapi.yaml: document is out of date; run `asyncgo generate`
 ```
 
@@ -193,18 +197,20 @@ prints at default verbosity (`--diff` is the request, so `-v` is not needed) and
 replaces the per-section `-v` findings for the same failure, so the drift is
 reported once.
 
-Each entry names the key path, the change, and the value. Two details keep the
-report readable:
+Each row names the key path, the change, and the value, with the path printed
+once in the header rather than on every row and the columns aligned to the widest
+cell in that artifact's block. Two details keep the report readable:
 
 - A value too large for one line is summarised (`{5 keys}`, `[12 items]`) rather
-  than cut mid-way, and a long report stops at 50 entries per document with an
-  `and N more change(s)` line.
+  than cut mid-way, and a long report stops at 50 rows per document, with the
+  header counting all of them and an `and N more change(s)` footer saying what the
+  block left out.
 - An artifact that no longer parses reports the first differing byte offset, and
   one whose values all match — reindented, reordered, or carrying YAML anchors —
   reports `values match, encoding differs` instead of printing nothing.
 
-In directory mode each stale document gets its own diff. A **missing** artifact
-and an **orphan** keep their one-line finding, because there is no second
+In directory mode each stale document gets its own header and block. A **missing**
+artifact and an **orphan** keep their one-line finding, because there is no second
 document to compare them against.
 
 ## Discovery and configuration

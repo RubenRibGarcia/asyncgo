@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -12,6 +13,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// diffRow matches one row of a --diff block: an indented location, a change
+// verdict, and a value, separated by the alignment gaps. It is a pattern rather
+// than an exact string because the gaps depend on the widest cell in the block.
+func diffRow(where, what, value string) string {
+	return `(?m)^  ` + regexp.QuoteMeta(where) + `\s+` + regexp.QuoteMeta(what) +
+		`\s+` + regexp.QuoteMeta(value) + `$`
+}
 
 // TestCheckDiff pins the --diff contract: the value changes print at default
 // verbosity (unlike the -v findings), the verdict and exit code are untouched,
@@ -30,8 +39,9 @@ func TestCheckDiff(t *testing.T) {
 		assert.ErrorIs(t, err, ErrOutOfDate)
 		assert.Equal(t, 3, ExitCode(err), "the diff is detail, not a new outcome")
 		assert.Empty(t, stdout, "stdout stays reserved for the verdict")
-		assert.Contains(t, stderr, artifact+": channels.order-placed: added (")
-		assert.Contains(t, stderr, artifact+": channels.order-renamed: removed (")
+		assert.Contains(t, stderr, artifact+" is out of date, 4 changes")
+		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
+		assert.Regexp(t, diffRow("channels.order-renamed", "removed", "{5 keys}"), stderr)
 	})
 
 	t.Run("should_report_a_nested_value_change", func(t *testing.T) {
@@ -46,10 +56,10 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Contains(
+		assert.Regexp(
 			t,
+			diffRow("channels.order-placed.address", "changed", `"orders" -> "order-placed"`),
 			stderr,
-			artifact+`: channels.order-placed.address: changed ("orders" -> "order-placed")`,
 		)
 	})
 
@@ -62,7 +72,7 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Contains(t, stderr, "channels.order-placed: added")
+		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
 		assert.NotContains(t, stderr, ": stale", "the diff explains the drift once")
 	})
 
@@ -102,7 +112,7 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Regexp(t, `byte \d+: differs from what generate would write`, stderr)
+		assert.Regexp(t, `(?m)^  byte \d+\s+differs from what generate would write`, stderr)
 	})
 
 	t.Run("should_diff_a_json_artifact", func(t *testing.T) {
@@ -119,8 +129,9 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Contains(t, stderr, artifact+": channels.order-placed: added (")
-		assert.Contains(t, stderr, artifact+": channels.order-renamed: removed (")
+		assert.Contains(t, stderr, artifact+" is out of date, 4 changes")
+		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
+		assert.Regexp(t, diffRow("channels.order-renamed", "removed", "{5 keys}"), stderr)
 	})
 
 	t.Run("should_diff_a_yaml_artifact_checked_as_json", func(t *testing.T) {
@@ -142,8 +153,9 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Contains(t, stderr, artifact+": channels.order-placed: added (")
-		assert.Contains(t, stderr, artifact+": channels.order-renamed: removed (")
+		assert.Contains(t, stderr, artifact+" is out of date, 4 changes")
+		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
+		assert.Regexp(t, diffRow("channels.order-renamed", "removed", "{5 keys}"), stderr)
 	})
 }
 
@@ -169,7 +181,8 @@ func TestCheckPerCatalogDiff(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrOutOfDate)
 	assert.Equal(t, 3, ExitCode(err))
-	assert.Contains(t, stderr, stale+": channels.order-placed: added (")
+	assert.Contains(t, stderr, stale+" is out of date, 4 changes")
+	assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
 	assert.Contains(t, stderr, "deleted.asyncapi.yaml: document: orphan")
 	assert.Contains(t, stderr, "extra.Catalog.asyncapi.yaml: document: missing")
 }
@@ -186,23 +199,25 @@ func TestDiffFindings(t *testing.T) {
 			fmt.Fprintf(&before, "  k%02d: {}\n", i)
 		}
 
-		findings := diffFindings(
+		rows, elided := diffFindings(
 			log, "asyncapi.yaml", []byte(before.String()), []byte("channels: {}\n"), "yaml",
 		)
 
-		require.Len(t, findings, maxDiffChanges+1)
-		assert.Equal(t, "channels.k00", findings[0].Where)
-		assert.Equal(t, "removed", findings[0].What)
-		assert.Equal(t, "and 10 more change(s)", findings[maxDiffChanges].What)
-		assert.Equal(t, maxDiffChanges, len(findings)-1)
+		require.Len(t, rows, maxDiffChanges)
+		assert.Equal(t, "channels.k00", rows[0].Where)
+		assert.Equal(t, "removed", rows[0].What)
+		assert.Equal(t, 60-maxDiffChanges, elided, "the header and footer count the rest")
 	})
 
 	t.Run("should_name_the_root_when_the_document_shape_changes", func(t *testing.T) {
-		findings := diffFindings(log, "asyncapi.yaml", []byte("[]\n"), []byte("{}\n"), "yaml")
+		rows, elided := diffFindings(
+			log, "asyncapi.yaml", []byte("[]\n"), []byte("{}\n"), "yaml",
+		)
 
-		require.Len(t, findings, 1)
-		assert.Equal(t, "document", findings[0].Where)
-		assert.Equal(t, "changed", findings[0].What)
+		require.Len(t, rows, 1)
+		assert.Equal(t, "document", rows[0].Where)
+		assert.Equal(t, "changed", rows[0].What)
+		assert.Zero(t, elided)
 	})
 }
 

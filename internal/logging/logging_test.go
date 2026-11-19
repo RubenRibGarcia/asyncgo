@@ -253,61 +253,88 @@ func TestReportFindings(t *testing.T) {
 		plain := slog.New(slog.NewTextHandler(&out, nil))
 
 		logging.ReportFindings(plain, []logging.Finding{{Where: "channels.c", What: "missing"}})
-		logging.ReportDiff(plain, []logging.Finding{{Where: "channels.d", What: "added"}})
+		logging.ReportDiff(
+			plain, "asyncapi.yaml is out of date, 1 change",
+			[]logging.Finding{{Where: "channels.d", What: "added"}}, 0,
+		)
 
 		assert.Contains(t, out.String(), "channels.c: missing")
 		assert.Contains(t, out.String(), "channels.d: added")
 	})
 }
 
-// TestReportDiff pins the difference from ReportFindings that makes --diff
-// usable without -v: the entries print at default verbosity, and each document's
-// own order survives the sort so a truncation notice ends its block.
+// TestReportDiff pins what makes --diff readable without -v: a header record
+// naming the artifact and counting its changes, one aligned row per change with
+// the path printed once, and a footer counting anything the cap dropped.
 func TestReportDiff(t *testing.T) {
-	t.Run("should_print_at_quiet", func(t *testing.T) {
+	t.Run("should_open_with_a_header_and_print_at_quiet", func(t *testing.T) {
 		var out bytes.Buffer
 
-		logging.ReportDiff(logging.New(&out, logging.Quiet), []logging.Finding{
-			{
-				Path:  "asyncapi.yaml",
-				Where: "channels.c",
-				What:  "added",
-				Why:   `{"address":"orders"}`,
+		logging.ReportDiff(
+			logging.New(&out, logging.Quiet),
+			"asyncapi.yaml is out of date, 2 changes",
+			[]logging.Finding{
+				{Where: "channels.a", What: "added", Why: `{"address":"orders"}`},
+				{Where: "channels.b", What: "removed", Why: `{"address":"orders"}`},
 			},
-		})
+			0,
+		)
 
 		assert.Equal(
 			t,
-			`  asyncapi.yaml: channels.c: added ({"address":"orders"})`+"\n",
-			out.String(),
+			"asyncgo: asyncapi.yaml is out of date, 2 changes\n"+
+				"  where       change   value\n"+
+				"  channels.a  added    {\"address\":\"orders\"}\n"+
+				"  channels.b  removed  {\"address\":\"orders\"}\n",
+			withoutStamp(out.String()),
 			"--diff is an explicit request, so it must not need -v",
 		)
 	})
 
-	t.Run("should_group_by_path_and_keep_each_documents_order", func(t *testing.T) {
+	t.Run("should_skip_the_column_legend_for_a_single_row", func(t *testing.T) {
 		var out bytes.Buffer
 
-		logging.ReportDiff(logging.New(&out, logging.Quiet), []logging.Finding{
-			{Path: "b.yaml", Where: "x", What: "changed"},
-			{Path: "a.yaml", Where: "z", What: "changed"},
-			{Path: "a.yaml", Where: "a", What: "changed"},
-			{Path: "a.yaml", Where: "document", What: "and 1 more change"},
-		})
+		logging.ReportDiff(
+			logging.New(&out, logging.Quiet),
+			"asyncapi.yaml is out of date, 1 change",
+			[]logging.Finding{{
+				Where: "byte 12",
+				What:  "values match, encoding differs",
+				Why:   "artifact is 40 bytes, generated is 41",
+			}},
+			0,
+		)
 
 		assert.Equal(
 			t,
-			"  a.yaml: z: changed\n"+
-				"  a.yaml: a: changed\n"+
-				"  a.yaml: document: and 1 more change\n"+
-				"  b.yaml: x: changed\n",
-			out.String(),
+			"asyncgo: asyncapi.yaml is out of date, 1 change\n"+
+				"  byte 12  values match, encoding differs  artifact is 40 bytes, generated is 41\n",
+			withoutStamp(out.String()),
+			"one row explains itself, so a column legend would only add noise",
+		)
+	})
+
+	t.Run("should_count_what_the_cap_dropped_in_a_footer", func(t *testing.T) {
+		var out bytes.Buffer
+
+		logging.ReportDiff(
+			logging.New(&out, logging.Quiet),
+			"asyncapi.yaml is out of date, 60 changes",
+			[]logging.Finding{{Where: "channels.a", What: "removed"}},
+			59,
+		)
+
+		assert.Equal(
+			t,
+			"  and 59 more change(s)\n",
+			lastLine(out.String()),
 		)
 	})
 
 	t.Run("should_print_nothing_for_an_empty_report", func(t *testing.T) {
 		var out bytes.Buffer
 
-		logging.ReportDiff(logging.New(&out, logging.Quiet), nil)
+		logging.ReportDiff(logging.New(&out, logging.Quiet), "nothing to say", nil, 0)
 
 		assert.Empty(t, out.String())
 	})

@@ -52,7 +52,9 @@ func newCheckCmd() *cobra.Command {
 			"With -v, a stale artifact is reported as one finding per differing section key, so " +
 			"CI says what changed instead of only that something did.\n\n" +
 			"With --diff, it is reported as the value changes between the committed document and " +
-			"the one generate would write: one entry per added, removed or changed key. The " +
+			"the one generate would write, in one aligned block per artifact: the header names the " +
+			"file and counts its changes, and each row is one added, removed or changed key with " +
+			"the value involved. The " +
 			"comparison is over keys and values rather than text, so it reads the same for a " +
 			"YAML and a JSON artifact — including a YAML file checked with --format json — and " +
 			"it prints without -v.\n\n" +
@@ -137,11 +139,17 @@ func checkMerged(
 	// The error text and exit code stay exactly as they were; the findings are
 	// the verbose detail behind it, so CI keeps parsing one familiar line.
 	if findings, equal := compareArtifact(path, want, got, format, checkLog); !equal {
-		checkLog.Info(path+" is out of date", "path", path)
 		if showDiff {
-			findings = diffFindings(checkLog, path, want, got, format)
+			// The block header names the artifact and counts its changes, so the
+			// per-artifact line findings would only repeat it.
+			rows, elided := diffFindings(checkLog, path, want, got, format)
+			logging.ReportDiff(
+				checkLog, diffHeader(path, len(rows)+elided), rows, elided,
+			)
+		} else {
+			checkLog.Info(path+" is out of date", "path", path)
+			logging.ReportFindings(checkLog, findings)
 		}
-		reportFindings(checkLog, findings, showDiff)
 		return fmt.Errorf("%s: %w; run `asyncgo generate`", path, ErrOutOfDate)
 	}
 
@@ -185,7 +193,11 @@ func checkPerCatalog(
 
 	checkLog, checkDone := logging.Step(log, "check")
 	expected := make(map[string]bool, len(artifacts))
+	// findings carries what --diff cannot render as a value change — the locators
+	// of a missing or orphan artifact — plus the -v section findings when the run
+	// has no --diff. diffs carries one headed block per stale artifact.
 	findings := make([]logging.Finding, 0, len(artifacts))
+	diffs := make([]artifactDiff, 0, len(artifacts))
 	stale := make([]string, 0, len(artifacts))
 	for _, a := range artifacts {
 		expected[filepath.Base(a.path)] = true
@@ -204,13 +216,11 @@ func checkPerCatalog(
 			return fmt.Errorf("reading %s: %w", a.path, err)
 		}
 		if f, equal := compareArtifact(a.path, want, a.data, format, checkLog); !equal {
-			checkLog.Info(a.path+" is out of date", "path", a.path)
 			if showDiff {
-				findings = append(
-					findings,
-					diffFindings(checkLog, a.path, want, a.data, format)...,
-				)
+				rows, elided := diffFindings(checkLog, a.path, want, a.data, format)
+				diffs = append(diffs, artifactDiff{path: a.path, rows: rows, elided: elided})
 			} else {
+				checkLog.Info(a.path+" is out of date", "path", a.path)
 				findings = append(findings, f...)
 			}
 			stale = append(stale, filepath.Base(a.path))
@@ -232,7 +242,18 @@ func checkPerCatalog(
 	}
 
 	if len(stale) > 0 {
-		reportFindings(checkLog, findings, showDiff)
+		if showDiff {
+			// One block per stale artifact, in artifact order: the header names the
+			// document, so the blocks cannot be merged without repeating it.
+			for _, d := range diffs {
+				logging.ReportDiff(
+					checkLog, diffHeader(d.path, len(d.rows)+d.elided), d.rows, d.elided,
+				)
+			}
+			logging.ReportLocators(checkLog, findings)
+		} else {
+			logging.ReportFindings(checkLog, findings)
+		}
 		return fmt.Errorf(
 			"%s: %w (%s); run `asyncgo generate`",
 			outDir, ErrOutOfDate, staleSummary(stale),
@@ -371,20 +392,11 @@ func decodeArtifactJSON(data []byte) (*spec.AsyncAPI, error) {
 	return doc, nil
 }
 
-// reportFindings writes the collected findings with the reporter the run asked
-// for. --diff is an explicit request, so its entries print at default verbosity;
-// the -v findings keep their existing gate.
-func reportFindings(log *slog.Logger, findings []logging.Finding, showDiff bool) {
-	if showDiff {
-		logging.ReportDiff(log, findings)
-		return
-	}
-	logging.ReportFindings(log, findings)
-}
-
 // diffFindings explains a stale artifact as the value changes between the
 // committed document and the one generate would write, one finding per added,
-// removed or changed key.
+// removed or changed key. It returns the number of changes its cap dropped, so
+// the block header can state the size of the drift and the footer can say what it
+// left out.
 //
 // It decodes both sides as generic documents rather than typed ones: the walk
 // needs to see values and keys the typed model does not carry, and the two sides
@@ -395,39 +407,58 @@ func diffFindings(
 	path string,
 	want, got []byte,
 	format string,
-) []logging.Finding {
+) ([]logging.Finding, int) {
 	before, err := decodeDocument(want, format)
 	if err != nil {
 		log.Debug("artifact does not decode as a document: " + err.Error())
-		return []logging.Finding{byteOffsetFinding(path, want, got)}
+		return []logging.Finding{byteOffsetFinding(path, want, got)}, 0
 	}
 	after, err := decodeDocument(got, format)
 	if err != nil {
 		// The generated document always decodes; failing here is a bug in the
 		// encoder, not a stale artifact, so say nothing rather than mislead.
 		log.Debug("generated document does not decode: " + err.Error())
-		return nil
+		return nil, 0
 	}
 
 	changes := docdiff.Changes(before, after)
 	if len(changes) == 0 {
 		// Byte equality failed but every value matched: the encoding differs.
-		return []logging.Finding{encodingOnlyFinding(path, want, got)}
+		return []logging.Finding{encodingOnlyFinding(path, want, got)}, 0
 	}
 
-	findings := make([]logging.Finding, 0, len(changes)+1)
-	for i, c := range changes {
-		if i == maxDiffChanges {
-			findings = append(findings, logging.Finding{
-				Path:  path,
-				Where: "document",
-				What:  fmt.Sprintf("and %d more change(s)", len(changes)-i),
-			})
-			break
-		}
+	if len(changes) > maxDiffChanges {
+		return changeFindings(path, changes[:maxDiffChanges]), len(changes) - maxDiffChanges
+	}
+	return changeFindings(path, changes), 0
+}
+
+// changeFindings renders changes in the finding shape, so a diff row and a drift
+// finding share one vocabulary.
+func changeFindings(path string, changes []docdiff.Change) []logging.Finding {
+	findings := make([]logging.Finding, 0, len(changes))
+	for _, c := range changes {
 		findings = append(findings, changeFinding(path, c))
 	}
 	return findings
+}
+
+// diffHeader is the sentence a --diff block opens with: which artifact is stale
+// and how many changes explain it, including the ones the cap dropped.
+func diffHeader(path string, changes int) string {
+	noun := "changes"
+	if changes == 1 {
+		noun = "change"
+	}
+	return fmt.Sprintf("%s is out of date, %d %s", path, changes, noun)
+}
+
+// artifactDiff is one stale artifact's diff: the rows the block prints and the
+// count its cap dropped.
+type artifactDiff struct {
+	path   string
+	rows   []logging.Finding
+	elided int
 }
 
 // changeFinding renders one value change in the finding shape, so a diff entry

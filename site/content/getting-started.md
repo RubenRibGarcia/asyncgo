@@ -183,14 +183,19 @@ want to know which settings it used; `-vv` adds per-package detail and a timing
 recap. [CLI](cli.md#verbose-logging) has the transcripts.
 
 When the check does fail, `--diff` prints the **value changes** between the
-committed document and the one `generate` would write — one entry per added,
-removed or changed key. It needs no `-v`, and it reads the same for a YAML and a
-JSON artifact alike:
+committed document and the one `generate` would write — one row per added,
+removed or changed key, under a header that names the artifact and counts the
+changes. It needs no `-v`, and it reads the same for a YAML and a JSON artifact
+alike:
 
 ```console
 $ asyncgo check . --diff
-  /home/you/orders/asyncapi.yaml: channels.order-placed: added ({5 keys})
-  /home/you/orders/asyncapi.yaml: channels.order-renamed: removed ({5 keys})
+asyncgo: +0.121s check: /home/you/orders/asyncapi.yaml is out of date, 4 changes
+  where                             change   value
+  channels.order-placed             added    {5 keys}
+  channels.order-renamed            removed  {5 keys}
+  operations["order-placed.send"]   added    {3 keys}
+  operations["order-renamed.send"]  removed  {3 keys}
 asyncgo: /home/you/orders/asyncapi.yaml: document is out of date; run `asyncgo generate`
 ```
 

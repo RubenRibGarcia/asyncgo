@@ -3,7 +3,7 @@
 - Status: accepted
 - Deciders: asyncgo maintainers
 - Created: 2026-11-12
-- Status updated: 2026-11-12
+- Status updated: 2026-11-19
 
 ## Context and Problem Statement
 
@@ -50,11 +50,17 @@ it does so without a diff engine.
 
 Concretely:
 
-- **`check --diff` prints one entry per changed key** in the shape findings
-  already use — `<path>: <where>: <added|removed|changed> (<values>)` — through a
-  new `logging.ReportDiff`, which is the *ungated* counterpart of
-  `ReportFindings`: `--diff` is the user asking for this detail, so it prints at
-  default verbosity, while findings stay `-v` narration.
+- **`check --diff` prints one row per changed key**, in one block per artifact:
+  a header record naming the file and counting its changes, then `where`,
+  `change` and `value` columns aligned to the widest cell in that block. The
+  path is printed once in the header instead of on every row, which is what keeps
+  a 50-row diff scannable. It goes through `logging.ReportDiff`, the *ungated*
+  counterpart of `ReportFindings`: `--diff` is the user asking for this detail, so
+  it prints at default verbosity, while findings stay `-v` narration. A member of
+  an out-of-date set that has no second document to compare against — a missing
+  artifact, an orphan file — keeps its one-line finding through
+  `logging.ReportLocators`, also ungated, because a header over a single row would
+  only repeat it.
 - **`--diff` replaces the `-v` section findings** for a stale artifact rather
   than printing both: the value diff is the superset (it also sees an empty
   section, which key comparison misses), and two reports of one change is noise.
@@ -88,10 +94,11 @@ Concretely:
   document — reindented, reordered, different line endings, or carrying YAML
   anchors — reports `values match, encoding differs` instead of printing nothing
   on a failing check.
-- **The report is capped at 50 changes per artifact**, with an
-  `and N more change(s)` line. Higher than the 10-per-section findings cap
-  because the flag is a targeted request, and lower than "unbounded" because a
-  regenerated document can legitimately differ in hundreds of keys.
+- **The report is capped at 50 rows per artifact**, with the header counting the
+  changes it has and an `and N more change(s)` footer saying what the cap dropped.
+  Higher than the 10-per-section findings cap because the flag is a targeted
+  request, and lower than "unbounded" because a regenerated document can
+  legitimately differ in hundreds of keys.
 - **Directory mode diffs only the stale members.** A missing artifact and an
   orphan have no second document to compare against, so they keep their single
   finding and the set keeps its one verdict.
@@ -126,6 +133,18 @@ Rejected:
 - Bad, because `internal/docdiff` is a new package with a valuation rule set
   (numbers, sequences, nested mappings) that has to be kept in step with the
   encoders' behaviour.
+
+## Update (2026-11-19)
+
+The decisions above stand; the report *shape* changed. The first version printed
+each change as an indented finding line that carried the artifact path
+(`<path>: <where>: <added|removed|changed> (<values>)`). That repeated a long
+absolute path on every row, and because the block bypasses the record writer it
+reached CI logs as one unlabelled message — the header it was subordinate to is
+an `-v` record, so at the default verbosity there was no header at all. It is now
+one headed, column-aligned block per artifact (first bullet under "Decision
+Outcome"). The ungated/gated split, the 50-change cap, the value summarising,
+the fallbacks and the locator handling are unchanged.
 
 ## More Information
 
