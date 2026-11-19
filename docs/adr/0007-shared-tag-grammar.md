@@ -5,6 +5,11 @@
 - Created: 2026-11-08
 - Status updated: 2026-11-08
 
+> **Amended by [0014](0014-semicolon-separated-tag-directives.md).** The
+> directive and list separators quoted below are historical: directives are now
+> `;`-separated and list members `,`-separated. The package boundary, the shared
+> grammar and the conformance test decided here are unchanged.
+
 ## Context and Problem Statement
 
 asyncgo reads the same struct tags in two places, in two different processes. The
@@ -81,4 +86,6 @@ both passes. That is the one place this change can move an emitted document.
 ## More Information
 
 - Design doc: [`docs/designdoc/shared-tag-grammar.md`](../designdoc/shared-tag-grammar.md)
+- Amended by: [0014](0014-semicolon-separated-tag-directives.md) — the separators
+  only; see the note at the top.
 - Tracking issue: [#47](https://github.com/RubenRibGarcia/asyncgo/issues/47), phase 5 item 5.11

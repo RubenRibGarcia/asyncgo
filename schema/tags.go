@@ -13,7 +13,7 @@ import (
 // applyTag applies the asyncapi struct tag to the schema. Supported directives:
 //
 //	required             (handled by the caller; ignored here)
-//	enum=a|b|c           enumerated string values
+//	enum=a,b,c           enumerated string values
 //	examples=...         append one Draft-07 examples entry; repeatable
 //	format=...           JSON Schema format (e.g. "date-time", "uuid", "email")
 //	contentEncoding=...  Draft-07 content encoding (e.g. "base64"); overriding it
@@ -29,9 +29,9 @@ import (
 //	writeOnly
 //	uniqueItems
 //	deprecated
-//	oneOf=A|B            (handled by the caller via combinatorNames; ignored here)
-//	anyOf=A|B            (handled by the caller via combinatorNames; ignored here)
-//	allOf=A|B            (handled by the caller via combinatorNames; ignored here)
+//	oneOf=A,B            (handled by the caller via combinatorNames; ignored here)
+//	anyOf=A,B            (handled by the caller via combinatorNames; ignored here)
+//	allOf=A,B            (handled by the caller via combinatorNames; ignored here)
 //
 // A malformed value — a non-numeric bound, an empty examples=, an empty enum= —
 // is ignored rather than reported: the FromType/fillFields/applyTag chain returns
@@ -42,10 +42,13 @@ import (
 // generated harness is built. See the design doc
 // (docs/designdoc/schema-keywords.md, D6 and O2).
 //
-// Directives are separated by whitespace — `asyncapi:"required examples=1,000"`
-// yields the example "1,000" — so a value may contain a comma but not a space. A
-// legacy comma-separated tag is a single unknown directive: CheckTag names it,
-// and applyTag ignores it.
+// Directives are separated by ";" and a list directive's members by ",":
+// `asyncapi:"required;examples=1,000"` yields the example "1,000", and
+// `asyncapi:"enum=draft,sent"` yields the two values. A scalar value may
+// therefore contain a comma and a "|", but not a ";" or a space. The static pass
+// rejects a space anywhere in the tag. A legacy comma-separated or
+// space-separated tag is a single unknown directive: CheckTag names it, and
+// applyTag ignores it. See ADR 0014.
 //
 // Descriptions are not carried in the tag; the generator's discovery pass reads
 // them from the field's doc comment instead.
@@ -67,7 +70,7 @@ func applyTag(s *spec.Schema, ds []taggrammar.Directive) {
 		switch d.Key {
 		case "enum":
 			if d.Value != "" {
-				for e := range strings.SplitSeq(d.Value, "|") {
+				for _, e := range taggrammar.SplitList(d.Value) {
 					s.Enum = append(s.Enum, e)
 				}
 			}
@@ -115,15 +118,11 @@ func setUint(dst **uint64, value string) {
 	*dst = &n
 }
 
-// combinatorNames returns the "|"-separated type names for a combinator
+// combinatorNames returns the comma-separated type names for a combinator
 // directive (oneOf=/anyOf=/allOf=), or ok=false when the directive is absent or
 // has an empty value.
 func combinatorNames(ds []taggrammar.Directive, key string) ([]string, bool) {
-	raw, ok := taggrammar.Value(ds, key)
-	if !ok || raw == "" {
-		return nil, false
-	}
-	return strings.Split(raw, "|"), true
+	return taggrammar.List(ds, key)
 }
 
 // directiveKind is the syntax a directive key accepts. It is the whole of what
@@ -142,8 +141,8 @@ const (
 	// valueDirective takes one non-empty value, as in "format=date-time".
 	valueDirective
 
-	// listDirective takes a non-empty "|"-separated list, as in "enum=draft|sent".
-	// No member may be empty: "oneOf=A|" is a typo, not a member named "".
+	// listDirective takes a non-empty comma-separated list, as in "enum=draft,sent".
+	// No member may be empty: "oneOf=A," is a typo, not a member named "".
 	listDirective
 )
 
@@ -193,6 +192,14 @@ func DirectiveKeys() []string {
 // static pass in internal/discovery calls this for every tagged field, so a typo
 // fails generate and check instead of quietly changing the document.
 func CheckTag(tag string) []error {
+	if strings.ContainsAny(tag, " \t\n") {
+		// Whitespace used to separate directives. It is no longer a separator, and a
+		// space inside a value is not expressible either, so the whole tag is one
+		// error rather than one per directive it would have been split into.
+		return []error{fmt.Errorf(
+			"a space is not allowed; directives are separated by %q",
+			taggrammar.DirectiveSeparator)}
+	}
 	var errs []error
 	for _, d := range taggrammar.Parse(tag) {
 		errs = append(errs, checkDirective(d)...)
@@ -205,12 +212,14 @@ func checkDirective(d taggrammar.Directive) []error {
 	if d.Key == "" {
 		return []error{fmt.Errorf("directive has no name")}
 	}
-	if strings.Contains(d.Key, ",") {
-		// The grammar splits on whitespace, so the old comma-separated form
-		// arrives as one key: "required,examples=x" is a single directive
-		// named "required,examples".
+	if strings.Contains(d.Key, taggrammar.ListSeparator) {
+		// Directives are split on ";", so the old comma-separated form arrives as
+		// one key: "required,examples=x" is a single directive named
+		// "required,examples". A comma inside a value is fine; only the key is
+		// checked, because it is the key that cannot hold one.
 		return []error{fmt.Errorf(
-			"%q: directives are separated by spaces, not commas", d.Key)}
+			"%q: directives are separated by %q",
+			d.Key, taggrammar.DirectiveSeparator)}
 	}
 	kind, known := directiveKinds[d.Key]
 	if !known {
@@ -252,15 +261,43 @@ func checkValue(d taggrammar.Directive) []error {
 	return nil
 }
 
-// checkList reports an empty member in a "|"-separated list. One error is enough:
-// the message is the same for every empty member, and the fix is the same too.
+// checkList reports a list directive whose members are not a comma-separated
+// list of plain values. One error is enough: the message is the same for every
+// offending member, and so is the fix.
 func checkList(d taggrammar.Directive) []error {
-	for member := range strings.SplitSeq(d.Value, "|") {
-		if member == "" {
+	for _, member := range taggrammar.SplitList(d.Value) {
+		switch {
+		case member == "":
 			return []error{fmt.Errorf("%q has an empty entry", d.Key)}
+		case strings.Contains(member, "|"):
+			// "|" was the list separator before ADR 0014. Left alone, "enum=a|b"
+			// would silently become the single value "a|b" and change an emitted
+			// document without failing anything.
+			return []error{fmt.Errorf(
+				"%q: list members are separated by %q, not %q",
+				d.Key, taggrammar.ListSeparator, "|")}
+		case looksLikeDirective(member):
+			// The separator for this position is ";", not ",", so the directive
+			// was swallowed into the list instead of being applied.
+			return []error{fmt.Errorf(
+				"%q: member %q looks like a directive; directives are separated by %q",
+				d.Key, member, taggrammar.DirectiveSeparator)}
 		}
 	}
 	return nil
+}
+
+// looksLikeDirective reports whether a list member is spelled as a directive —
+// "key=value" with a known key — which means its author used the list separator
+// where the directive separator belongs. A bare known key is not treated as a
+// directive: "enum=required,draft" names two plausible values.
+func looksLikeDirective(member string) bool {
+	key, _, hasValue := strings.Cut(member, "=")
+	if !hasValue {
+		return false
+	}
+	_, known := directiveKinds[key]
+	return known
 }
 
 // unknownDirective names the closest known directive when the key looks like a

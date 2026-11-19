@@ -1,5 +1,5 @@
 // Package oneof is a test fixture demonstrating the oneOf combinator: a union
-// field tagged asyncapi:"oneOf=A|B" emits a oneOf of $refs, and the generator
+// field tagged asyncapi:"oneOf=A,B" emits a oneOf of $refs, and the generator
 // hoists the referenced types into components.schemas automatically.
 package oneof
 
@@ -21,5 +21,5 @@ type OrderCancelled struct {
 // OrderEvent is an envelope whose data field is exactly one of the order
 // event types.
 type OrderEvent struct {
-	Data any `json:"data" asyncapi:"required oneOf=OrderPlaced|OrderCancelled"`
+	Data any `json:"data" asyncapi:"required;oneOf=OrderPlaced,OrderCancelled"`
 }

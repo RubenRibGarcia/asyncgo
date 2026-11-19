@@ -1,5 +1,5 @@
 // Package anyof is a test fixture demonstrating the anyOf combinator: a union
-// field tagged asyncapi:"anyOf=A|B" emits an anyOf of $refs, and the generator
+// field tagged asyncapi:"anyOf=A,B" emits an anyOf of $refs, and the generator
 // hoists the referenced types into components.schemas automatically.
 package anyof
 
@@ -20,5 +20,5 @@ type OrderCancelled struct {
 
 // OrderEvent is an envelope whose data field is any of the order event types.
 type OrderEvent struct {
-	Data any `json:"data" asyncapi:"required anyOf=OrderPlaced|OrderCancelled"`
+	Data any `json:"data" asyncapi:"required;anyOf=OrderPlaced,OrderCancelled"`
 }

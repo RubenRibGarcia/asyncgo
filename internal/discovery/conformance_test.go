@@ -29,7 +29,7 @@ type conformanceFixture struct {
 	OptionsOnly string `json:",omitempty"`
 	Defaulted   string
 	Hidden      string `json:"-"`
-	United      string `json:"united"     asyncapi:"oneOf=conformanceMemberA|conformanceMemberB"`
+	United      string `json:"united"     asyncapi:"oneOf=conformanceMemberA,conformanceMemberB"`
 }
 
 // TestTagGrammarConformance is the drift guard ADR 0007 promised: it runs the same

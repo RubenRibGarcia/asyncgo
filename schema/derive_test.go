@@ -739,7 +739,7 @@ type UnionMemberB struct {
 
 // UnionHolder references two same-package types by short name.
 type UnionHolder struct {
-	Data any `json:"data" asyncapi:"oneOf=UnionMemberA|UnionMemberB"`
+	Data any `json:"data" asyncapi:"oneOf=UnionMemberA,UnionMemberB"`
 }
 
 // FQNUnionHolder references a type by fully-qualified name.
@@ -749,9 +749,9 @@ type FQNUnionHolder struct {
 
 // CombinatorHolder exercises oneOf, anyOf, and allOf directives side by side.
 type CombinatorHolder struct {
-	One any `json:"one" asyncapi:"oneOf=UnionMemberA|UnionMemberB"`
-	Any any `json:"any" asyncapi:"anyOf=UnionMemberA|UnionMemberB"`
-	All any `json:"all" asyncapi:"allOf=UnionMemberA|UnionMemberB"`
+	One any `json:"one" asyncapi:"oneOf=UnionMemberA,UnionMemberB"`
+	Any any `json:"any" asyncapi:"anyOf=UnionMemberA,UnionMemberB"`
+	All any `json:"all" asyncapi:"allOf=UnionMemberA,UnionMemberB"`
 }
 
 // CustomString is a SchemaProvider on the value receiver.
@@ -1126,11 +1126,11 @@ func TestSchemaProviderNonStructFinalize(t *testing.T) {
 // absent: they are authoring-only. So are minLength/maxLength/pattern, which
 // stay reachable only through spec.SchemaProvider (coverage doc §4.3).
 type keywordTagged struct {
-	Kind  string   `json:"kind"  asyncapi:"required const=OrderPlaced discriminator=kind"`
-	Items []string `json:"items" asyncapi:"minItems=1 maxItems=10 uniqueItems examples=sku-1 examples=sku-2"`
-	Note  string   `json:"note"  asyncapi:"deprecated writeOnly"`
+	Kind  string   `json:"kind"  asyncapi:"required;const=OrderPlaced;discriminator=kind"`
+	Items []string `json:"items" asyncapi:"minItems=1;maxItems=10;uniqueItems;examples=sku-1;examples=sku-2"`
+	Note  string   `json:"note"  asyncapi:"deprecated;writeOnly"`
 	ID    string   `json:"id"    asyncapi:"readOnly"`
-	Meta  struct{} `json:"meta"  asyncapi:"minProperties=1 maxProperties=8"`
+	Meta  struct{} `json:"meta"  asyncapi:"minProperties=1;maxProperties=8"`
 }
 
 // TestFromTypeSchemaKeywordsDerivation walks the whole reflection path —

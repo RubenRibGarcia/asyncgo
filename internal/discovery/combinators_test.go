@@ -54,7 +54,7 @@ func TestCombinatorNamesInTag(t *testing.T) {
 	}{
 		{
 			name:   "should_return_names_when_present",
-			tag:    "oneOf=A|B",
+			tag:    "oneOf=A,B",
 			key:    "oneOf",
 			want:   []string{"A", "B"},
 			wantOK: true,

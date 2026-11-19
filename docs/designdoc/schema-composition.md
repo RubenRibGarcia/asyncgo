@@ -15,7 +15,7 @@ the JSON Schema combinators `allOf`, `oneOf`, and `anyOf`:
   composes the embedded type and the remaining fields via `allOf`, instead of
   the current flat flattening.
 - **`oneOf` / `anyOf` / `allOf` from a tag** — a directive on a field
-  (`asyncapi:"oneOf=OrderPlaced|OrderShipped"`) emits the corresponding
+  (`asyncapi:"oneOf=OrderPlaced,OrderShipped"`) emits the corresponding
   combinator of `$ref`s to the named types.
 
 The model already carries `OneOf`/`AllOf`/`AnyOf` in `spec.Schema`; only
@@ -123,15 +123,15 @@ is emitting it from a union.
 
 ### 1. Tag grammar (`schema/tags.go`)
 
-Existing directives are unchanged: `required`, `enum=a|b`, `examples=...`,
+Existing directives are unchanged: `required`, `enum=a,b`, `examples=...`,
 `format=...`. New:
 
 | Directive | Form | Meaning |
 | ----------- | ------ | --------- |
 | `allOf` | bare flag on anonymous embedded field | compose the embedded type via `allOf` instead of flattening |
-| `allOf=A\|B` | on a field | `{ allOf: [ $ref A, $ref B ] }`, replaces the field's derived schema |
-| `oneOf=A\|B` | on a field | `{ oneOf: [ $ref A, $ref B ] }` |
-| `anyOf=A\|B` | on a field | `{ anyOf: [ $ref A, $ref B ] }` |
+| `allOf=A\,B` | on a field | `{ allOf: [ $ref A, $ref B ] }`, replaces the field's derived schema |
+| `oneOf=A\,B` | on a field | `{ oneOf: [ $ref A, $ref B ] }` |
+| `anyOf=A\,B` | on a field | `{ anyOf: [ $ref A, $ref B ] }` |
 
 Name resolution rule (shared, see §4):
 
@@ -143,7 +143,7 @@ Name resolution rule (shared, see §4):
 Add to `tags.go`:
 
 ```go
-// combinatorNames returns the "|"-separated type names for a directive
+// combinatorNames returns the comma-separated type names for a directive
 // (oneOf=/anyOf=/allOf=), or ok=false when absent.
 func combinatorNames(tag, key string) ([]string, bool)
 ```
@@ -314,7 +314,7 @@ type Delivery struct {
 }
 
 type Event struct {
-    Data any `json:"data" asyncapi:"oneOf=OrderPlaced|OrderCancelled"`
+    Data any `json:"data" asyncapi:"oneOf=OrderPlaced,OrderCancelled"`
 }
 ```
 

@@ -207,16 +207,17 @@ Derivable from a Go struct tag, all on `*Schema`-valued properties:
 | `minProperties` | `minProperties=1` | `key=value`, `*uint64` |
 | `maxProperties` | `maxProperties=8` | `key=value`, `*uint64` |
 | `const` | `const=OrderPlaced` | `key=value`, string |
-| `examples` | `examples=a examples=b` | `key=value`, repeatable, appends |
+| `examples` | `examples=a;examples=b` | `key=value`, repeatable, appends |
 | `discriminator` | `discriminator=kind` | `key=value`, string |
 
 Bare flags use camelCase, matching the existing `allOf` flag; `deprecated` is
-lowercase because it is one word. `examples=` is **repeatable** rather than
-`|`-separated so an example containing `|` is expressible, unlike `enum=`.
-Directives are separated by whitespace — `asyncapi:"required examples=1,000"` —
-so a value may contain a comma but not a space. A legacy comma-separated tag is
-rejected and named as such: `"required,examples": directives are separated by
-spaces, not commas`.
+lowercase because it is one word. `examples=` is **repeatable** rather than a
+list directive so an example containing a comma or a `|` is expressible:
+directives are separated by `;` and a list directive's members by `,`
+(ADR 0014) — `asyncapi:"required;enum=draft,sent;examples=1,000"` — so a scalar
+value may contain a comma and a pipe, but not a `;` or a space. The legacy
+spellings are rejected and named as such: `"required,examples": directives are
+separated by ";"`, and a space anywhere says the same.
 
 **A malformed value is ignored; a malformed directive is not.** `minItems=abc`
 still sets nothing: `applyTag` has no error channel and the derivation chain is
@@ -224,7 +225,7 @@ error-free, so the numeric value itself is not validated (O2a). What *is*
 validated, by the static pass in `internal/discovery` before the harness is
 built, is the vocabulary and its shape: an unknown or misspelt directive, a flag
 carrying a value, a value directive with no value or an empty one, and an empty
-member in a `|`-separated list are all catalog build errors naming file, line and
+member in a `,`-separated list are all catalog build errors naming file, line and
 column. `schema.CheckTag` is the single arbiter, and
 `TestDirectiveVocabularyMatchesDerivation` fails when it and `applyTag` drift
 apart (O2).
@@ -428,9 +429,9 @@ merge at `doc.go:63` — the same pattern as `validateServerRefs`.
 
 ```go
 type OrderPlaced struct {
-	Kind   string   `json:"kind"   asyncapi:"required const=OrderPlaced"`
-	Items  []string `json:"items"  asyncapi:"minItems=1 maxItems=10 uniqueItems examples=sku-1 examples=sku-2"`
-	Note   string   `json:"note"   asyncapi:"deprecated writeOnly examples=none"`
+	Kind   string   `json:"kind"   asyncapi:"required;const=OrderPlaced"`
+	Items  []string `json:"items"  asyncapi:"minItems=1;maxItems=10;uniqueItems;examples=sku-1;examples=sku-2"`
+	Note   string   `json:"note"   asyncapi:"deprecated;writeOnly;examples=none"`
 	Secret string   `json:"secret" asyncapi:"readOnly"`
 }
 

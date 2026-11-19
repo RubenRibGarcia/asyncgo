@@ -38,9 +38,9 @@ func TestCheckDirectives(t *testing.T) {
 		{
 			name: "should_accept_a_legal_corpus",
 			src: "package orders\n\ntype Order struct {\n" +
-				"\tID    string `json:\"id\"     asyncapi:\"required format=uuid\"`\n" +
-				"\tNote  string `json:\"note\"   asyncapi:\"deprecated examples=none\"`\n" +
-				"\tItems []string `json:\"items\" asyncapi:\"minItems=1 uniqueItems\"`\n" +
+				"\tID    string `json:\"id\"     asyncapi:\"required;format=uuid\"`\n" +
+				"\tNote  string `json:\"note\"   asyncapi:\"deprecated;examples=none\"`\n" +
+				"\tItems []string `json:\"items\" asyncapi:\"minItems=1;uniqueItems\"`\n" +
 				"}\n",
 		},
 		{
@@ -88,11 +88,22 @@ func TestCheckDirectives(t *testing.T) {
 			want: []string{`asyncapi:"requird": unknown directive "requird"`},
 		},
 		{
-			name: "should_name_the_whitespace_rule_for_the_legacy_comma_form",
+			name: "should_name_the_separator_for_the_legacy_comma_form",
 			src: "package orders\n\ntype Order struct {\n" +
 				"\tID string `json:\"id\" asyncapi:\"required,format=uuid\"`\n" +
 				"}\n",
-			want: []string{`directives are separated by spaces, not commas`},
+			want: []string{`directives are separated by ";"`},
+		},
+		{
+			// The form before ADR 0014: whitespace no longer separates directives.
+			name: "should_reject_the_legacy_whitespace_form_with_its_position",
+			src: "package orders\n\ntype Order struct {\n" +
+				"\tID string `json:\"id\" asyncapi:\"required format=uuid\"`\n" +
+				"}\n",
+			want: []string{
+				`orders.go:4:`,
+				`a space is not allowed; directives are separated by ";"`,
+			},
 		},
 	}
 

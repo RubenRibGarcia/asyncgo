@@ -21,18 +21,19 @@
 //     does derivation.
 //   - All fields are optional unless tagged asyncgo:"required".
 //   - json struct tags drive field names; "-" skips a field.
-//   - asyncapi struct tags carry "required", "enum=a|b|...", "examples=...",
+//   - asyncapi struct tags carry "required", "enum=a,b,...", "examples=...",
 //     "format=...", "const=...", "discriminator=...", the numeric bounds
 //     ("minItems=", "maxItems=", "minProperties=", "maxProperties="), and the
 //     flags "readOnly", "writeOnly", "uniqueItems", "deprecated".
-//     Combinator members are named as "oneOf=A|B": a bare name resolves against
+//     Combinator members are named as "oneOf=A,B": a bare name resolves against
 //     the declaring struct's package, and a name containing "/" is a
 //     fully-qualified pkgPath.TypeName. A semi-qualified name (pkg.Type, with no
 //     import path) is neither, so this pass would emit a dangling $ref — the
 //     name is a generate-time error instead, because internal/discovery applies
 //     the same rule when it collects the types to hoist and rejects a name the
 //     generated harness could not emit.
-//     Directives are separated by whitespace, so a value may contain a comma.
+//     Directives are separated by ";" and a list directive's members by ",", so a
+//     scalar value may contain a comma.
 //     Descriptions are read from the field's doc comment by
 //     the generator's discovery pass (internal/discovery), since reflection
 //     cannot see comments.

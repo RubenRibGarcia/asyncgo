@@ -27,9 +27,19 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_apply_enum_values",
-			tag:  "enum=a|b|c",
+			tag:  "enum=a,b,c",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Equal(t, []any{"a", "b", "c"}, s.Enum)
+			},
+		},
+		{
+			// "|" was the list separator before ADR 0014. applyTag takes the value
+			// verbatim, so a stale "enum=a|b" derives one value — CheckTag is what
+			// rejects it, with a message naming the new separator.
+			name: "should_treat_a_pipe_as_one_enum_value",
+			tag:  "enum=a|b",
+			verify: func(t *testing.T, s *spec.Schema) {
+				assert.Equal(t, []any{"a|b"}, s.Enum)
 			},
 		},
 		{
@@ -117,7 +127,7 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_apply_all_flags_together",
-			tag:  "required readOnly writeOnly uniqueItems deprecated",
+			tag:  "required;readOnly;writeOnly;uniqueItems;deprecated",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.True(t, s.ReadOnly)
 				assert.True(t, s.WriteOnly)
@@ -127,14 +137,14 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_append_repeated_examples",
-			tag:  "examples=sku-1 examples=sku-2",
+			tag:  "examples=sku-1;examples=sku-2",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Equal(t, []any{"sku-1", "sku-2"}, s.Examples)
 			},
 		},
 		{
 			name: "should_keep_examples_when_a_removed_example_directive_is_present",
-			tag:  "examples=draft-07 example=legacy",
+			tag:  "examples=draft-07;example=legacy",
 			verify: func(t *testing.T, s *spec.Schema) {
 				assert.Equal(t, []any{"draft-07"}, s.Examples,
 					"the removed example= is ignored, not merged into examples=")
@@ -148,8 +158,8 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
-			// Whitespace separates directives, so a comma is an ordinary value
-			// character: "1,000" survives as a single example.
+			// "," separates the members of a list directive only, so in a scalar
+			// value it is an ordinary character: "1,000" survives as one example.
 			name: "should_keep_a_comma_inside_a_value",
 			tag:  "examples=1,000",
 			verify: func(t *testing.T, s *spec.Schema) {
@@ -157,8 +167,8 @@ func TestApplyTag(t *testing.T) {
 			},
 		},
 		{
-			// The separator changed from comma to whitespace, so a legacy tag is
-			// now one unrecognized directive and sets nothing. Pinned so the
+			// The directive separator changed from a comma to ";", so a legacy
+			// tag is one unrecognized directive and sets nothing. Pinned so the
 			// silent drop stays deliberate and visible.
 			name: "should_ignore_a_legacy_comma_separated_tag",
 			tag:  "required,readOnly",
@@ -189,7 +199,7 @@ func TestApplyTag(t *testing.T) {
 		},
 		{
 			name: "should_apply_numeric_bounds",
-			tag:  "minItems=1 maxItems=10 minProperties=1 maxProperties=8",
+			tag:  "minItems=1;maxItems=10;minProperties=1;maxProperties=8",
 			verify: func(t *testing.T, s *spec.Schema) {
 				require.NotNil(t, s.MinItems)
 				require.NotNil(t, s.MaxItems)
@@ -243,14 +253,14 @@ func TestCombinatorNames(t *testing.T) {
 	}{
 		{
 			name:   "should_return_names_when_present",
-			tag:    "oneOf=A|B",
+			tag:    "oneOf=A,B",
 			key:    "oneOf",
 			want:   []string{"A", "B"},
 			wantOK: true,
 		},
 		{
-			name:   "should_find_a_directive_after_whitespace",
-			tag:    "required anyOf=A",
+			name:   "should_find_a_directive_after_a_separator",
+			tag:    "required;anyOf=A",
 			key:    "anyOf",
 			want:   []string{"A"},
 			wantOK: true,
@@ -301,21 +311,21 @@ func TestCombinatorNames(t *testing.T) {
 // is what fails when they drift apart — the same drift guard ADR 0007 legislated
 // for the grammar, applied to the vocabulary.
 var minimalTags = map[string]string{
-	"allOf":            "allOf=A|B",
-	"anyOf":            "anyOf=A|B",
+	"allOf":            "allOf=A,B",
+	"anyOf":            "anyOf=A,B",
 	"const":            "const=x",
 	"contentEncoding":  "contentEncoding=base64",
 	"contentMediaType": "contentMediaType=image/png",
 	"deprecated":       "deprecated",
 	"discriminator":    "discriminator=kind",
-	"enum":             "enum=a|b",
+	"enum":             "enum=a,b",
 	"examples":         "examples=x",
 	"format":           "format=date-time",
 	"maxItems":         "maxItems=1",
 	"maxProperties":    "maxProperties=1",
 	"minItems":         "minItems=1",
 	"minProperties":    "minProperties=1",
-	"oneOf":            "oneOf=A|B",
+	"oneOf":            "oneOf=A,B",
 	"readOnly":         "readOnly",
 	"required":         "required",
 	"uniqueItems":      "uniqueItems",
@@ -376,11 +386,11 @@ func TestCheckTag(t *testing.T) {
 		},
 		{
 			name: "should_accept_every_known_directive_at_once",
-			tag: "required readOnly writeOnly uniqueItems deprecated " +
-				"enum=draft|sent examples=1,000 format=date-time " +
-				"contentEncoding=base64 contentMediaType=image/png const=fixed " +
-				"discriminator=kind minItems=1 maxItems=9 minProperties=1 " +
-				"maxProperties=9 oneOf=A|B anyOf=A allOf=A",
+			tag: "required;readOnly;writeOnly;uniqueItems;deprecated;" +
+				"enum=draft,sent;examples=1,000;format=date-time;" +
+				"contentEncoding=base64;contentMediaType=image/png;const=fixed;" +
+				"discriminator=kind;minItems=1;maxItems=9;minProperties=1;" +
+				"maxProperties=9;oneOf=A,B;anyOf=A;allOf=A",
 		},
 		{
 			// allOf is the one directive legal in both forms: bare composes an
@@ -391,6 +401,12 @@ func TestCheckTag(t *testing.T) {
 		{
 			name: "should_accept_a_value_containing_a_comma",
 			tag:  "examples=1,000",
+		},
+		{
+			// A scalar value may carry the retired list separator; only a list
+			// directive's members are split on ",".
+			name: "should_accept_a_value_containing_a_pipe",
+			tag:  "examples=a|b",
 		},
 		{
 			name: "should_suggest_the_closest_directive",
@@ -411,9 +427,14 @@ func TestCheckTag(t *testing.T) {
 		},
 		{
 			// The old spelling, and the likeliest migration failure.
-			name: "should_name_the_whitespace_rule_for_a_comma_separated_tag",
+			name: "should_name_the_separator_for_a_comma_separated_tag",
 			tag:  "required,examples=x",
-			want: []string{`"required,examples": directives are separated by spaces, not commas`},
+			want: []string{`"required,examples": directives are separated by ";"`},
+		},
+		{
+			name: "should_reject_a_space_anywhere_in_the_tag",
+			tag:  "required format=uuid",
+			want: []string{`a space is not allowed; directives are separated by ";"`},
 		},
 		{
 			name: "should_reject_a_value_on_a_flag",
@@ -432,8 +453,31 @@ func TestCheckTag(t *testing.T) {
 		},
 		{
 			name: "should_reject_an_empty_list_entry",
-			tag:  "oneOf=A|",
+			tag:  "oneOf=A,",
 			want: []string{`"oneOf" has an empty entry`},
+		},
+		{
+			// "|" was the list separator before ADR 0014. Left alone it would
+			// derive one value and change the document silently.
+			name: "should_reject_the_retired_pipe_list_separator",
+			tag:  "enum=a|b",
+			want: []string{`"enum": list members are separated by ",", not "|"`},
+		},
+		{
+			// A list member spelled as a directive means ";" was written as ",".
+			name: "should_reject_a_directive_swallowed_by_a_list",
+			tag:  "enum=a,format=uuid",
+			want: []string{`"enum": member "format=uuid" looks like a directive`},
+		},
+		{
+			// A bare known key is a plausible enum value, so it stays legal.
+			name: "should_accept_a_list_member_named_like_a_flag",
+			tag:  "enum=required,draft",
+		},
+		{
+			name: "should_reject_a_directive_with_no_name",
+			tag:  "required;;readOnly",
+			want: []string{"directive has no name"},
 		},
 		{
 			name: "should_reject_a_directive_with_no_name",
@@ -442,7 +486,7 @@ func TestCheckTag(t *testing.T) {
 		},
 		{
 			name: "should_report_every_violation_not_only_the_first",
-			tag:  "requird readOnly=true format=",
+			tag:  "requird;readOnly=true;format=",
 			want: []string{
 				`unknown directive "requird"`,
 				`"readOnly" is a flag and takes no value`,
