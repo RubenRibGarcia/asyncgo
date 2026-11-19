@@ -10,30 +10,8 @@ declarations. Nothing here needs a hand-written schema.
   (e.g. `example.com/orders/orders.OrderPlaced`); `$ref` escapes `/` per JSON
   Pointer.
 - **Optional by default** — a field is required only with `asyncapi:"required"`.
-- **Nilable means nullable** — a pointer, slice, map, interface, `chan` or `func`
-  position can hold `null`, and `encoding/json` both emits and accepts it, so the
-  position derives `oneOf` with a `{type: "null"}` branch:
-
-  ```yaml
-  note:                       # *string
-    oneOf:
-    - type: string
-    - type: "null"
-  customer:                   # *Customer
-    oneOf:
-    - $ref: "#/components/schemas/...Customer"
-    - type: "null"
-  ```
-
-  The rules that follow from it: `omitempty` does not change this (it governs
-  only what asyncgo writes, not what a consumer may send); `asyncapi:"required"`
-  still means the key must be present, so required-and-nullable is a normal
-  combination; a tag keyword such as `enum=` lands on the payload branch so it
-  cannot exclude `null`; and `components.schemas` entries stay non-nullable, so
-  `*Order` and `Order` share one component. `nullable` is not a 3.1.0 keyword —
-  `oneOf` with `{type: "null"}` is how Draft-07 spells it. A `oneOf=` or `anyOf=`
-  directive takes the null branch as one of its own members; `allOf=`, where
-  every member must pass, wraps it instead.
+- **Nilable means nullable** — pointers, slices, maps, interfaces, `chan` and
+  `func` derive `oneOf` with a `{type: "null"}` branch (see below).
 - **`;`-separated directives** — `asyncapi:"required;examples=1,000"`
   separates directives with semicolons, so a scalar value may contain a comma.
   List directives (`enum`, `oneOf`, `anyOf`, `allOf`) separate their members with
@@ -65,6 +43,32 @@ declarations. Nothing here needs a hand-written schema.
 
 The directive reference — every flag, every value directive, the combinators and
 the spellings that are rejected — is [Struct tags](reference/struct-tags.md).
+
+### Nilable and null
+
+A nilable position can hold `null`, and `encoding/json` both emits and accepts
+it, so the position derives `oneOf` with a `{type: "null"}` branch:
+
+```yaml
+note:                       # *string
+  oneOf:
+  - type: string
+  - type: "null"
+customer:                   # *Customer
+  oneOf:
+  - $ref: "#/components/schemas/...Customer"
+  - type: "null"
+```
+
+The rules that follow from it: `omitempty` does not change this (it governs only
+what asyncgo writes, not what a consumer may send); `asyncapi:"required"` still
+means the key must be present, so required-and-nullable is a normal combination;
+a tag keyword such as `enum=` lands on the payload branch so it cannot exclude
+`null`; and `components.schemas` entries stay non-nullable, so `*Order` and
+`Order` share one component. `nullable` is not a 3.1.0 keyword — `oneOf` with
+`{type: "null"}` is how Draft-07 spells it. A `oneOf=` or `anyOf=` directive
+takes the null branch as one of its own members; `allOf=`, where every member must
+pass, wraps it instead.
 
 ## Schema composition
 
