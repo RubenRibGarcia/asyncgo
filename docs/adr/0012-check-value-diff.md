@@ -75,10 +75,17 @@ Concretely:
   one on failure, so neither is silently reported as unparsable. The typed
   findings path gets the same tolerance, which removes a byte-offset fallback
   that used to fire for a perfectly readable YAML artifact.
-- **The walk descends only when both sides have the key.** A removed or added
-  subtree is one entry whose value *is* the subtree, and sequences compare as
-  values (a reordered `enum` is a change). This is what keeps a rename at two
-  entries instead of one per leaf.
+- **A key only one side has is expanded to its leaves**, bounded by two limits: a
+  depth of three levels below the changed key (a container sitting at the limit is
+  one entry, so a deep branch costs one row instead of collapsing the shallow
+  leaves beside it) and ten leaf entries per changed subtree (a subtree needing
+  more is one counted entry, so a moved payload schema never buries the rest of
+  the drift, and the report never shows an arbitrary prefix of a subtree as if it
+  were the whole thing). Sequences compare as values when both sides have them — a
+  reordered `enum` is a change, and per-element noise would bury it — but an added
+  or removed sequence is expanded by position. This is the one place the walk
+  deliberately trades rows for precision: a renamed channel used to be two
+  entries and is now its address, its bindings and its messages.
 - **Numbers compare by value, not by Go type.** goccy/go-yaml yields `uint64`
   for `3` and `int64` for `-7`; encoding/json yields `float64` for both. The same
   number therefore arrives as different types depending on the encoding, and a
@@ -118,12 +125,18 @@ Rejected:
 
 - Good, because a failing `check` now names the keys and values that differ, in
   either encoding, without a regenerate-and-read loop.
+- Good, because a subtree one side lacks is listed leaf by leaf, so a renamed or
+  added channel says what it contains instead of only how many keys it has.
 - Good, because the default output, the error text, exit code 3, and the `-v`
   findings are unchanged; the flag is additive.
 - Good, because one walker covers YAML, JSON and the mixed pair, and its numeric
   comparison is exact rather than float-truncating.
 - Good, because the encoding-tolerant decode also fixes the mixed case on the
   existing findings path.
+- Bad, because leaf expansion makes a rename cost one row per leaf — 18 rows for
+  the one-channel fixture — where it used to cost two. The depth and leaf limits
+  bound that, but a diff of several renames is a longer read than it was, and the
+  artifact row cap is what keeps it finite.
 - Bad, because `--diff` and `-v` are two ways to explain the same failure with
   different granularity; the interaction (diff wins) has to stay documented.
 - Bad, because generic decoding means the diff sees whatever the decoders
@@ -136,15 +149,17 @@ Rejected:
 
 ## Update (2026-11-19)
 
-The decisions above stand; the report *shape* changed. The first version printed
-each change as an indented finding line that carried the artifact path
-(`<path>: <where>: <added|removed|changed> (<values>)`). That repeated a long
-absolute path on every row, and because the block bypasses the record writer it
-reached CI logs as one unlabelled message — the header it was subordinate to is
-an `-v` record, so at the default verbosity there was no header at all. It is now
-one headed, column-aligned block per artifact (first bullet under "Decision
-Outcome"). The ungated/gated split, the 50-change cap, the value summarising,
-the fallbacks and the locator handling are unchanged.
+The decisions above stand; the report *shape* and the granularity of a changed
+subtree changed. The first version printed each change as an indented finding line
+that carried the artifact path (`<path>: <where>: <added|removed|changed>
+(<values>)`), and a key one side lacked was a single entry whose value was the
+whole subtree. That repeated a long absolute path on every row, said only `{6
+keys}` about a renamed channel, and — because the block bypasses the record writer
+— reached CI logs as one unlabelled message. It is now one headed, column-aligned
+block per artifact (first bullet under "Decision Outcome"), with a changed
+subtree expanded to its leaves under the new depth and leaf limits. The
+ungated/gated split, the 50-change cap, the value summarising, the fallbacks and
+the locator handling are unchanged.
 
 ## More Information
 

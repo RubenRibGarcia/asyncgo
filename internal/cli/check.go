@@ -54,7 +54,9 @@ func newCheckCmd() *cobra.Command {
 			"With --diff, it is reported as the value changes between the committed document and " +
 			"the one generate would write, in one aligned block per artifact: the header names the " +
 			"file and counts its changes, and each row is one added, removed or changed key with " +
-			"the value involved. The " +
+			"the value involved. A key only one document has is expanded to its leaves, within a " +
+			"depth and width budget, so a renamed channel lists its address, its messages and its " +
+			"bindings instead of collapsing to a count. The " +
 			"comparison is over keys and values rather than text, so it reads the same for a " +
 			"YAML and a JSON artifact — including a YAML file checked with --format json — and " +
 			"it prints without -v.\n\n" +

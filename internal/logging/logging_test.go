@@ -314,6 +314,37 @@ func TestReportDiff(t *testing.T) {
 		)
 	})
 
+	t.Run("should_wrap_a_location_longer_than_the_column", func(t *testing.T) {
+		var out bytes.Buffer
+
+		logging.ReportDiff(
+			logging.New(&out, logging.Quiet),
+			"asyncapi.yaml is out of date, 2 changes",
+			[]logging.Finding{
+				{Where: "channels.order-placed.address", What: "added", Why: `"order-placed"`},
+				{
+					Where: `components.schemas["github.com/example/orders.OrderPlaced"].properties.amount.type`,
+					What:  "added",
+					Why:   `"number"`,
+				},
+			},
+			0,
+		)
+
+		assert.Equal(
+			t,
+			"asyncgo: asyncapi.yaml is out of date, 2 changes\n"+
+				"  where                                                     change  value\n"+
+				"  channels.order-placed.address                             added   \"order-placed\"\n"+
+				"  components.schemas\n"+
+				"    [\"github.com/example/orders.OrderPlaced\"].properties\n"+
+				"    .amount.type\n"+
+				"      added   \"number\"\n",
+			withoutStamp(out.String()),
+			"a path wider than the column wraps at its segments, and its verdict follows indented",
+		)
+	})
+
 	t.Run("should_count_what_the_cap_dropped_in_a_footer", func(t *testing.T) {
 		var out bytes.Buffer
 

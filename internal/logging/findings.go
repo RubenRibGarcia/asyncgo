@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Finding is one located problem: where it is, what is wrong, and why.
@@ -170,8 +171,8 @@ func (h *handler) writeDiff(header string, rows []Finding, elided int) {
 		}
 		what[i] = f.What
 	}
-	whereWidth := min(maxLen(where), maxWhereWidth)
-	whatWidth := maxLen(what)
+	whereWidth := min(max(maxLen(where), len("where")), maxWhereWidth)
+	whatWidth := max(maxLen(what), len("change"))
 
 	var b strings.Builder
 	// The header goes through the record rendering on purpose: it is the one line
@@ -193,17 +194,115 @@ func (h *handler) writeDiff(header string, rows []Finding, elided int) {
 	_, _ = io.WriteString(h.w, b.String())
 }
 
-// writeDiffRow renders one aligned row. A cell wider than its column (a deep key,
-// a long verdict) is written whole rather than cut: the columns are a reading aid,
-// and dropping part of a key would defeat the point of the block.
+// writeDiffRow renders one aligned row. A cell wider than its column (a long
+// verdict) is written whole rather than cut: the columns are a reading aid, and
+// dropping part of a key would defeat the point of the block.
+//
+// A location wider than the column wraps instead: its path takes one line per
+// segment run and the verdict moves to a continuation line, so a fully-qualified
+// schema path costs two lines without pushing every other row's columns right.
 func writeDiffRow(b *strings.Builder, where, what, value string, whereWidth, whatWidth int) {
-	b.WriteString("  ")
-	b.WriteString(padRight(where, whereWidth))
-	b.WriteString("  ")
+	if utf8.RuneCountInString(where) <= whereWidth {
+		b.WriteString("  ")
+		b.WriteString(padRight(where, whereWidth))
+		b.WriteString("  ")
+		b.WriteString(padRight(what, whatWidth))
+		writeDiffValue(b, value)
+		return
+	}
+	for i, line := range wrapPath(where, whereWidth) {
+		if i > 0 {
+			b.WriteString("    ")
+		} else {
+			b.WriteString("  ")
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	// The verdict sits under the wrapped path, clear of both indents, so it reads
+	// as this row's outcome rather than as a row of its own.
+	b.WriteString("      ")
 	b.WriteString(padRight(what, whatWidth))
+	writeDiffValue(b, value)
+}
+
+// writeDiffValue closes a row with the value, when the change has one.
+func writeDiffValue(b *strings.Builder, value string) {
 	if value != "" {
 		b.WriteString("  ")
 		b.WriteString(value)
 	}
 	b.WriteByte('\n')
+}
+
+// wrapPath packs a document path into lines of at most width runes, breaking only
+// at segment boundaries so a break never lands inside a key. A segment longer
+// than width — a fully-qualified type name inside a bracket, typically — is left
+// whole: eliding part of a location would make it uncopyable, and this is the one
+// line every other row already paid for.
+func wrapPath(path string, width int) []string {
+	var (
+		lines   []string
+		line    strings.Builder
+		lineLen int
+	)
+	for _, seg := range pathSegments(path) {
+		segLen := utf8.RuneCountInString(seg)
+		if lineLen > 0 && lineLen+segLen > width {
+			lines = append(lines, line.String())
+			line.Reset()
+			lineLen = 0
+		}
+		line.WriteString(seg)
+		lineLen += segLen
+	}
+	if line.Len() > 0 {
+		lines = append(lines, line.String())
+	}
+	return lines
+}
+
+// pathSegments splits a document path at the boundaries its grammar defines: a
+// dotted key starts a segment at every top-level '.', a quoted key at every '['.
+// Dots inside brackets belong to the key — a Go type name is dotted — so the scan
+// tracks bracket depth and the quoting inside it.
+func pathSegments(path string) []string {
+	var (
+		segments []string
+		start    int
+		depth    int
+		quoted   bool
+		escaped  bool
+	)
+	for i, r := range path {
+		switch {
+		case escaped:
+			escaped = false
+		case quoted && r == '\\':
+			escaped = true
+		case quoted:
+			if r == '"' {
+				quoted = false
+			}
+		case depth > 0:
+			switch r {
+			case '"':
+				quoted = true
+			case ']':
+				depth--
+			}
+		case r == '[':
+			if i > start {
+				segments = append(segments, path[start:i])
+				start = i
+			}
+			depth++
+		case r == '.':
+			if i > start {
+				segments = append(segments, path[start:i])
+				start = i
+			}
+		}
+	}
+	return append(segments, path[start:])
 }

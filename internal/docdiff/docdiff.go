@@ -1,5 +1,5 @@
 // Package docdiff compares two decoded AsyncAPI documents and reports the value
-// changes between them, one entry per key.
+// changes between them, one entry per changed key.
 //
 // It is the explanation behind `asyncgo check --diff`. Check's verdict is a byte
 // comparison, and this package answers the question that follows — which values
@@ -9,7 +9,11 @@
 //
 // The comparison is a walk over the document, not a text diff: the AsyncAPI
 // document is a mapping tree, so comparing keys and values reports a rename as
-// one removal plus one addition instead of a hundred changed lines.
+// two subtree changes instead of a hundred changed lines. A subtree one side does
+// not have is the interesting case, so it is expanded into one entry per leaf — a
+// new channel scrolls as its address, its messages and its bindings rather than
+// as `{6 keys}` — while a subtree too deep or too wide to read keeps its single
+// counted entry.
 package docdiff
 
 import (
@@ -43,6 +47,22 @@ const (
 // confirm which key changed, not to reproduce the document.
 const maxValueWidth = 60
 
+// Expansion limits for a subtree one document does not have. Such a subtree is
+// the change, so it is worth listing leaf by leaf; but an added payload schema can
+// be hundreds of leaves, and printing those would bury the rest of the drift and
+// push the report past the caller's row cap. The two limits bound that:
+const (
+	// maxExpandDepth is how far below the changed key the walk descends. A
+	// container at the limit is one entry whose value is still the whole subtree,
+	// so a deep branch costs one row instead of collapsing the useful shallow ones.
+	maxExpandDepth = 3
+	// maxExpandLeaves is how many leaf entries one changed subtree may
+	// contribute. A subtree that needs more is reported as its single counted
+	// entry; the budget is all-or-nothing so the report never shows an arbitrary
+	// prefix of a subtree and implies it is the whole thing.
+	maxExpandLeaves = 10
+)
+
 // Change is one difference between the committed document and the generated one.
 type Change struct {
 	// Path locates the change inside the document: dotted for identifier-ish
@@ -64,10 +84,11 @@ type Change struct {
 // path so the same drift always reads the same way.
 //
 // Both arguments are generic decoded documents (map[string]any, []any, scalars).
-// A mapping is descended only when both sides have one at that key, so a
-// removed or added subtree is one entry rather than one per leaf, and sequences
-// compare as values: a reordered enum is a change, and per-element noise would
-// bury the change that matters.
+// A mapping both sides carry is descended key by key, so a nested edit keeps its
+// own verdict and a type change stays one entry. A mapping — or sequence — only
+// one side has is expanded into one entry per leaf, bounded by maxExpandDepth and
+// maxExpandLeaves; a container that does not fit keeps one counted entry, which
+// is what makes a moved schema one row instead of a hundred.
 func Changes(before, after any) []Change {
 	w := &walker{}
 	w.walk("", before, after)
@@ -111,16 +132,13 @@ func (w *walker) scalar(path string, before, after any) {
 }
 
 // mapping compares two mappings key by key. Keys present on one side only are
-// reported whole: their subtree is the value.
+// expanded into their leaves: their subtree is the change.
 func (w *walker) mapping(path string, before, after map[string]any) {
 	for key, b := range before {
 		child := join(path, key)
 		a, ok := after[key]
 		if !ok {
-			w.changes = append(
-				w.changes,
-				Change{Path: child, Kind: Removed, Before: b},
-			)
+			w.subtree(child, Removed, b, nil)
 			continue
 		}
 		w.walk(child, b, a)
@@ -129,11 +147,88 @@ func (w *walker) mapping(path string, before, after map[string]any) {
 		if _, ok := before[key]; ok {
 			continue
 		}
-		w.changes = append(
-			w.changes,
-			Change{Path: join(path, key), Kind: Added, After: a},
-		)
+		w.subtree(join(path, key), Added, nil, a)
 	}
+}
+
+// subtree records a value only one document has at path, as one entry per leaf
+// when the subtree is shallow and small enough to read and as a single entry
+// otherwise.
+//
+// before is nil for an addition and after is nil for a removal; the pair says the
+// same thing the Kind does, so the summary entry and a leaf entry are built from
+// the same two fields.
+func (w *walker) subtree(path string, kind Kind, before, after any) {
+	value := before
+	if kind == Added {
+		value = after
+	}
+	var leaves []Change
+	if w.leaves(path, kind, value, 0, &leaves) {
+		w.changes = append(w.changes, leaves...)
+		return
+	}
+	w.changes = append(w.changes, Change{Path: path, Kind: kind, Before: before, After: after})
+}
+
+// leaves appends one entry per leaf under path and reports whether the subtree
+// fitted the expansion budget. A subtree that does not fit is discarded as a
+// whole, and the caller keeps its single counted entry.
+//
+// A node at maxExpandDepth is one entry regardless of its shape: that is the row
+// that says "this branch exists and holds N keys" without reproducing it.
+func (w *walker) leaves(path string, kind Kind, value any, depth int, out *[]Change) bool {
+	if depth < maxExpandDepth {
+		switch v := value.(type) {
+		case map[string]any:
+			if len(v) > 0 {
+				for _, key := range sortedKeys(v) {
+					if !w.leaves(join(path, key), kind, v[key], depth+1, out) {
+						return false
+					}
+				}
+				return true
+			}
+		case []any:
+			if len(v) > 0 {
+				for i, item := range v {
+					if !w.leaves(indexed(path, i), kind, item, depth+1, out) {
+						return false
+					}
+				}
+				return true
+			}
+		}
+	}
+
+	// A scalar, or a container at the depth limit: the value is the whole entry.
+	if len(*out) == maxExpandLeaves {
+		return false
+	}
+	leaf := Change{Path: path, Kind: kind}
+	if kind == Added {
+		leaf.After = value
+	} else {
+		leaf.Before = value
+	}
+	*out = append(*out, leaf)
+	return true
+}
+
+// sortedKeys returns the mapping's keys in order, so the leaf walk spends its
+// budget the same way on every run.
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// indexed appends a sequence position to a document path.
+func indexed(parent string, i int) string {
+	return parent + "[" + strconv.Itoa(i) + "]"
 }
 
 // equal compares two decoded values. Numbers compare by exact value, because the

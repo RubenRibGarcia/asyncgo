@@ -185,23 +185,38 @@ recap. [CLI](cli.md#verbose-logging) has the transcripts.
 When the check does fail, `--diff` prints the **value changes** between the
 committed document and the one `generate` would write — one row per added,
 removed or changed key, under a header that names the artifact and counts the
-changes. It needs no `-v`, and it reads the same for a YAML and a JSON artifact
-alike:
+changes. A key only one side has is expanded to its leaves, so a renamed channel
+reads as its address, bindings and messages rather than as `{6 keys}`. It needs
+no `-v`, and it reads the same for a YAML and a JSON artifact alike:
 
 ```console
 $ asyncgo check . --diff
-asyncgo: +0.121s check: /home/you/orders/asyncapi.yaml is out of date, 4 changes
-  where                             change   value
-  channels.order-placed             added    {5 keys}
-  channels.order-renamed            removed  {5 keys}
-  operations["order-placed.send"]   added    {3 keys}
-  operations["order-renamed.send"]  removed  {3 keys}
+asyncgo: +0.121s check: /home/you/orders/asyncapi.yaml is out of date, 18 changes
+  where                                                 change   value
+  channels.order-placed.address                         added    "order-placed"
+  channels.order-placed.bindings.kafka.partitions       added    3
+  channels.order-placed.bindings.kafka.topic            added    "order-placed"
+  channels.order-placed.description                     added    "Emitted when an order is placed"
+  channels.order-placed.messages.OrderPlaced["$ref"]    added    "#/components/messages/OrderPlaced"
+  channels.order-placed.servers[0]["$ref"]              added    "#/servers/prod"
+  channels.order-renamed.address                        removed  "order-renamed"
+  channels.order-renamed.bindings.kafka.partitions      removed  3
+  channels.order-renamed.bindings.kafka.topic           removed  "order-renamed"
+  channels.order-renamed.description                    removed  "Emitted when an order is placed"
+  channels.order-renamed.messages.OrderPlaced["$ref"]   removed  "#/components/messages/OrderPlaced"
+  channels.order-renamed.servers[0]["$ref"]             removed  "#/servers/prod"
+  operations["order-placed.send"].action                added    "send"
+  operations["order-placed.send"].channel["$ref"]       added    "#/channels/order-placed"
+  operations["order-placed.send"].messages[0]["$ref"]   added    "#/channels/order-placed/messages/OrderPlaced"
+  operations["order-renamed.send"].action               removed  "send"
+  operations["order-renamed.send"].channel["$ref"]      removed  "#/channels/order-renamed"
+  operations["order-renamed.send"].messages[0]["$ref"]  removed  "#/channels/order-renamed/messages/OrderPlaced"
 asyncgo: /home/you/orders/asyncapi.yaml: document is out of date; run `asyncgo generate`
 ```
 
-[Seeing what changed](cli.md#seeing-what-changed) covers the report cap and the
-two fallbacks — an artifact that no longer parses, and one where only the
-encoding changed.
+[Seeing what changed](cli.md#seeing-what-changed) covers how far a subtree is
+expanded, the report cap, and the two fallbacks — an artifact that no longer
+parses, and one where only the encoding changed.
 
 ## Next
 

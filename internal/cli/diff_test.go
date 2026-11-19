@@ -39,9 +39,17 @@ func TestCheckDiff(t *testing.T) {
 		assert.ErrorIs(t, err, ErrOutOfDate)
 		assert.Equal(t, 3, ExitCode(err), "the diff is detail, not a new outcome")
 		assert.Empty(t, stdout, "stdout stays reserved for the verdict")
-		assert.Contains(t, stderr, artifact+" is out of date, 4 changes")
-		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
-		assert.Regexp(t, diffRow("channels.order-renamed", "removed", "{5 keys}"), stderr)
+		assert.Contains(t, stderr, artifact+" is out of date, 18 changes")
+		assert.Regexp(
+			t,
+			diffRow("channels.order-placed.address", "added", `"order-placed"`),
+			stderr,
+		)
+		assert.Regexp(
+			t,
+			diffRow("channels.order-renamed.address", "removed", `"order-renamed"`),
+			stderr,
+		)
 	})
 
 	t.Run("should_report_a_nested_value_change", func(t *testing.T) {
@@ -72,7 +80,11 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
+		assert.Regexp(
+			t,
+			diffRow("channels.order-placed.address", "added", `"order-placed"`),
+			stderr,
+		)
 		assert.NotContains(t, stderr, ": stale", "the diff explains the drift once")
 	})
 
@@ -129,9 +141,17 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Contains(t, stderr, artifact+" is out of date, 4 changes")
-		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
-		assert.Regexp(t, diffRow("channels.order-renamed", "removed", "{5 keys}"), stderr)
+		assert.Contains(t, stderr, artifact+" is out of date, 18 changes")
+		assert.Regexp(
+			t,
+			diffRow("channels.order-placed.address", "added", `"order-placed"`),
+			stderr,
+		)
+		assert.Regexp(
+			t,
+			diffRow("channels.order-renamed.address", "removed", `"order-renamed"`),
+			stderr,
+		)
 	})
 
 	t.Run("should_diff_a_yaml_artifact_checked_as_json", func(t *testing.T) {
@@ -153,9 +173,17 @@ func TestCheckDiff(t *testing.T) {
 		)
 
 		require.Error(t, err)
-		assert.Contains(t, stderr, artifact+" is out of date, 4 changes")
-		assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
-		assert.Regexp(t, diffRow("channels.order-renamed", "removed", "{5 keys}"), stderr)
+		assert.Contains(t, stderr, artifact+" is out of date, 18 changes")
+		assert.Regexp(
+			t,
+			diffRow("channels.order-placed.address", "added", `"order-placed"`),
+			stderr,
+		)
+		assert.Regexp(
+			t,
+			diffRow("channels.order-renamed.address", "removed", `"order-renamed"`),
+			stderr,
+		)
 	})
 }
 
@@ -181,8 +209,12 @@ func TestCheckPerCatalogDiff(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrOutOfDate)
 	assert.Equal(t, 3, ExitCode(err))
-	assert.Contains(t, stderr, stale+" is out of date, 4 changes")
-	assert.Regexp(t, diffRow("channels.order-placed", "added", "{5 keys}"), stderr)
+	assert.Contains(t, stderr, stale+" is out of date, 18 changes")
+	assert.Regexp(
+		t,
+		diffRow("channels.order-placed.description", "added", `"Emitted when an order is placed"`),
+		stderr,
+	)
 	assert.Contains(t, stderr, "deleted.asyncapi.yaml: document: orphan")
 	assert.Contains(t, stderr, "extra.Catalog.asyncapi.yaml: document: missing")
 }

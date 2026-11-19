@@ -74,16 +74,20 @@ func TestChanges(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name:   "should_report_an_added_key",
+			name:   "should_expand_an_added_key_leaf_by_leaf",
 			before: yaml("channels: {}\n"),
 			after:  yaml("channels:\n  order-placed:\n    address: orders\n"),
-			want:   []string{`channels.order-placed added [null -> {"address":"orders"}]`},
+			want: []string{
+				`channels.order-placed.address added [null -> "orders"]`,
+			},
 		},
 		{
-			name:   "should_report_a_removed_key",
+			name:   "should_expand_a_removed_key_leaf_by_leaf",
 			before: yaml("channels:\n  order-placed:\n    address: orders\n"),
 			after:  yaml("channels: {}\n"),
-			want:   []string{`channels.order-placed removed [{"address":"orders"} -> null]`},
+			want: []string{
+				`channels.order-placed.address removed ["orders" -> null]`,
+			},
 		},
 		{
 			name:   "should_locate_a_nested_change",
@@ -94,9 +98,9 @@ func TestChanges(t *testing.T) {
 			},
 		},
 		{
-			// A whole schema is one entry, not one per property: the removed
-			// subtree is the value.
-			name: "should_report_a_removed_subtree_once",
+			// A schema the generated document no longer has is worth its leaf paths:
+			// the type name locates it, and `properties.id.type` says what went away.
+			name: "should_expand_a_removed_subtree_leaf_by_leaf",
 			before: yaml(`
 components:
   schemas:
@@ -106,7 +110,94 @@ components:
 `),
 			after: yaml("components:\n  schemas: {}\n"),
 			want: []string{
-				`components.schemas.Order removed [{"properties":{"id":{"type":"string"}}} -> null]`,
+				`components.schemas.Order.properties.id.type removed ["string" -> null]`,
+			},
+		},
+		{
+			// A sequence is expanded by position: the position is part of the
+			// location, and an added sequence has no reorder to be confused by.
+			name:   "should_expand_an_added_sequence_by_position",
+			before: yaml("channels:\n  c:\n    address: orders\n"),
+			after: yaml(`
+channels:
+  c:
+    address: orders
+    messages:
+    - $ref: "#/components/messages/OrderPlaced"
+`),
+			want: []string{
+				`channels.c.messages[0]["$ref"] added [null -> "#/components/messages/OrderPlaced"]`,
+			},
+		},
+		{
+			// maxExpandDepth bounds the walk: the container sitting at the limit is
+			// one entry, so a deep branch costs one row without collapsing the
+			// shallow leaves beside it.
+			name:   "should_keep_a_branch_at_the_depth_limit_as_one_entry",
+			before: yaml("top: {}\n"),
+			after: yaml(`
+top:
+  b:
+    c:
+      d:
+        e:
+          f: 1
+`),
+			want: []string{
+				`top.b.c.d.e added [null -> {"f":1}]`,
+			},
+		},
+		{
+			// maxExpandLeaves bounds one changed subtree: this one needs eleven and
+			// gets a single counted entry instead of ten leaves that would read as
+			// the whole subtree.
+			name:   "should_keep_a_subtree_over_the_leaf_budget_as_one_entry",
+			before: yaml("top: {}\n"),
+			after: yaml(`
+top:
+  b:
+    k0: 0
+    k1: 1
+    k2: 2
+    k3: 3
+    k4: 4
+    k5: 5
+    k6: 6
+    k7: 7
+    k8: 8
+    k9: 9
+    k10: 10
+`),
+			want: []string{`top.b added [null -> {11 keys}]`},
+		},
+		{
+			name:   "should_expand_a_subtree_that_exactly_fits_the_leaf_budget",
+			before: yaml("top: {}\n"),
+			after: yaml(`
+top:
+  b:
+    k0: 0
+    k1: 1
+    k2: 2
+    k3: 3
+    k4: 4
+    k5: 5
+    k6: 6
+    k7: 7
+    k8: 8
+    k9: 9
+`),
+			want: []string{
+				`top.b.k0 added [null -> 0]`,
+				`top.b.k1 added [null -> 1]`,
+				`top.b.k2 added [null -> 2]`,
+				`top.b.k3 added [null -> 3]`,
+				`top.b.k4 added [null -> 4]`,
+				`top.b.k5 added [null -> 5]`,
+				`top.b.k6 added [null -> 6]`,
+				`top.b.k7 added [null -> 7]`,
+				`top.b.k8 added [null -> 8]`,
+				`top.b.k9 added [null -> 9]`,
 			},
 		},
 		{
@@ -229,7 +320,7 @@ components:
       type: object
 `),
 			want: []string{
-				`components.schemas["example.com/orders.Order"] added [null -> {"type":"object"}]`,
+				`components.schemas["example.com/orders.Order"].type added [null -> "object"]`,
 			},
 		},
 		{
