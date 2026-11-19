@@ -7,8 +7,8 @@ channels:
   order-updated:
     address: order-updated
     messages:
-      github.com/RubenRibGarcia/asyncgo/test/data/nullable.OrderUpdated:
-        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.OrderUpdated"
+      github.com_RubenRibGarcia_asyncgo_test_data_nullable.OrderUpdated:
+        $ref: "#/components/messages/github.com_RubenRibGarcia_asyncgo_test_data_nullable.OrderUpdated"
     description: Emitted when an order changes
 operations:
   order-updated.send:
@@ -16,10 +16,10 @@ operations:
     channel:
       $ref: "#/channels/order-updated"
     messages:
-    - $ref: "#/channels/order-updated/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.OrderUpdated"
+    - $ref: "#/channels/order-updated/messages/github.com_RubenRibGarcia_asyncgo_test_data_nullable.OrderUpdated"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/nullable.Customer:
+    github.com_RubenRibGarcia_asyncgo_test_data_nullable.Customer:
       type: object
       properties:
         id:
@@ -27,7 +27,7 @@ components:
           description: ID identifies the customer.
       required:
       - id
-    github.com/RubenRibGarcia/asyncgo/test/data/nullable.OrderUpdated:
+    github.com_RubenRibGarcia_asyncgo_test_data_nullable.OrderUpdated:
       type: object
       properties:
         attributes:
@@ -50,7 +50,7 @@ components:
         customer:
           description: "Customer is required but nullable: the key must be there, the value may be\nnull."
           oneOf:
-          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.Customer"
+          - $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_nullable.Customer"
           - type: "null"
         metadata:
           description: Metadata is unconstrained, so it already admits null and is left alone.
@@ -70,7 +70,7 @@ components:
           - type: array
             items:
               oneOf:
-              - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.Refund"
+              - $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_nullable.Refund"
               - type: "null"
           - type: "null"
         ship_by:
@@ -91,7 +91,7 @@ components:
       required:
       - order_id
       - customer
-    github.com/RubenRibGarcia/asyncgo/test/data/nullable.Refund:
+    github.com_RubenRibGarcia_asyncgo_test_data_nullable.Refund:
       type: object
       properties:
         amount:
@@ -99,7 +99,7 @@ components:
           description: Amount is the refunded amount.
           format: double
   messages:
-    github.com/RubenRibGarcia/asyncgo/test/data/nullable.OrderUpdated:
+    github.com_RubenRibGarcia_asyncgo_test_data_nullable.OrderUpdated:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1nullable.OrderUpdated"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_nullable.OrderUpdated"
       name: OrderUpdated

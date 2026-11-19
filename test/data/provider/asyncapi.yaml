@@ -32,28 +32,28 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/provider.Money:
+    github.com_RubenRibGarcia_asyncgo_test_data_provider.Money:
       type: string
       examples:
       - 12.34 USD
       pattern: "^\\d+\\.\\d{2} [A-Z]{3}$"
-    github.com/RubenRibGarcia/asyncgo/test/data/provider.OrderID:
+    github.com_RubenRibGarcia_asyncgo_test_data_provider.OrderID:
       type: string
       examples:
       - ord_000123
       minLength: 10
       pattern: ^ord_[0-9]{6}$
-    github.com/RubenRibGarcia/asyncgo/test/data/provider.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_provider.OrderPlaced:
       type: object
       properties:
         order_id:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.OrderID"
+          $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_provider.OrderID"
         price:
-          $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.Money"
+          $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_provider.Money"
       required:
       - order_id
   messages:
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1provider.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_provider.OrderPlaced"
       name: OrderPlaced

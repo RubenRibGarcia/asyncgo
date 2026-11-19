@@ -54,7 +54,7 @@ operations:
     - $ref: "#/channels/orders-mqtt5/messages/MQTT5Event"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/bindings-unlisted.Event:
+    github.com_RubenRibGarcia_asyncgo_test_data_bindings-unlisted.Event:
       type: object
       properties:
         id:
@@ -64,11 +64,11 @@ components:
   messages:
     MQTT5Event:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings-unlisted.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings-unlisted.Event"
       name: MQTT5Event
     MercureEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings-unlisted.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings-unlisted.Event"
       name: MercureEvent
       bindings:
         mercure:

@@ -70,14 +70,14 @@ operations:
     - $ref: "#/channels/order-shipped/messages/OrderShipped"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/traits.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_traits.OrderPlaced:
       type: object
       properties:
         order_id:
           type: string
       required:
       - order_id
-    github.com/RubenRibGarcia/asyncgo/test/data/traits.OrderShipped:
+    github.com_RubenRibGarcia_asyncgo_test_data_traits.OrderShipped:
       type: object
       properties:
         order_id:
@@ -87,13 +87,13 @@ components:
   messages:
     OrderCancelled:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_traits.OrderPlaced"
       correlationId:
         $ref: "#/components/correlationIds/OrderCancelledCorrelationID"
       name: OrderCancelled
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_traits.OrderPlaced"
       name: OrderPlaced
       tags:
       - name: orders
@@ -103,7 +103,7 @@ components:
       - $ref: "#/components/messageTraits/TracedMessage"
     OrderShipped:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1traits.OrderShipped"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_traits.OrderShipped"
       name: OrderShipped
       traits:
       - $ref: "#/components/messageTraits/TracedMessage"

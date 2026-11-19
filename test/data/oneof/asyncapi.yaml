@@ -32,7 +32,7 @@ operations:
     - $ref: "#/channels/order-event/messages/OrderEvent"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/oneof.OrderCancelled:
+    github.com_RubenRibGarcia_asyncgo_test_data_oneof.OrderCancelled:
       type: object
       properties:
         order_id:
@@ -42,17 +42,17 @@ components:
           description: Reason for the cancellation
       required:
       - order_id
-    github.com/RubenRibGarcia/asyncgo/test/data/oneof.OrderEvent:
+    github.com_RubenRibGarcia_asyncgo_test_data_oneof.OrderEvent:
       type: object
       properties:
         data:
           oneOf:
-          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderPlaced"
-          - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderCancelled"
+          - $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_oneof.OrderPlaced"
+          - $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_oneof.OrderCancelled"
           - type: "null"
       required:
       - data
-    github.com/RubenRibGarcia/asyncgo/test/data/oneof.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_oneof.OrderPlaced:
       type: object
       properties:
         amount:
@@ -69,5 +69,5 @@ components:
   messages:
     OrderEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1oneof.OrderEvent"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_oneof.OrderEvent"
       name: OrderEvent

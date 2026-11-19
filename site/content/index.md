@@ -86,7 +86,7 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    github.com/acme/orders.OrderPlaced:
+    github.com_acme_orders.OrderPlaced:
       type: object
       properties:
         amount:
@@ -103,7 +103,7 @@ components:
   messages:
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1acme~1orders.OrderPlaced"
+        $ref: "#/components/schemas/github.com_acme_orders.OrderPlaced"
       name: OrderPlaced
 ```
 

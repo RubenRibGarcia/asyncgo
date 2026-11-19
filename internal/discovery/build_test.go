@@ -27,7 +27,7 @@ func TestBuild(t *testing.T) {
 	require.Contains(
 		t,
 		doc.Components.Schemas,
-		"github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced",
+		"github.com_RubenRibGarcia_asyncgo_test_data_simple.OrderPlaced",
 	)
 }
 

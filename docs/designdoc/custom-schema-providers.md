@@ -299,7 +299,7 @@ type Order struct {
 Before (wrong — object schema from the struct fields):
 
 ```yaml
-github.com/acme/orders.Money:
+github.com_acme_orders.Money:
   type: object
   properties:
     amount: { type: integer }
@@ -309,18 +309,18 @@ github.com/acme/orders.Money:
 After:
 
 ```yaml
-github.com/acme/orders.Money:
+github.com_acme_orders.Money:
   type: string
   examples:
   - 12.34 USD
   pattern: "^\d+\.\d{2} [A-Z]{3}$"
 
-github.com/acme/orders.Order:
+github.com_acme_orders.Order:
   type: object
   properties:
     id: { type: string }
     price:
-      $ref: "#/components/schemas/github.com/acme/orders.Money"
+      $ref: "#/components/schemas/github.com_acme_orders.Money"
   required: [id]
 ```
 

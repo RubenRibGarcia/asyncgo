@@ -28,7 +28,7 @@ func TestRegister(t *testing.T) {
 		assert.Contains(
 			t,
 			registry,
-			"github.com/RubenRibGarcia/asyncgo/schema.CustomString",
+			"github.com_RubenRibGarcia_asyncgo_schema.CustomString",
 		)
 	})
 
@@ -45,7 +45,7 @@ func TestRegister(t *testing.T) {
 	})
 
 	t.Run("should_be_idempotent", func(t *testing.T) {
-		const key = "github.com/RubenRibGarcia/asyncgo/schema.CustomString"
+		const key = "github.com_RubenRibGarcia_asyncgo_schema.CustomString"
 
 		Register(CustomString{})
 		Register(CustomString{})
@@ -54,7 +54,7 @@ func TestRegister(t *testing.T) {
 		// not merely leave the key present: comparing the whole schema catches a
 		// second registration that overwrote the first with something else.
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.NotNil(t, doc.Components)
 		require.Contains(t, doc.Components.Schemas, key)
@@ -66,12 +66,12 @@ func TestFinalize(t *testing.T) {
 	restoreRegistry(t)
 
 	t.Run("should_be_noop_on_nil_document", func(t *testing.T) {
-		assert.NotPanics(t, func() { Finalize(nil) })
+		assert.NotPanics(t, func() { require.NoError(t, Finalize(nil)) })
 	})
 
 	t.Run("should_not_overwrite_existing_schemas", func(t *testing.T) {
 		Register(CustomString{})
-		const key = "github.com/RubenRibGarcia/asyncgo/schema.CustomString"
+		const key = "github.com_RubenRibGarcia_asyncgo_schema.CustomString"
 
 		sentinel := &spec.Schema{Type: "sentinel"}
 		doc := spec.New()
@@ -79,7 +79,7 @@ func TestFinalize(t *testing.T) {
 			Schemas: map[string]*spec.Schema{key: sentinel},
 		}
 
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		assert.Same(t, sentinel, doc.Components.Schemas[key])
 		assert.Equal(t, "sentinel", doc.Components.Schemas[key].Type)

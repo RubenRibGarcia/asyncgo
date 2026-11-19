@@ -10,12 +10,15 @@ import (
 	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/taggrammar"
+	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"golang.org/x/tools/go/packages"
 )
 
-// descriptions maps a hoisted schema name (pkgPath.TypeName) to a map of JSON
-// field name -> doc-comment text.
+// descriptions maps a hoisted schema's components key to a map of JSON field
+// name -> doc-comment text. The key is schema.ComponentKey of the type's fully
+// qualified name: the same key reflection-based derivation hoists the type
+// under, which is what lets applyDescriptions find it.
 type descriptions map[string]map[string]string
 
 // extractDescriptions walks the scannable packages' syntax and collects the doc
@@ -46,7 +49,11 @@ func extractDescriptions(pkgs []*packages.Package) descriptions {
 			if !ok || tn.Pkg() == nil {
 				return
 			}
-			out[tn.Pkg().Path()+"."+tn.Name()] = collectFieldDescriptions(pkg, st, named)
+			out[schema.ComponentKey(tn.Pkg().Path()+"."+tn.Name())] = collectFieldDescriptions(
+				pkg,
+				st,
+				named,
+			)
 		},
 	)
 	return out

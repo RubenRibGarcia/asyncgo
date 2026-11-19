@@ -6,6 +6,7 @@ import (
 	"maps"
 	"regexp"
 
+	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
@@ -107,6 +108,7 @@ func Spec(items ...Item) *SpecResult {
 	errs = append(errs, b.validateOperationMessages()...)
 	errs = append(errs, b.validateTraitRefs()...)
 	errs = append(errs, b.validateSchemaNodes()...)
+	errs = append(errs, schema.KeyCollisionErrors()...)
 	if len(b.defs) > 0 {
 		c := b.components()
 		maps.Copy(c.Schemas, b.defs)
@@ -130,16 +132,20 @@ func (b *builder) components() *spec.Components {
 // schema constrains keys this way rather than with additionalProperties: false
 // — so this check is the only place the constraint is enforced, the same
 // situation validateReplyRefs documents for the address/channel MUST.
-const componentKeyPatternSrc = `^[\w\d.\-_]+$`
+//
+// The pattern is schema.ComponentKeyPattern: the same constant derivation uses to
+// sanitize a type's fully qualified name into a key (schema.ComponentKey), so an
+// authored key and a derived one are held to one rule. A key derived from a Go
+// type therefore conforms rather than being exempt.
+const componentKeyPatternSrc = schema.ComponentKeyPattern
 
 var componentKeyPattern = regexp.MustCompile(componentKeyPatternSrc)
 
 // validateKey reports a component key that does not match the specification's
 // pattern. kind names the component map ("schema", "securityScheme", ...) so
-// the message names the offending object. Keys derived from a Go type's fully
-// qualified name are never passed here: they carry the package path, whose
-// separators the pattern rejects, and that kept deviation is recorded under B11
-// in docs/asyncapi-3.1.0-coverage.md.
+// the message names the offending object. Keys derived from a Go type's name are
+// sanitized by schema.ComponentKey, so they are held to the same pattern as an
+// authored name rather than exempted from it.
 func validateKey(kind, name string) error {
 	if componentKeyPattern.MatchString(name) {
 		return nil

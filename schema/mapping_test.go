@@ -94,12 +94,14 @@ func isolateMappings(t *testing.T) {
 	t.Helper()
 
 	savedRegistry := maps.Clone(mappingRegistry)
+	savedNames := maps.Clone(mappingName)
 	savedAliases := maps.Clone(aliasRegistry)
 	savedConsulted := maps.Clone(consulted)
 	savedBuiltins := maps.Clone(builtins)
 	savedDeferred := maps.Clone(deferredPayloads)
 	t.Cleanup(func() {
 		mappingRegistry = savedRegistry
+		mappingName = savedNames
 		aliasRegistry = savedAliases
 		consulted = savedConsulted
 		builtins = savedBuiltins
@@ -107,6 +109,7 @@ func isolateMappings(t *testing.T) {
 	})
 
 	clear(mappingRegistry)
+	clear(mappingName)
 	clear(aliasRegistry)
 	clear(consulted)
 	clear(builtins)
@@ -319,7 +322,7 @@ func TestMappingFinalize(t *testing.T) {
 		Register(mappingUUID{})
 
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.Contains(t, doc.Components.Schemas, mappingUUIDName)
 		hoisted := doc.Components.Schemas[mappingUUIDName]
@@ -340,7 +343,7 @@ func TestMappingFinalize(t *testing.T) {
 		assert.Equal(t, "null", members[1].Type)
 
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		// The directive's $ref has to resolve, and to the mapping rather than to
 		// an array of integers.
@@ -354,7 +357,7 @@ func TestMappingFinalize(t *testing.T) {
 		Register(mappingOrderID{})
 
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.Contains(t, doc.Components.Schemas, mappingOrderIDName)
 		assert.Equal(t, "uuid", doc.Components.Schemas[mappingOrderIDName].Format)
@@ -544,8 +547,12 @@ func TestBuiltinMappings(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Contains(t, mappingRegistry, tc.fqn)
-			s := mappingRegistry[tc.fqn]
+			// The registry is keyed by the components key, so a table row written in
+			// the Go spelling of the type is looked up through the same normalization
+			// registration applies.
+			key := ComponentKey(tc.fqn)
+			require.Contains(t, mappingRegistry, key)
+			s := mappingRegistry[key]
 			assert.Equal(t, tc.want, s.Type)
 			assert.Equal(t, tc.format, s.Format)
 			assert.Equal(t, tc.pattern, s.Pattern)
@@ -554,7 +561,12 @@ func TestBuiltinMappings(t *testing.T) {
 
 	isolated(t, "should_flag_every_table_entry_as_builtin", func(t *testing.T) {
 		for _, tc := range tests {
-			assert.True(t, builtins[tc.fqn], "%s must be excluded from warnings", tc.fqn)
+			assert.True(
+				t,
+				builtins[ComponentKey(tc.fqn)],
+				"%s must be excluded from warnings",
+				tc.fqn,
+			)
 		}
 	})
 

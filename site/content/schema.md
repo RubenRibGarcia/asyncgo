@@ -32,7 +32,7 @@ declarations. Nothing here needs a hand-written schema.
   field emits `$ref`s to the named types, which are hoisted automatically.
 - **Custom types** — a named type implementing `spec.SchemaProvider` overrides
   derivation: its `AsyncAPISchema()` result is hoisted under the type's
-  fully-qualified name as-is, and referenced via `$ref` from every use site. This
+  components key as-is, and referenced via `$ref` from every use site. This
   works for structs and for named non-structs alike — see
   [Custom types](custom-types.md).
 - **Declared mappings** — a mapping registered for a type's fully-qualified name

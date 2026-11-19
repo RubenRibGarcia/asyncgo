@@ -26,15 +26,22 @@ const maxAliasDepth = 32
 var builtinMappings []byte
 
 var (
-	// mappingRegistry maps a fully-qualified type name (pkgPath.TypeName) to the
-	// schema that overrides derivation for that type. Populated by
-	// MapSchema/MapSchemaByName (built-ins, user init, generated harness main) and
-	// read by FromType. Not safe for concurrent use, matching registry in
-	// registry.go: registration finishes before derivation starts.
+	// mappingRegistry maps a type's components key — Name's sanitized form of its
+	// fully-qualified name (pkgPath.TypeName) — to the schema that overrides
+	// derivation for that type. Populated by MapSchema/MapSchemaByName (built-ins,
+	// user init, generated harness main) and read by FromType. Not safe for
+	// concurrent use, matching registry in registry.go: registration finishes
+	// before derivation starts.
 	mappingRegistry = map[string]*spec.Schema{}
 
-	// aliasRegistry maps a derived alias's fully-qualified name to the name of
-	// the type it was declared from (`pkg.OrderID` -> `github.com/gofrs/uuid.UUID`).
+	// mappingName records the spelling each mapping was registered under, keyed by
+	// the same components key. A mapping is accepted in the fully-qualified form
+	// ("pkgPath.TypeName"), so the slash form is what MappingWarnings has to echo
+	// back: a warning the author cannot find in asyncgo.yaml is no warning.
+	mappingName = map[string]string{}
+
+	// aliasRegistry maps a derived alias's components key to the key of the type
+	// it was declared from (`pkg.OrderID` -> `github.com/gofrs/uuid.UUID`).
 	// Reflection cannot walk that link, so the discovery pass emits an edge per
 	// `type X Y` declaration and the harness records it with MapAlias.
 	aliasRegistry = map[string]string{}
@@ -106,10 +113,14 @@ func MapSchemaByName(fqn string, s *spec.Schema) {
 // empty or self-referential edge is ignored rather than reported: it cannot
 // resolve to a mapping, and a mapping that never applies is already warned about.
 func MapAlias(aliasFQN, baseFQN string) {
-	if aliasFQN == "" || baseFQN == "" || aliasFQN == baseFQN {
+	if aliasFQN == "" || baseFQN == "" {
 		return
 	}
-	aliasRegistry[aliasFQN] = baseFQN
+	alias, base := ComponentKey(aliasFQN), ComponentKey(baseFQN)
+	if alias == base {
+		return
+	}
+	aliasRegistry[alias] = base
 }
 
 // MapSchemaJSON registers the schema encoded as JSON as the derivation override
@@ -131,30 +142,39 @@ func MapSchemaJSON(fqn, payload string) error {
 // Built-in mappings never warn: they are always registered and usually unused.
 func MappingWarnings() []string {
 	var out []string
-	for fqn := range mappingRegistry {
-		if builtins[fqn] || consulted[fqn] {
+	for key := range mappingRegistry {
+		if builtins[key] || consulted[key] {
 			continue
 		}
-		out = append(out, fqn)
+		name := key
+		if declared, ok := mappingName[key]; ok {
+			name = declared
+		}
+		out = append(out, name)
 	}
 	sort.Strings(out)
 	return out
 }
 
 // registerMapping is the single write path for mappingRegistry, so the built-in
-// bookkeeping cannot drift between the three callers.
+// bookkeeping cannot drift between the three callers. The name is normalized to
+// the components key Name produces, so a mapping registered under the Go spelling
+// of a type ("github.com/acme/orders.T", as asyncgo.yaml and the generated
+// harness write it) matches the type at derivation time.
 func registerMapping(fqn string, s *spec.Schema, builtin bool) {
 	if s == nil {
 		panic("schema: mapping for " + fqn + " is nil")
 	}
-	mappingRegistry[fqn] = s
+	key := ComponentKey(fqn)
+	mappingRegistry[key] = s
+	mappingName[key] = fqn
 	// Re-registration replaces (last wins), including a built-in: a project that
 	// overrides time.Time or a third-party entry takes ownership of the name.
 	if builtin {
-		builtins[fqn] = true
+		builtins[key] = true
 		return
 	}
-	delete(builtins, fqn)
+	delete(builtins, key)
 }
 
 // registerJSONMapping decodes a JSON Schema Object and registers it. Both the

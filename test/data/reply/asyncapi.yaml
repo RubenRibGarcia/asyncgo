@@ -33,14 +33,14 @@ operations:
     - $ref: "#/channels/order-replies/messages/OrderAccepted"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/reply.OrderAccepted:
+    github.com_RubenRibGarcia_asyncgo_test_data_reply.OrderAccepted:
       type: object
       properties:
         order_id:
           type: string
       required:
       - order_id
-    github.com/RubenRibGarcia/asyncgo/test/data/reply.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_reply.OrderPlaced:
       type: object
       properties:
         order_id:
@@ -50,11 +50,11 @@ components:
   messages:
     OrderAccepted:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderAccepted"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_reply.OrderAccepted"
       name: OrderAccepted
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1reply.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_reply.OrderPlaced"
       name: OrderPlaced
   replies:
     OrderAcceptedReply:

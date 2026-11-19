@@ -3,11 +3,14 @@ package integration
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/discovery"
+	"github.com/RubenRibGarcia/asyncgo/schema"
 	"github.com/RubenRibGarcia/asyncgo/spec"
 	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
@@ -83,6 +86,49 @@ var cliUnsupported = map[string]string{
 // When the generator output changes, regenerate with:
 //
 //	go run ./cmd/asyncgo generate ./test/data/<name>
+//
+// assertComponentKeys asserts that every key in every components fixed field of
+// doc matches the specification's key pattern. The constraint lives in
+// `patternProperties`, so `asyncapi validate` accepts a violating key rather than
+// rejecting it — this assertion is what holds a generated key to the same rule as
+// an authored one, over every fixture rather than one shape.
+func assertComponentKeys(t *testing.T, doc *spec.AsyncAPI) {
+	t.Helper()
+	if doc.Components == nil {
+		return
+	}
+	c := doc.Components
+	fields := []struct {
+		kind string
+		keys []string
+	}{
+		{"schemas", slices.Sorted(maps.Keys(c.Schemas))},
+		{"servers", slices.Sorted(maps.Keys(c.Servers))},
+		{"channels", slices.Sorted(maps.Keys(c.Channels))},
+		{"operations", slices.Sorted(maps.Keys(c.Operations))},
+		{"messages", slices.Sorted(maps.Keys(c.Messages))},
+		{"securitySchemes", slices.Sorted(maps.Keys(c.SecuritySchemes))},
+		{"parameters", slices.Sorted(maps.Keys(c.Parameters))},
+		{"correlationIds", slices.Sorted(maps.Keys(c.CorrelationIDs))},
+		{"operationTraits", slices.Sorted(maps.Keys(c.OperationTraits))},
+		{"messageTraits", slices.Sorted(maps.Keys(c.MessageTraits))},
+		{"replies", slices.Sorted(maps.Keys(c.Replies))},
+		{"replyAddresses", slices.Sorted(maps.Keys(c.ReplyAddresses))},
+	}
+	for _, field := range fields {
+		for _, key := range field.keys {
+			assert.Regexp(
+				t,
+				schema.ComponentKeyPattern,
+				key,
+				"components.%s key %q",
+				field.kind,
+				key,
+			)
+		}
+	}
+}
+
 func TestAsyncGoGenerate(t *testing.T) {
 	for _, name := range fixtures {
 		t.Run(name, func(t *testing.T) {
@@ -91,6 +137,8 @@ func TestAsyncGoGenerate(t *testing.T) {
 
 			doc, _, err := discovery.Build(t.Context(), dir, discovery.Options{})
 			require.NoError(t, err)
+
+			assertComponentKeys(t, doc)
 
 			got, err := doc.YAML()
 			require.NoError(t, err)

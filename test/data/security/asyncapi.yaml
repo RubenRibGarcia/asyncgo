@@ -30,7 +30,7 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/security.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_security.OrderPlaced:
       type: object
       properties:
         amount:
@@ -44,7 +44,7 @@ components:
   messages:
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1security.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_security.OrderPlaced"
       name: OrderPlaced
   securitySchemes:
     apiKeyAuth:

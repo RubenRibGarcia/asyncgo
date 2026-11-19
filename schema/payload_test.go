@@ -44,7 +44,7 @@ func TestRederivePayloads(t *testing.T) {
 
 		// The harness registers asyncgo.yaml's mappings after the catalogs are built.
 		MapSchemaByName(mappingUUIDName, uuidSchema())
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		id = doc.Components.Schemas[mappingPayloadName].Properties["id"]
 		require.NotNil(t, id)
@@ -57,7 +57,7 @@ func TestRederivePayloads(t *testing.T) {
 		require.Contains(t, doc.Components.Schemas, mappingRecordName)
 
 		MapSchemaByName(mappingRecordName, &spec.Schema{Type: "string", Format: "csv"})
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		// A mapped type is inlined at every use site, so the provisional component
 		// is obsolete — and a component nothing references is noise in the document.
@@ -69,7 +69,7 @@ func TestRederivePayloads(t *testing.T) {
 		require.Contains(t, doc.Components.Schemas, mappingRecordName)
 
 		MapSchemaByName(mappingRecordName, &spec.Schema{Type: "string", Format: "csv"})
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		assert.NotContains(t, doc.Components.Schemas, mappingRecordName)
 		rec := doc.Components.Schemas[mappingPayloadName].Properties["rec"]
@@ -85,7 +85,7 @@ func TestRederivePayloads(t *testing.T) {
 		defs[mappingPayloadName].Examples = examples
 
 		MapSchemaByName(mappingUUIDName, uuidSchema())
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		assert.Equal(t, examples, doc.Components.Schemas[mappingPayloadName].Examples)
 	})
@@ -100,7 +100,7 @@ func TestRederivePayloads(t *testing.T) {
 		node.Examples = examples
 
 		MapSchemaByName(mappingUUIDName, uuidSchema())
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		assert.Equal(t, "uuid", msg.Payload.Format)
 		assert.Equal(t, examples, msg.Payload.Examples)
@@ -113,7 +113,7 @@ func TestRederivePayloads(t *testing.T) {
 		require.NotEmpty(t, msg.Payload.Ref)
 
 		MapSchemaByName(mappingUUIDName, uuidSchema())
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		// The message holds the same node it always did; Finalize rewrote its
 		// contents rather than replacing the pointer.
@@ -125,14 +125,14 @@ func TestRederivePayloads(t *testing.T) {
 		doc, _ := buildProvisional(t, reflect.TypeFor[mappingPayload]())
 		require.Contains(t, deferredPayloads, doc)
 
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		assert.NotContains(t, deferredPayloads, doc)
 	})
 
 	isolated(t, "should_leave_a_document_without_deferred_derivations_alone", func(t *testing.T) {
 		doc := spec.New()
-		assert.NotPanics(t, func() { Finalize(doc) })
+		assert.NotPanics(t, func() { require.NoError(t, Finalize(doc)) })
 		assert.Nil(t, doc.Components)
 	})
 

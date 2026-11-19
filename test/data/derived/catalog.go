@@ -3,9 +3,9 @@ package derived
 import "github.com/RubenRibGarcia/asyncgo"
 
 // orderPlaced names no explicit message name, so its components.messages key is
-// the payload type's fully-qualified name — the same key its hoisted schema
-// uses. The same value is carried by both channels, so it is hoisted once and
-// referenced from two channel messages maps.
+// derived from the payload type — the same key its hoisted schema uses. The same
+// value is carried by both channels, so it is hoisted once and referenced from
+// two channel messages maps.
 var orderPlaced = asyncgo.MessageOf(OrderPlaced{})
 
 // Catalog is the AsyncAPI description of an order service that publishes one

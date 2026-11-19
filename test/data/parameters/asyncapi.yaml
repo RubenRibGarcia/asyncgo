@@ -30,7 +30,7 @@ operations:
     - $ref: "#/channels/users.{userId}/messages/UserUpdated"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/parameters.UserUpdated:
+    github.com_RubenRibGarcia_asyncgo_test_data_parameters.UserUpdated:
       type: object
       properties:
         userId:
@@ -40,5 +40,5 @@ components:
   messages:
     UserUpdated:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1parameters.UserUpdated"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_parameters.UserUpdated"
       name: UserUpdated
