@@ -60,7 +60,7 @@ func TestSpecBuildsDocument(t *testing.T) {
 	require.NotNil(t, msg.Payload)
 	assert.NotEmpty(t, msg.Payload.Ref)
 
-	const key = "github.com/RubenRibGarcia/asyncgo.OrderPlaced"
+	const key = "github.com_RubenRibGarcia_asyncgo.OrderPlaced"
 	require.Contains(t, doc.Components.Schemas, key)
 	assert.Len(t, doc.Components.Schemas[key].Required, 2)
 
@@ -133,7 +133,7 @@ func TestFinalizeRedrivesPayloadWithDeclaredMapping(t *testing.T) {
 	assert.Equal(t, "array", id.Type)
 
 	schema.MapSchemaByName(idKey, &spec.Schema{Type: "string", Format: "uuid"})
-	schema.Finalize(doc)
+	require.NoError(t, schema.Finalize(doc))
 
 	id = doc.Components.Schemas[payloadKey].Properties["id"]
 	require.NotNil(t, id)

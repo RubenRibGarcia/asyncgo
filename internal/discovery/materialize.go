@@ -349,9 +349,17 @@ func harness(plan Plan) string {
 		b.WriteString("\t\tout.Catalogs = append(out.Catalogs, c)\n")
 		b.WriteString("\t}\n")
 	}
-	b.WriteString(
-		"\tfor _, c := range out.Catalogs {\n\t\tif c.Doc != nil {\n\t\t\tschema.Finalize(c.Doc)\n\t\t}\n\t}\n",
-	)
+	// Finalize runs after every catalog's own validation, so a failure it reports —
+	// two types that derive to one components key (schema.KeyCollisionErrors) — is
+	// appended to the catalog it was finalizing. By index, not by range value: the
+	// error has to land in out.Catalogs, and Materialize treats a catalog carrying
+	// errors as invalid rather than writing the document it could not represent.
+	b.WriteString("\tfor i := range out.Catalogs {\n")
+	b.WriteString("\t\tc := &out.Catalogs[i]\n")
+	b.WriteString("\t\tif c.Doc == nil {\n\t\t\tcontinue\n\t\t}\n")
+	b.WriteString("\t\tif err := schema.Finalize(c.Doc); err != nil {\n")
+	b.WriteString("\t\t\tc.Errors = append(c.Errors, err.Error())\n")
+	b.WriteString("\t\t}\n\t}\n")
 	b.WriteString("\tout.Warnings = schema.MappingWarnings()\n")
 	b.WriteString(
 		"\toutBytes, err := yaml.Marshal(out)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tif _, err := os.Stdout.Write(outBytes); err != nil {\n\t\tpanic(err)\n\t}\n}\n",

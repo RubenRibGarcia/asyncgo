@@ -57,9 +57,13 @@ artifact.
    duplication); topology is declared once in a typed, compiler-checked catalog
    (no magic-string comments).
 
-2. **Fully-qualified schema names** — hoisted schemas are keyed
-   `pkgPath.TypeName` (e.g. `example.com/orders/orders.OrderPlaced`); `$ref`
-   escapes `/`→`~1`, `~`→`~0` per RFC 6901.
+2. **Fully-qualified schema names** — a hoisted schema is keyed by the type's
+   fully-qualified name with the import path sanitized into a components key:
+   every character the specification's key pattern rejects becomes `_`, so
+   `example.com/orders/orders.OrderPlaced` is keyed
+   `example.com_orders_orders.OrderPlaced` (`schema.Name`, `schema.ComponentKey`).
+   The pattern admits no `/`, and a key that misses it is not one a components
+   map may carry. `$ref` carries the key verbatim.
 
 3. **Optional by default** — a field is required only when tagged
    `asyncapi:"required"`. Field descriptions are read from the field's doc
@@ -76,7 +80,7 @@ artifact.
    referenced via `$ref`; only anonymous inline types are inlined. Messages are
    hoisted the same way into `components.messages`: a channel's `messages` entry
    is a `$ref` to the hoisted message, keyed by the authored name or, when
-   `MessageOf` leaves it unset, by the payload type's fully-qualified name.
+   `MessageOf` leaves it unset, by the components key of the payload type's name.
    Operations and replies still point at `#/channels/<id>/messages/<key>` —
    the specification requires their `messages` to be a subset of the messages
    defined in the referenced channel, not of `components.messages`.

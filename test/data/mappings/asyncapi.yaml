@@ -7,8 +7,8 @@ channels:
   order-placed:
     address: order-placed
     messages:
-      github.com/RubenRibGarcia/asyncgo/test/data/mappings.OrderPlaced:
-        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1mappings.OrderPlaced"
+      github.com_RubenRibGarcia_asyncgo_test_data_mappings.OrderPlaced:
+        $ref: "#/components/messages/github.com_RubenRibGarcia_asyncgo_test_data_mappings.OrderPlaced"
     description: Emitted when an order is placed
 operations:
   order-placed.send:
@@ -16,10 +16,10 @@ operations:
     channel:
       $ref: "#/channels/order-placed"
     messages:
-    - $ref: "#/channels/order-placed/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1mappings.OrderPlaced"
+    - $ref: "#/channels/order-placed/messages/github.com_RubenRibGarcia_asyncgo_test_data_mappings.OrderPlaced"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/mappings.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_mappings.OrderPlaced:
       type: object
       properties:
         created_at:
@@ -73,7 +73,7 @@ components:
       required:
       - id
   messages:
-    github.com/RubenRibGarcia/asyncgo/test/data/mappings.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_mappings.OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1mappings.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_mappings.OrderPlaced"
       name: OrderPlaced

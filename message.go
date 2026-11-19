@@ -238,9 +238,12 @@ func messageErrorPath(m *message) string {
 //
 // A name the author set — MessageFrom's name argument, or MessageOf followed by
 // Name — is that identity. Otherwise the name is derived from the payload type,
-// and the key is the type's fully-qualified name (pkgPath.TypeName, as
-// schema.Name defines it), so every channel carrying the same Go type shares one
-// hoisted component while two packages' same-named types stay distinct.
+// and the key is the components key of the type's name (schema.Name, which
+// sanitizes the package path into a conforming key), so every channel carrying
+// the same Go type shares one hoisted component while two packages' same-named
+// types stay distinct. The key always matches the specification's component key
+// pattern: an author-set name is checked against it, and a derived one is
+// sanitized into it.
 func messageKey(m *message) string {
 	if m.name != "" {
 		return m.name

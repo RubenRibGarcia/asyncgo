@@ -11,8 +11,10 @@
 // Derivation rules (per the locked design decisions):
 //
 //   - Named struct types are always hoisted into the provided defs map under
-//     their fully-qualified name ("pkgPath.TypeName") and referenced via $ref
-//     into "#/components/schemas/...".
+//     the components key derived from their fully-qualified name
+//     ("pkgPath.TypeName" sanitized by ComponentKey, e.g.
+//     "github.com_acme_orders.OrderPlaced") and referenced via $ref into
+//     "#/components/schemas/...".
 //   - Anonymous embedded structs are flattened, matching encoding/json, unless
 //     tagged asyncapi:"allOf", in which case the embedded type is composed via
 //     allOf instead (opt-in). An embedded struct carrying an explicit name in
@@ -59,7 +61,7 @@
 //     cannot see comments.
 //   - A named type (struct or non-struct) implementing spec.SchemaProvider
 //     overrides derivation: its AsyncAPISchema() result is hoisted under the
-//     type's fully-qualified name as-is. Non-struct kinds are hoisted only when
+//     type's components key as-is. Non-struct kinds are hoisted only when
 //     they carry a provider, so a plain `type ID string` stays inline.
 //   - Byte slices are base64 strings by kind, so a named `type Raw []byte`
 //     derives the same way []byte does.
@@ -74,7 +76,10 @@ package schema
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/RubenRibGarcia/asyncgo/internal/jsonpointer"
@@ -87,18 +92,26 @@ var (
 	schemaProviderType = reflect.TypeFor[spec.SchemaProvider]()
 )
 
-// Name returns the fully-qualified schema name for a named type:
-// "pkgPath.TypeName" (e.g. "github.com/acme/app/orders.OrderPlaced").
-// Name returns the fully-qualified schema name for a named type:
-// "pkgPath.TypeName" (e.g. "github.com/acme/app/orders.OrderPlaced"). It
-// returns "" for an unnamed type: an anonymous struct, slice, map or interface
-// has no stable name, so it cannot key a component schema. That is the same
-// predicate isNamed enforces internally — only named types are ever hoisted.
+// Name returns the schema name a named type is keyed by in the document:
+// the type's fully-qualified name (pkgPath.TypeName) with the import path
+// sanitized into a components key (ComponentKey), so
+// "github.com/acme/app/orders.OrderPlaced" becomes
+// "github.com_acme_app_orders.OrderPlaced". The specification's key pattern is
+// why: it admits no "/", and a key that misses it is not a key a components map
+// may carry.
+//
+// It returns "" for an unnamed type: an anonymous struct, slice, map or
+// interface has no stable name, so it cannot key a component schema. That is the
+// same predicate isNamed enforces internally — only named types are ever
+// hoisted.
 func Name(t reflect.Type) string {
 	if !isNamed(t) {
 		return ""
 	}
-	return t.PkgPath() + "." + t.Name()
+	fqn := t.PkgPath() + "." + t.Name()
+	key := ComponentKey(fqn)
+	claimComponentKey(key, fqn)
+	return key
 }
 
 // Ref returns the $ref for a hoisted named type, or "" for an unnamed type.
@@ -114,15 +127,16 @@ func Ref(t reflect.Type) string {
 
 // RefByName returns the $ref for a hoisted schema identified by its
 // fully-qualified name ("pkgPath.TypeName"), for combinator directives that
-// resolve names as strings rather than reflect.Type.
+// resolve names as strings rather than reflect.Type. The name is sanitized to
+// the components key the schema is hoisted under (ComponentKey), so a directive
+// keeps naming the type the way Go does.
 func RefByName(fqn string) string {
-	return "#/components/schemas/" + jsonpointer.Escape(fqn)
+	return "#/components/schemas/" + jsonpointer.Escape(ComponentKey(fqn))
 }
 
 // FromType derives a JSON Schema for t. Named struct types, and named
 // non-struct types implementing spec.SchemaProvider, are hoisted into defs
-// (keyed by their fully-qualified name) and returned as a $ref; all other types
-// are inlined.
+// (keyed by Name) and returned as a $ref; all other types are inlined.
 //
 // The returned schema describes a non-nil instance of t: nullability is a
 // property of the position a type occupies, so FromType never wraps its own
@@ -558,4 +572,146 @@ func jsonName(f reflect.StructField) (string, bool) {
 func hasExplicitJSONName(f reflect.StructField) bool {
 	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 	return name != ""
+}
+
+// ComponentKeyPattern is the pattern the AsyncAPI 3.1.0 specification applies to
+// every key of a components fixed field — schemas, messages, securitySchemes and
+// the rest of componentsObject — where it is expressed as patternProperties. The
+// root package reuses this constant for the keys an author writes, so the two
+// enforcement points cannot disagree.
+const ComponentKeyPattern = `^[\w\d.\-_]+$`
+
+// componentKeyPatternRE is the compiled form of ComponentKeyPattern. Derivation
+// filters characters with componentKeyRune rather than a regexp, since Name runs
+// on every type in a document; the pattern is kept compiled so the conformance
+// test can hold the two to the same answer.
+var componentKeyPatternRE = regexp.MustCompile(ComponentKeyPattern)
+
+// ComponentKey returns the key a components fixed field uses for a fully
+// qualified type name (pkgPath.TypeName, the form Name produces).
+//
+// An import path is not a valid components key: the specification's pattern
+// admits letters, digits, dots, hyphens and underscores, and pkgPath carries
+// "/". The key therefore keeps the pkgPath.TypeName shape and replaces every
+// character the pattern rejects with "_":
+//
+//	github.com/acme/orders.OrderPlaced  ->  github.com_acme_orders.OrderPlaced
+//
+// The dot before the type name survives — it is admitted by the pattern — so the
+// key stays readable and stays distinct per package and type. The transform is
+// idempotent: an already conforming name comes back unchanged.
+//
+// It is lossy. Two import paths that differ only by "_" against "/" sanitize to
+// one key (a/b_c.T and a_b/c.T both give a_b_c.T), so the second type would
+// overwrite the first in the components map. Name records that case — it is the
+// point where a key comes from a real Go type — and KeyCollisionErrors reports
+// it instead of letting it pass silently.
+func ComponentKey(fqn string) string {
+	if !strings.ContainsFunc(fqn, func(r rune) bool { return !componentKeyRune(r) }) {
+		return fqn
+	}
+	var b strings.Builder
+	b.Grow(len(fqn) + 8)
+	for _, r := range fqn {
+		if componentKeyRune(r) {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteByte('_')
+	}
+	return b.String()
+}
+
+// componentKeyRune reports whether r may appear in a components key. It is
+// ComponentKeyPattern applied per rune, and every non-ASCII rune — a Unicode
+// letter in an import path or a type name — is rejected: the pattern is ASCII.
+func componentKeyRune(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	case r == '.', r == '-', r == '_':
+		return true
+	default:
+		return false
+	}
+}
+
+// KeyCollision is one components key produced by two different fully qualified
+// type names. The key can hold one schema, so the second name's type is not
+// representable in the document.
+type KeyCollision struct {
+	Key    string // the shared components key
+	First  string // the fully qualified name that claimed the key first
+	Second string // the fully qualified name that also produced it
+}
+
+var (
+	// componentKeyOwner maps a components key to the first fully qualified name
+	// that produced it. It is what makes a collision detectable at all: the
+	// transform drops the "/" that told the two names apart.
+	componentKeyOwner = map[string]string{}
+
+	// componentKeyCollisions collects the collisions detected since the last
+	// drain, and collided marks the keys already recorded, so a derivation that
+	// revisits a type does not append the same pair again.
+	componentKeyCollisions []KeyCollision
+	collided               = map[string]bool{}
+)
+
+// claimComponentKey records that fqn produced key, and notes a collision the
+// first time a second name produces it. Only Name calls it: a name that reaches
+// ComponentKey as a string — a combinator directive, a mapping, a $ref lookup —
+// may already be the key, so it cannot be told apart from a different type's
+// name and would report a collision against itself.
+func claimComponentKey(key, fqn string) {
+	if key == "" {
+		return
+	}
+	owner, claimed := componentKeyOwner[key]
+	if !claimed {
+		componentKeyOwner[key] = fqn
+		return
+	}
+	if owner == fqn || collided[key] {
+		return
+	}
+	collided[key] = true
+	componentKeyCollisions = append(
+		componentKeyCollisions,
+		KeyCollision{Key: key, First: owner, Second: fqn},
+	)
+}
+
+// KeyCollisionErrors returns one error per components key that two different
+// fully qualified type names produced, and clears the list so the same collision
+// is reported once per drain window.
+//
+// It is drained rather than merely read because the report has to reach a caller
+// that owns an error channel: builder.Spec joins it into a catalog's errors and
+// Finalize returns it, so a document that would silently drop a schema fails
+// instead. Detection is process-wide — Name claims the key where the derivation
+// happens, which is the only place that knows a key came from a Go type.
+func KeyCollisionErrors() []error {
+	if len(componentKeyCollisions) == 0 {
+		return nil
+	}
+	collisions := componentKeyCollisions
+	componentKeyCollisions = nil
+	clear(collided)
+	errs := make([]error, 0, len(collisions))
+	for _, c := range collisions {
+		errs = append(errs, fmt.Errorf(
+			"components key %q is claimed by both %s and %s",
+			c.Key,
+			c.First,
+			c.Second,
+		))
+	}
+	return errs
+}
+
+// collisionError is KeyCollisionErrors joined into a single error, for the
+// callers whose signature carries one error rather than a list.
+func collisionError() error {
+	return errors.Join(KeyCollisionErrors()...)
 }

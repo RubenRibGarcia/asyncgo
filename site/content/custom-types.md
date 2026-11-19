@@ -72,7 +72,7 @@ type OrderPlaced struct {
 #     type: object
 #     properties:
 #       order_id:
-#         $ref: "#/components/schemas/github.com~1acme~1orders.OrderID"
+#         $ref: "#/components/schemas/github.com_acme_orders.OrderID"
 #     required:
 #     - order_id
 ```

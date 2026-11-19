@@ -81,18 +81,18 @@ var Catalog = asyncgo.Spec(
 #   order-placed:
 #     address: order-placed
 #     messages:
-#       github.com/acme/orders.OrderPlaced:
-#         $ref: '#/components/messages/github.com~1acme~1orders.OrderPlaced'
+#       github.com_acme_orders.OrderPlaced:
+#         $ref: '#/components/messages/github.com_acme_orders.OrderPlaced'
 # operations:
 #   order-placed.send:
 #     messages:
-#     - $ref: '#/channels/order-placed/messages/github.com~1acme~1orders.OrderPlaced'
+#     - $ref: '#/channels/order-placed/messages/github.com_acme_orders.OrderPlaced'
 # components:
 #   messages:
-#     github.com/acme/orders.OrderPlaced:
+#     github.com_acme_orders.OrderPlaced:
 #       name: OrderPlaced
 #       payload:
-#         $ref: '#/components/schemas/github.com~1acme~1orders.OrderPlaced'
+#         $ref: '#/components/schemas/github.com_acme_orders.OrderPlaced'
 ```
 
 ### Message identity
@@ -100,12 +100,14 @@ var Catalog = asyncgo.Spec(
 The component key is the message's identity, and it is also the channel's
 message id. A name you set — `MessageFrom("Name", ...)` or
 `MessageOf(T{}).Name("Name")` — is that key; an unpinned `MessageOf` derives it
-from the payload type's fully-qualified name, so `Name(...)` is how you keep the
-key short.
+from the payload type, so `Name(...)` is how you keep the key short.
 
-A key you set must match `^[\w\d\.\-_]+$` — the pattern the specification applies
-to every `components.*` map — while a key derived from the fully-qualified name is
-exempt: the package separators it carries cannot match that pattern.
+Every key matches `^[\w\d\.\-_]+$` — the pattern the specification applies to
+every `components.*` map. A key you set is checked against it; a key derived from
+a type's fully-qualified name is sanitized into it, because an import path
+carries `/`, which the pattern rejects. `github.com/acme/orders.OrderPlaced`
+becomes `github.com_acme_orders.OrderPlaced`: the shape stays readable, and the
+dot before the type name survives.
 
 Two channels carrying the same message share one component, while the same key
 carrying different content is a catalog validation error. Operations and replies

@@ -28,8 +28,8 @@ func (Money) AsyncAPISchema() *spec.Schema {
 type OrderID string
 
 // AsyncAPISchema declares the wire schema for the named string; being a
-// non-struct provider, it is hoisted under its fully-qualified name and
-// referenced via $ref, exactly like Money.
+// non-struct provider, it is hoisted under its components key and referenced
+// via $ref, exactly like Money.
 func (OrderID) AsyncAPISchema() *spec.Schema {
 	minLen := uint64(10)
 	return &spec.Schema{

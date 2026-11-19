@@ -16,7 +16,7 @@ func TestExtractDescriptionsSimple(t *testing.T) {
 	require.NoError(t, err)
 	desc := extractDescriptions(pkgs)
 
-	const key = "github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced"
+	const key = "github.com_RubenRibGarcia_asyncgo_test_data_simple.OrderPlaced"
 	require.Contains(t, desc, key)
 	assert.Equal(t, "Optional note from the customer", desc[key]["note"])
 }
@@ -29,7 +29,7 @@ func TestExtractDescriptionsAllOf(t *testing.T) {
 	require.NoError(t, err)
 	desc := extractDescriptions(pkgs)
 
-	const key = "github.com/RubenRibGarcia/asyncgo/test/data/allof.OrderPlaced"
+	const key = "github.com_RubenRibGarcia_asyncgo_test_data_allof.OrderPlaced"
 	require.Contains(t, desc, key)
 	// Embedded BaseSchema.ID is flattened into OrderPlaced under "id".
 	assert.Equal(t, "Unique identifier for the order", desc[key]["id"])

@@ -7,10 +7,11 @@ import (
 	"github.com/RubenRibGarcia/asyncgo/spec"
 )
 
-// registry maps a fully-qualified type name (pkgPath.TypeName) to its
-// reflect.Type. It is populated by generated harness code (Register) and
-// consumed by Finalize to hoist the schemas that combinator directives
-// reference by name — types reflection cannot reach on its own.
+// registry maps a type's components key — Name's sanitized form of its
+// fully-qualified name (pkgPath.TypeName) — to its reflect.Type. It is populated
+// by generated harness code (Register) and consumed by Finalize to hoist the
+// schemas that combinator directives reference by name — types reflection cannot
+// reach on its own.
 var registry = map[string]reflect.Type{}
 
 // Register records types by fully-qualified name for combinator resolution.
@@ -32,7 +33,7 @@ func Register(types ...any) {
 }
 
 // Finalize hoists every registered type into doc.Components.Schemas so the
-// $refs emitted by FromType resolve. Types are derived in sorted-FQN order for
+// $refs emitted by FromType resolve. Types are derived in sorted-key order for
 // deterministic output, and existing schemas are never overwritten.
 //
 // It also completes the document's payload schemas: a catalog derives them while
@@ -41,9 +42,14 @@ func Register(types ...any) {
 // (see FromTypePayload). A catalog document therefore has to be finalized before
 // it is merged into another: the deferred derivations are attached to the
 // document object, not to its contents.
-func Finalize(doc *spec.AsyncAPI) {
+//
+// The returned error reports components keys that two different types produced
+// (see ComponentKey), so a document that cannot represent a hoisted type fails
+// instead of losing one silently. The generated harness records it against the
+// catalog it was finalizing.
+func Finalize(doc *spec.AsyncAPI) error {
 	if doc == nil {
-		return
+		return nil
 	}
 
 	rederivePayloads(doc)
@@ -69,7 +75,7 @@ func Finalize(doc *spec.AsyncAPI) {
 		FromType(registry[name], defs)
 	}
 	if len(defs) == 0 {
-		return
+		return collisionError()
 	}
 
 	if doc.Components == nil {
@@ -83,4 +89,5 @@ func Finalize(doc *spec.AsyncAPI) {
 			doc.Components.Schemas[name] = s
 		}
 	}
+	return collisionError()
 }

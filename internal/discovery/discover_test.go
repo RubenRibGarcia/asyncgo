@@ -94,7 +94,7 @@ func TestFindMaterializeMerge(t *testing.T) {
 	require.Contains(t, ch.Messages, "OrderPlaced")
 
 	// Schema is hoisted under the fully-qualified type name.
-	const key = "github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced"
+	const key = "github.com_RubenRibGarcia_asyncgo_test_data_simple.OrderPlaced"
 	require.Contains(t, merged.Components.Schemas, key)
 	assert.Len(t, merged.Components.Schemas[key].Required, 2)
 }

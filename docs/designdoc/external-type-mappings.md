@@ -544,7 +544,7 @@ mappings:
 Before (kind derivation — `uuid.UUID` is a named `[16]byte`):
 
 ```yaml
-github.com/acme/orders.OrderPlaced:
+github.com_acme_orders.OrderPlaced:
   type: object
   properties:
     id:
@@ -561,7 +561,7 @@ github.com/acme/orders.OrderPlaced:
 After:
 
 ```yaml
-github.com/acme/orders.OrderPlaced:
+github.com_acme_orders.OrderPlaced:
   type: object
   properties:
     id:    { type: string, format: uuid }

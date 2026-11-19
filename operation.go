@@ -109,8 +109,8 @@ func (o *operation) build(
 		}
 		key := messageKey(m)
 		// The key becomes the message's components.messages key, which the
-		// specification patterns. A key derived from the payload type's fully
-		// qualified name is exempt: appendKeyError skips an unauthored name.
+		// specification patterns. An author-set name is checked against that pattern;
+		// a key derived from the payload type is sanitized into it (schema.Name).
 		errs = appendKeyError(errs, "message", m.name)
 		entry, err := hoistMessage(b, key, "channel."+address, sm)
 		if err != nil {

@@ -583,7 +583,7 @@ operations:
     - $ref: "#/channels/orders-ws/messages/WSEvent"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/bindings.Event:
+    github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event:
       type: object
       properties:
         id:
@@ -593,14 +593,14 @@ components:
   messages:
     AMQP1Event:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: AMQP1Event
       bindings:
         amqp1:
           bindingVersion: 0.1.0
     AMQPEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: AMQPEvent
       bindings:
         amqp:
@@ -609,7 +609,7 @@ components:
           messageType: order
     AnypointMQEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: AnypointMQEvent
       bindings:
         anypointmq:
@@ -618,7 +618,7 @@ components:
             type: object
     GooglePubSubEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: GooglePubSubEvent
       bindings:
         googlepubsub:
@@ -630,7 +630,7 @@ components:
             name: projects/orders/schemas/orders
     HTTPEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: HTTPEvent
       bindings:
         http:
@@ -640,7 +640,7 @@ components:
           statusCode: 201
     IBMMQEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: IBMMQEvent
       bindings:
         ibmmq:
@@ -651,7 +651,7 @@ components:
           type: binary
     JMSEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: JMSEvent
       bindings:
         jms:
@@ -660,7 +660,7 @@ components:
             type: object
     KafkaEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: KafkaEvent
       bindings:
         kafka:
@@ -672,7 +672,7 @@ components:
           schemaLookupStrategy: TopicNameStrategy
     MQTTEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: MQTTEvent
       bindings:
         mqtt:
@@ -684,57 +684,57 @@ components:
           responseTopic: orders/reply
     NATSEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: NATSEvent
       bindings:
         nats:
           bindingVersion: 0.1.0
     PulsarEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: PulsarEvent
     ROS2Event:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: ROS2Event
     RedisEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: RedisEvent
       bindings:
         redis:
           bindingVersion: 0.1.0
     SNSEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: SNSEvent
       bindings:
         sns:
           bindingVersion: 0.1.0
     SQSEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: SQSEvent
       bindings:
         sqs:
           bindingVersion: 0.2.0
     SolaceEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: SolaceEvent
       bindings:
         solace:
           bindingVersion: 0.4.0
     StompEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: StompEvent
       bindings:
         stomp:
           bindingVersion: 0.1.0
     WSEvent:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bindings.Event"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bindings.Event"
       name: WSEvent
       bindings:
         ws:

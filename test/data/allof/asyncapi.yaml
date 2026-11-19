@@ -32,7 +32,7 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/allof.BaseSchema:
+    github.com_RubenRibGarcia_asyncgo_test_data_allof.BaseSchema:
       type: object
       properties:
         id:
@@ -40,10 +40,10 @@ components:
           description: Unique identifier for the order
       required:
       - id
-    github.com/RubenRibGarcia/asyncgo/test/data/allof.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_allof.OrderPlaced:
       type: object
       allOf:
-      - $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1allof.BaseSchema"
+      - $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_allof.BaseSchema"
       - type: object
         properties:
           amount:
@@ -57,5 +57,5 @@ components:
   messages:
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1allof.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_allof.OrderPlaced"
       name: OrderPlaced

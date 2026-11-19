@@ -187,9 +187,10 @@ func TestSchemaValidationErrors(t *testing.T) {
 					),
 				)
 			},
+			// The declared name is the type's own components key, so it conforms to the
+			// key pattern; the error left is the collision with the schema derivation
+			// hoists under that key, which first entry wins rather than overwriting.
 			want: "schema." + schema.Name(reflect.TypeFor[OrderPlaced]()) +
-				": name must match ^[\\w\\d.\\-_]+$" +
-				"\nschema." + schema.Name(reflect.TypeFor[OrderPlaced]()) +
 				": collides with an auto-hoisted schema of the same name",
 		},
 		{

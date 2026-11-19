@@ -7,8 +7,8 @@ channels:
   attachment-uploaded:
     address: attachment-uploaded
     messages:
-      github.com/RubenRibGarcia/asyncgo/test/data/bytes.Attachment:
-        $ref: "#/components/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bytes.Attachment"
+      github.com_RubenRibGarcia_asyncgo_test_data_bytes.Attachment:
+        $ref: "#/components/messages/github.com_RubenRibGarcia_asyncgo_test_data_bytes.Attachment"
     description: Emitted when an attachment is uploaded
 operations:
   attachment-uploaded.send:
@@ -16,10 +16,10 @@ operations:
     channel:
       $ref: "#/channels/attachment-uploaded"
     messages:
-    - $ref: "#/channels/attachment-uploaded/messages/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bytes.Attachment"
+    - $ref: "#/channels/attachment-uploaded/messages/github.com_RubenRibGarcia_asyncgo_test_data_bytes.Attachment"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/bytes.Attachment:
+    github.com_RubenRibGarcia_asyncgo_test_data_bytes.Attachment:
       type: object
       properties:
         body:
@@ -44,7 +44,7 @@ components:
       - name
       - body
   messages:
-    github.com/RubenRibGarcia/asyncgo/test/data/bytes.Attachment:
+    github.com_RubenRibGarcia_asyncgo_test_data_bytes.Attachment:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1bytes.Attachment"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_bytes.Attachment"
       name: Attachment

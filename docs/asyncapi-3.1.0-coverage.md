@@ -11,7 +11,7 @@ library produce it?**
 | --- | --- |
 | **Assessed** | 2026-09-12 |
 | **Revision** | `master` @ `d9f9dbd` (assessed) · `master` @ `9f98483` (latest revision) |
-| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` · 2026-10-25 — `§1`/`§3` binding rows and `§8 B12` implemented (typed bindings for all protocols, `spec.ProtocolKeys`, two binding fixtures) · 2026-10-31 — `§1` Schema Object row, `§4.1` `[]byte` row, `§8 B17` implemented (`contentEncoding`/`contentMediaType`, `test/data/bytes`) |
+| **Revised** | 2026-10-04 — `§5 Tooling and pipeline` (validation row), `§8 B12`/`B14`/`B15`, and accuracy fixes in `§1`, `§4.3`, `§9` · 2026-10-04 — `§1`/`§2` security scheme rows, `§7` `SecurityRequirement` deviation, `§8 B1` implemented · 2026-10-05 — `§1`/`§2` traits, tags/externalDocs, and correlation ID rows, `§3` Kafka binding Union types, `§8 B3` implemented / `B13` partially implemented · 2026-10-05 — `§1` Multi Format Schema Object row, `§4.3`, `§8 B4` implemented · 2026-10-05 — `§1` AsyncAPI root / License rows, `§7` deviations table, `§8 B9` implemented · 2026-10-05 — `§1` Message Object / Correlation ID Object rows, `§8 B13` implemented · 2026-10-10 — `§1` Messages Object / Components Object / Reference Object rows, `§2` `components.messages` populated · 2026-10-10 — `§1` Schema Object row, `§4.2` derivation rows, `§4.3`, `§7` `Schema.Example`, `§8 B7` implemented · 2026-10-10 — `Schema.Example` removed (breaking, [ADR 0006](adr/0006-schema-keywords.md)), `§4.2` and `§7` updated, `test/data/provider` migrated to `examples` · 2026-10-25 — `§1`/`§3` binding rows and `§8 B12` implemented (typed bindings for all protocols, `spec.ProtocolKeys`, two binding fixtures) · 2026-10-31 — `§1` Schema Object row, `§4.1` `[]byte` row, `§8 B17` implemented (`contentEncoding`/`contentMediaType`, `test/data/bytes`) · 2026-11-19 — `§2` key-shape note, `§6` key-pattern row, `§8 B11` implemented: a key derived from a Go type is sanitized into the pattern and the kept deviation is closed |
 | **Method** | Field-by-field diff of `spec/`, `schema/`, the root DSL package, `internal/cli`, and `internal/discovery` against the normative spec text at `github.com/asyncapi/spec@v3.1.0` (`spec/asyncapi.md`) |
 | **Spec source of truth** | <https://github.com/asyncapi/spec/blob/v3.1.0/spec/asyncapi.md> |
 
@@ -115,6 +115,13 @@ hoisting in `channel.apply` (`doc.go`), `components.securitySchemes` by the
 and `components.correlationIds` / `components.operationTraits` /
 `components.messageTraits` by `CorrelationIDs(...)` / `OperationTraits(...)` /
 `MessageTraits(...)` (`doc.go`).
+
+Every key in those maps matches the specification's `^[\w\d\.\-_]+$`
+pattern. An authored key is checked against it (`builder.validateKey`); a key
+derived from a Go type is sanitized into it by `schema.ComponentKey`, which turns
+the import path's separators — and any other character the pattern rejects —
+into `_`, so `github.com/acme/orders.OrderPlaced` is keyed
+`github.com_acme_orders.OrderPlaced`.
 
 ## 3. Bindings protocols
 
@@ -282,7 +289,7 @@ post-pass, and surface as a per-catalog `discovery.CatalogErrors` report.
 | duplicate channel address | ✅ |
 | channel `servers` `$ref` resolves to a declared server | ✅ post-pass in `builder.validateServerRefs` |
 | `MessageOf(nil)` guarded | ✅ |
-| key pattern `^[\w\d\.\-_]+$` on authored `components.*` keys | ✅ `builder.validateKey`; a key derived from a Go FQN is exempt |
+| key pattern `^[\w\d\.\-_]+$` on `components.*` keys | ✅ `builder.validateKey` for an authored key; `schema.ComponentKey` sanitizes a derived one |
 | `operation.messages` ⊆ channel `messages` | ✅ post-pass in `builder.validateOperationMessages` |
 | channel address expressions `{p}` ↔ declared `parameters` | ✅ `Channel.Parameter` plus `(*channel).validateParameters` |
 | operation map-key collision (a second `Send`/`Receive` on one channel overwrote) | ✅ reported; the first entry is kept |
@@ -555,9 +562,16 @@ implementation effort.
   `channels` keys (addresses), `servers` keys and `channel.messages` keys carry
   none, and because it is `patternProperties` rather than
   `additionalProperties: false`, a downstream validator accepts a violating key
-  — the DSL check is the only enforcement. Keys derived from a Go type's fully
-  qualified name therefore stay exempt: they keep the `pkgPath.TypeName` form
-  that the pattern rejects, and that deviation remains open. The subset rule has
+  — the DSL check is the only enforcement. The one shape that used to violate it
+  is now gone: a key derived from a Go type's fully qualified name is sanitized
+  into the pattern (`schema.ComponentKey`, which `schema.Name` returns), so
+  `github.com/acme/orders.OrderPlaced` is keyed
+  `github.com_acme_orders.OrderPlaced` and every `$ref` carries that key. The
+  transform is lossy, so two distinct names can claim one key (`a/b_c.T` and
+  `a_b/c.T`); that case is reported rather than silently dropping a schema
+  (`schema.KeyCollisionErrors`, folded into `builder.Spec`'s errors and
+  `schema.Finalize`'s return). Authored and derived keys are now held to one
+  rule, and the deviation is closed. The subset rule has
   one reachable shape — a duplicate channel address whose second declaration
   uses a different action — which is what the fixture pins. Separately,
   `CatalogErrors.Error()` now bullets every line of a joined message, so a

@@ -34,7 +34,7 @@ operations:
     - $ref: "#/channels/order-placed/messages/OrderPlaced"
 components:
   schemas:
-    github.com/RubenRibGarcia/asyncgo/test/data/simple.OrderPlaced:
+    github.com_RubenRibGarcia_asyncgo_test_data_simple.OrderPlaced:
       type: object
       properties:
         amount:
@@ -51,5 +51,5 @@ components:
   messages:
     OrderPlaced:
       payload:
-        $ref: "#/components/schemas/github.com~1RubenRibGarcia~1asyncgo~1test~1data~1simple.OrderPlaced"
+        $ref: "#/components/schemas/github.com_RubenRibGarcia_asyncgo_test_data_simple.OrderPlaced"
       name: OrderPlaced

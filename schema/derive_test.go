@@ -2,7 +2,9 @@ package schema
 
 import (
 	"encoding/json"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,8 +30,8 @@ type Order struct {
 }
 
 const (
-	orderKey   = "github.com/RubenRibGarcia/asyncgo/schema.Order"
-	addressKey = "github.com/RubenRibGarcia/asyncgo/schema.Address"
+	orderKey   = "github.com_RubenRibGarcia_asyncgo_schema.Order"
+	addressKey = "github.com_RubenRibGarcia_asyncgo_schema.Address"
 )
 
 func TestFromTypeHoistsNamedStructs(t *testing.T) {
@@ -77,7 +79,7 @@ func TestFromTypeInlineAnonymousStruct(t *testing.T) {
 }
 
 func TestEmbeddedFieldNaming(t *testing.T) {
-	baseKey := "github.com/RubenRibGarcia/asyncgo/schema.NamedEmbedBase"
+	baseKey := "github.com_RubenRibGarcia_asyncgo_schema.NamedEmbedBase"
 
 	tests := []struct {
 		name      string
@@ -157,7 +159,7 @@ func TestFromTypeUnexportedFieldSkipped(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	s := FromType(reflect.TypeFor[withUnexported](), defs)
 
-	obj := defs["github.com/RubenRibGarcia/asyncgo/schema.withUnexported"]
+	obj := defs["github.com_RubenRibGarcia_asyncgo_schema.withUnexported"]
 	require.NotNil(t, obj)
 	assert.Contains(t, obj.Properties, "public")
 	assert.NotContains(t, obj.Properties, "hidden")
@@ -306,16 +308,16 @@ func TestRecursiveStructTerminates(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	s := FromType(reflect.TypeFor[Node](), defs)
 	require.NotEmpty(t, s.Ref)
-	assert.Contains(t, defs, "github.com/RubenRibGarcia/asyncgo/schema.Node")
+	assert.Contains(t, defs, "github.com_RubenRibGarcia_asyncgo_schema.Node")
 }
 
 func TestAllOfEmbedding(t *testing.T) {
 	const (
-		composedKey = "github.com/RubenRibGarcia/asyncgo/schema.AllOfComposed"
-		flatKey     = "github.com/RubenRibGarcia/asyncgo/schema.FlatDefault"
-		topKey      = "github.com/RubenRibGarcia/asyncgo/schema.TopFlatten"
-		baseKey     = "github.com/RubenRibGarcia/asyncgo/schema.AllOfBase"
-		wrapperKey  = "github.com/RubenRibGarcia/asyncgo/schema.RecursiveAllOfWrapper"
+		composedKey = "github.com_RubenRibGarcia_asyncgo_schema.AllOfComposed"
+		flatKey     = "github.com_RubenRibGarcia_asyncgo_schema.FlatDefault"
+		topKey      = "github.com_RubenRibGarcia_asyncgo_schema.TopFlatten"
+		baseKey     = "github.com_RubenRibGarcia_asyncgo_schema.AllOfBase"
+		wrapperKey  = "github.com_RubenRibGarcia_asyncgo_schema.RecursiveAllOfWrapper"
 	)
 	tests := []struct {
 		name   string
@@ -381,7 +383,7 @@ func TestAllOfEmbedding(t *testing.T) {
 			name: "should_omit_the_empty_own_member_of_an_allOf_only_struct",
 			typ:  reflect.TypeFor[AllOfOnly](),
 			verify: func(t *testing.T, defs map[string]*spec.Schema) {
-				only := defs["github.com/RubenRibGarcia/asyncgo/schema.AllOfOnly"]
+				only := defs["github.com_RubenRibGarcia_asyncgo_schema.AllOfOnly"]
 				require.NotNil(t, only)
 				require.Len(t, only.AllOf, 1)
 				assert.Equal(t, Ref(reflect.TypeFor[AllOfBase]()), only.AllOf[0].Ref)
@@ -398,7 +400,7 @@ func TestAllOfEmbedding(t *testing.T) {
 				assert.Contains(
 					t,
 					defs,
-					"github.com/RubenRibGarcia/asyncgo/schema.RecursiveAllOfNode",
+					"github.com_RubenRibGarcia_asyncgo_schema.RecursiveAllOfNode",
 				)
 			},
 		},
@@ -483,7 +485,7 @@ func TestCombinatorDirectives(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defs := map[string]*spec.Schema{}
 			FromType(reflect.TypeFor[CombinatorHolder](), defs)
-			obj := defs["github.com/RubenRibGarcia/asyncgo/schema.CombinatorHolder"]
+			obj := defs["github.com_RubenRibGarcia_asyncgo_schema.CombinatorHolder"]
 			require.NotNil(t, obj)
 			prop := obj.Properties[tc.field]
 			require.NotNil(t, prop)
@@ -496,7 +498,7 @@ func TestCombinatorNameResolution(t *testing.T) {
 	t.Run("should_resolve_same_package_short_name", func(t *testing.T) {
 		defs := map[string]*spec.Schema{}
 		FromType(reflect.TypeFor[UnionHolder](), defs)
-		obj := defs["github.com/RubenRibGarcia/asyncgo/schema.UnionHolder"]
+		obj := defs["github.com_RubenRibGarcia_asyncgo_schema.UnionHolder"]
 		require.NotNil(t, obj)
 		prop := obj.Properties["data"]
 		require.NotNil(t, prop)
@@ -511,7 +513,7 @@ func TestCombinatorNameResolution(t *testing.T) {
 	t.Run("should_pass_through_fully_qualified_name", func(t *testing.T) {
 		defs := map[string]*spec.Schema{}
 		FromType(reflect.TypeFor[FQNUnionHolder](), defs)
-		obj := defs["github.com/RubenRibGarcia/asyncgo/schema.FQNUnionHolder"]
+		obj := defs["github.com_RubenRibGarcia_asyncgo_schema.FQNUnionHolder"]
 		require.NotNil(t, obj)
 		prop := obj.Properties["data"]
 		require.NotNil(t, prop)
@@ -527,20 +529,20 @@ func TestFinalizeHoistsRegisteredTypes(t *testing.T) {
 	t.Run("should_hoist_referenced_types_on_finalize", func(t *testing.T) {
 		Register(UnionMemberA{}, UnionMemberB{})
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.NotNil(t, doc.Components)
 		require.Contains(
 			t,
 			doc.Components.Schemas,
-			"github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA",
+			"github.com_RubenRibGarcia_asyncgo_schema.UnionMemberA",
 		)
 		require.Contains(
 			t,
 			doc.Components.Schemas,
-			"github.com/RubenRibGarcia/asyncgo/schema.UnionMemberB",
+			"github.com_RubenRibGarcia_asyncgo_schema.UnionMemberB",
 		)
-		a := doc.Components.Schemas["github.com/RubenRibGarcia/asyncgo/schema.UnionMemberA"]
+		a := doc.Components.Schemas["github.com_RubenRibGarcia_asyncgo_schema.UnionMemberA"]
 		require.NotNil(t, a)
 		assert.Contains(t, a.Properties, "a")
 		assert.Equal(t, []string{"a"}, a.Required)
@@ -607,8 +609,11 @@ func TestNameAndRefRequireANamedType(t *testing.T) {
 	}
 
 	t.Run("should_name_a_named_type", func(t *testing.T) {
-		assert.Equal(t, named.PkgPath()+"."+named.Name(), Name(named))
-		assert.NotEmpty(t, Ref(named))
+		// Computed from the type's own package path so the test survives module
+		// renames, but pinning the transform: every "/" in the path becomes "_".
+		key := strings.ReplaceAll(named.PkgPath(), "/", "_") + "." + named.Name()
+		assert.Equal(t, key, Name(named))
+		assert.Equal(t, "#/components/schemas/"+key, Ref(named))
 	})
 
 	for _, tc := range unnamed {
@@ -625,25 +630,141 @@ func TestNameAndRefRequireANamedType(t *testing.T) {
 }
 
 func TestRefEscapesPointerSegments(t *testing.T) {
-	t.Run("should_escape_the_slashes_in_a_package_path", func(t *testing.T) {
+	t.Run("should_build_the_ref_from_the_sanitized_key", func(t *testing.T) {
 		typ := reflect.TypeFor[Order]()
-		// Compute the expectation from the type's own package path so the test
-		// survives module renames: JSON Pointer escaping must turn "/" into "~1".
+		// The package path's separators never reach the ref: they are sanitized
+		// into the components key first, so nothing is left for JSON Pointer
+		// escaping to do.
 		want := "#/components/schemas/" + strings.ReplaceAll(
 			typ.PkgPath(),
 			"/",
-			"~1",
+			"_",
 		) + "." + typ.Name()
 		assert.Equal(t, want, Ref(typ))
 	})
 
-	t.Run("should_escape_a_tilde_before_a_slash", func(t *testing.T) {
-		// No Go type name can carry "~", so this case is reached through
-		// RefByName — the entry point a combinator directive resolves a string
-		// name with. RFC 6901 escapes "~" first: escaping "/" first would turn
-		// "~" into "~1" and then into "~01", which decodes to "~1", not "~".
-		assert.Equal(t, "#/components/schemas/x~0y~1z", RefByName("x~y/z"))
+	t.Run("should_sanitize_a_name_resolved_from_a_string", func(t *testing.T) {
+		// RefByName is the entry point a combinator directive resolves a string
+		// name with, and it sanitizes like Ref: a name carrying characters the
+		// key pattern rejects is turned into a key that conforms, rather than
+		// escaped into a JSON Pointer segment the map cannot hold.
+		assert.Equal(t, "#/components/schemas/x_y_z", RefByName("x~y/z"))
 	})
+}
+
+func TestComponentKey(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "should_replace_the_import_path_separators",
+			in:   "github.com/acme/orders.OrderPlaced",
+			want: "github.com_acme_orders.OrderPlaced",
+		},
+		{
+			name: "should_keep_a_name_that_already_conforms",
+			in:   "time.Time",
+			want: "time.Time",
+		},
+		{
+			name: "should_keep_dots_hyphens_and_underscores",
+			in:   "example.com/a-b/c_d.T",
+			want: "example.com_a-b_c_d.T",
+		},
+		{
+			name: "should_replace_a_character_the_pattern_rejects",
+			in:   "gopkg.in/yaml~v3.Map",
+			want: "gopkg.in_yaml_v3.Map",
+		},
+		{
+			// The pattern is ASCII, so a Unicode identifier is masked rune by rune.
+			name: "should_mask_a_unicode_rune",
+			in:   "example.com/ünïcode.T",
+			want: "example.com__n_code.T",
+		},
+		{
+			name: "should_return_empty_for_an_empty_name",
+			in:   "",
+			want: "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ComponentKey(tc.in)
+			assert.Equal(t, tc.want, got)
+			if tc.want != "" {
+				assert.True(
+					t,
+					componentKeyPatternRE.MatchString(got),
+					"%q must match %s",
+					got,
+					ComponentKeyPattern,
+				)
+			}
+			// Idempotent: an already sanitized name comes back unchanged, which is
+			// what lets the mapping registry and the document agree on one key.
+			assert.Equal(t, got, ComponentKey(got))
+		})
+	}
+}
+
+// TestComponentKeyRuneMatchesThePattern holds the per-rune filter ComponentKey
+// uses to the anchored pattern the specification states, so the fast path and
+// the documented rule cannot drift.
+func TestComponentKeyRuneMatchesThePattern(t *testing.T) {
+	for r := range rune(128) {
+		assert.Equal(
+			t,
+			componentKeyPatternRE.MatchString(string(r)),
+			componentKeyRune(r),
+			"rune %q",
+			r,
+		)
+	}
+}
+
+// restoreComponentKeys snapshots the components key claims and puts them back
+// when the test ends. Detection is process-wide — the key is computed where the
+// derivation happens — so a test that deliberately makes two names collide has
+// to leave the claim tables as it found them.
+func restoreComponentKeys(t *testing.T) {
+	t.Helper()
+	savedOwner := maps.Clone(componentKeyOwner)
+	savedCollided := maps.Clone(collided)
+	savedCollisions := slices.Clone(componentKeyCollisions)
+	t.Cleanup(func() {
+		componentKeyOwner = savedOwner
+		collided = savedCollided
+		componentKeyCollisions = savedCollisions
+	})
+	clear(componentKeyOwner)
+	clear(collided)
+	componentKeyCollisions = nil
+}
+
+func TestComponentKeyCollision(t *testing.T) {
+	restoreComponentKeys(t)
+
+	// Two import paths that differ only by "_" against "/" produce one key, so
+	// the second type would overwrite the first in components.schemas. Name claims
+	// the key for each type it derives; the claim is made here directly because
+	// this package cannot declare two types whose paths differ that way.
+	first := "example.com/a/b_c.T"
+	second := "example.com/a_b/c.T"
+	key := ComponentKey(first)
+	require.Equal(t, key, ComponentKey(second))
+	claimComponentKey(key, first)
+	claimComponentKey(key, second)
+
+	errs := KeyCollisionErrors()
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), first)
+	assert.Contains(t, errs[0].Error(), second)
+
+	// The list is drained: the same collision is not reported twice.
+	assert.Empty(t, KeyCollisionErrors())
 }
 
 // withUnexported has an unexported field that must be skipped during derivation.
@@ -814,11 +935,11 @@ type PlainStruct struct {
 
 func TestSchemaProvider(t *testing.T) {
 	const (
-		customStringKey  = "github.com/RubenRibGarcia/asyncgo/schema.CustomString"
-		customPointerKey = "github.com/RubenRibGarcia/asyncgo/schema.CustomPointer"
-		nilProviderKey   = "github.com/RubenRibGarcia/asyncgo/schema.NilProvider"
-		emptyProviderKey = "github.com/RubenRibGarcia/asyncgo/schema.EmptyProvider"
-		plainKey         = "github.com/RubenRibGarcia/asyncgo/schema.PlainStruct"
+		customStringKey  = "github.com_RubenRibGarcia_asyncgo_schema.CustomString"
+		customPointerKey = "github.com_RubenRibGarcia_asyncgo_schema.CustomPointer"
+		nilProviderKey   = "github.com_RubenRibGarcia_asyncgo_schema.NilProvider"
+		emptyProviderKey = "github.com_RubenRibGarcia_asyncgo_schema.EmptyProvider"
+		plainKey         = "github.com_RubenRibGarcia_asyncgo_schema.PlainStruct"
 	)
 
 	tests := []struct {
@@ -894,15 +1015,15 @@ func TestSchemaProviderFinalize(t *testing.T) {
 	t.Run("should_honor_provider_via_finalize", func(t *testing.T) {
 		Register(CustomString{})
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.NotNil(t, doc.Components)
 		require.Contains(
 			t,
 			doc.Components.Schemas,
-			"github.com/RubenRibGarcia/asyncgo/schema.CustomString",
+			"github.com_RubenRibGarcia_asyncgo_schema.CustomString",
 		)
-		custom := doc.Components.Schemas["github.com/RubenRibGarcia/asyncgo/schema.CustomString"]
+		custom := doc.Components.Schemas["github.com_RubenRibGarcia_asyncgo_schema.CustomString"]
 		require.NotNil(t, custom)
 		assert.Equal(t, "string", custom.Type)
 		assert.Equal(t, "uuid", custom.Format)
@@ -1113,7 +1234,7 @@ func TestSchemaProviderNonStructFinalize(t *testing.T) {
 	t.Run("should_hoist_registered_non_struct_provider", func(t *testing.T) {
 		Register(OrderID(""))
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.NotNil(t, doc.Components)
 		custom := doc.Components.Schemas[Name(reflect.TypeFor[OrderID]())]
@@ -1125,7 +1246,7 @@ func TestSchemaProviderNonStructFinalize(t *testing.T) {
 	t.Run("should_resolve_combinator_ref_to_non_struct_provider", func(t *testing.T) {
 		Register(NamedProviderUnion{}, OrderID(""))
 		doc := spec.New()
-		Finalize(doc)
+		require.NoError(t, Finalize(doc))
 
 		require.NotNil(t, doc.Components)
 		holder := doc.Components.Schemas[Name(reflect.TypeFor[NamedProviderUnion]())]
@@ -1163,7 +1284,7 @@ func TestFromTypeSchemaKeywordsDerivation(t *testing.T) {
 	defs := map[string]*spec.Schema{}
 	s := FromType(reflect.TypeFor[keywordTagged](), defs)
 
-	key := "github.com/RubenRibGarcia/asyncgo/schema.keywordTagged"
+	key := "github.com_RubenRibGarcia_asyncgo_schema.keywordTagged"
 	require.Contains(t, defs, key)
 	require.NotEmpty(t, s.Ref)
 
